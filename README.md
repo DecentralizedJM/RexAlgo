@@ -69,12 +69,11 @@ cp backend/.env.example backend/.env.local
 npm run dev
 ```
 
-| Service | URL |
-|--------|-----|
-| **UI** | [http://localhost:8080](http://localhost:8080) |
-| **API** | [http://localhost:3000](http://localhost:3000) |
+| Open this | URL |
+|-----------|-----|
+| **Everything (UI + API)** | **[http://localhost:8080](http://localhost:8080)** |
 
-The dev server proxies `frontend` → `/api` → `backend`, so cookies stay same-origin on `:8080`.
+One browser origin: a small **gateway** on **8080** sends `/api/*` to Next on **127.0.0.1:3000** and everything else to Vite on **127.0.0.1:5174** (you don’t need to open those).
 
 Sign in at **`/auth`** with your **Mudrex API secret**.
 
@@ -94,16 +93,16 @@ From the repository root, `npm install` pulls **both** workspaces. Run:
 npm run dev
 ```
 
-| App | URL | Notes |
-|-----|-----|--------|
-| Frontend | http://localhost:8080 | Vite; `/api` proxied to Next on 3000 |
-| Backend | http://localhost:3000 | Next.js App Router |
+| What | URL / notes |
+|------|----------------|
+| **Use in browser** | **http://localhost:8080** only |
+| Next + Vite | Bound to **127.0.0.1** (internal); started by `npm run dev` |
 
-Run individually:
+**Workspace-only** (two URLs again — for debugging):
 
 ```bash
-npm run dev -w @rexalgo/frontend
-npm run dev -w @rexalgo/backend
+npm run dev -w @rexalgo/backend    # http://127.0.0.1:3000
+npm run dev -w @rexalgo/frontend   # http://localhost:8080 + Vite proxy /api → 3000
 ```
 
 ### Backend environment
@@ -118,13 +117,13 @@ Set `JWT_SECRET` and `ENCRYPTION_KEY`. Optional: `REXALGO_DB_PATH` for a custom 
 
 1. Open the UI → **Connect** / **Auth**
 2. Enter your **Mudrex API secret** (validated against [Mudrex Futures API](https://docs.trade.mudrex.com/docs/overview))
-3. Session cookie is set on the UI origin; the dev proxy forwards `/api` so cookies stay same-origin
+3. Session cookie is set for **localhost:8080**; the gateway forwards `/api` to Next so cookies stay same-origin
 
 ### Troubleshooting
 
 | Issue | Try |
 |--------|-----|
-| **401 on `/api/*` after login** | Use the UI URL (`:8080` in dev) so the session cookie is sent; check `frontend/vite.config.ts` proxy |
+| **401 on `/api/*` after login** | Use **http://localhost:8080** (gateway), not 3000 or 5174 directly |
 | **DB errors** | Ensure `REXALGO_DB_PATH` (if set) is writable |
 | **Build failures** | Node 20+; run `npm install` from **repo root** (workspaces) |
 
@@ -162,15 +161,16 @@ flowchart TB
 flowchart LR
   subgraph dev [Developer machine]
     BR[Browser]
-    V["Vite port 8080"]
-    N["Next port 3000"]
+    GW["Gateway :8080"]
+    V[Vite 127.0.0.1:5174]
+    N[Next 127.0.0.1:3000]
     DB[(SQLite file)]
   end
   MR[Mudrex API]
 
-  BR -->|page assets| V
-  BR -->|/api/* proxied| V
-  V -->|forward /api| N
+  BR -->|one origin| GW
+  GW -->|/api/*| N
+  GW -->|everything else| V
   N --> DB
   N --> MR
 ```
@@ -303,7 +303,7 @@ npm run docker:down
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev` | Frontend (8080) + backend (3000) |
+| `npm run dev` | Gateway **:8080** + Next **127.0.0.1:3000** + Vite **127.0.0.1:5174** |
 | `npm run build` | Build both workspaces |
 | `npm run lint` | Lint frontend & backend (if configured) |
 | `npm run docker:up` | `docker compose up --build -d` |

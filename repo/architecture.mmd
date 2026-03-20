@@ -17,18 +17,19 @@ flowchart TB
   APP --> DB
   APP -->|REST + API secret| MR
 
-%% --- Development topology ---
+%% --- Development topology (monorepo npm run dev) ---
 flowchart LR
   subgraph dev [Developer machine]
     BR[Browser]
-    V["Vite port 8080"]
-    N["Next port 3000"]
+    GW[Gateway :8080]
+    V[Vite 127.0.0.1:5174]
+    N[Next 127.0.0.1:3000]
     DB[(SQLite file)]
   end
   MR[Mudrex API]
-  BR -->|page assets| V
-  BR -->|/api/* proxied| V
-  V -->|forward /api| N
+  BR -->|one origin| GW
+  GW -->|/api/*| N
+  GW -->|SPA assets| V
   N --> DB
   N --> MR
 

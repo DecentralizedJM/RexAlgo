@@ -9,7 +9,10 @@
   ],
   "scripts": {
     "predev": "node -e \"const fs=require('fs');const p='backend/.env.local';if(!fs.existsSync(p)){fs.copyFileSync('backend/.env.example',p);console.log('Created backend/.env.local from .env.example');}\"",
-    "dev": "concurrently -n web,api -c green,blue \"npm run dev -w @rexalgo/frontend\" \"npm run dev -w @rexalgo/backend\"",
+    "dev": "concurrently -k -n api,web,gateway -c blue,green,magenta \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:gateway\"",
+    "dev:api": "npm run dev -w @rexalgo/backend -- -H 127.0.0.1 -p 3000",
+    "dev:web": "cross-env VITE_INTERNAL_DEV=1 REXALGO_GATEWAY_PORT=8080 npm run dev -w @rexalgo/frontend",
+    "dev:gateway": "wait-on tcp:127.0.0.1:3000 tcp:127.0.0.1:5174 && cross-env REXALGO_GATEWAY_PORT=8080 node scripts/dev-gateway.mjs",
     "build": "npm run build -w @rexalgo/frontend && npm run build -w @rexalgo/backend",
     "lint": "npm run lint -w @rexalgo/frontend --if-present && npm run lint -w @rexalgo/backend --if-present",
     "docker:up": "docker compose up --build -d",
@@ -17,7 +20,10 @@
     "docker:logs": "docker compose logs -f"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0"
+    "concurrently": "^9.2.0",
+    "cross-env": "^7.0.3",
+    "http-proxy": "^1.18.1",
+    "wait-on": "^8.0.1"
   },
   "engines": {
     "node": ">=20"
