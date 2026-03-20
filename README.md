@@ -6,6 +6,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#repository-layout">Layout</a> ·
   <a href="#docker-full-stack">Docker</a> ·
+  <a href="#roadmap">Roadmap</a> ·
   <a href="#credits">Credits</a>
 </p>
 
@@ -36,7 +37,7 @@ RexAlgo/
 ├── backend/           # Next.js 16 API — Mudrex client, Drizzle, auth
 │   ├── src/app/       # App Router (API routes + optional dashboard pages)
 │   └── Dockerfile     # Standalone Node server
-├── docs/              # Architecture & dev guides
+├── docs/              # Architecture diagrams, dev guide, roadmap
 ├── docker-compose.yml # Run web + api together
 ├── package.json       # npm workspaces (root scripts)
 └── LICENSE            # MIT
@@ -119,16 +120,32 @@ npm run dev -w @rexalgo/backend
 
 ## Documentation
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — diagrams & data flow  
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — **Mermaid diagrams** (context, deployment, auth, subscriptions)  
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — local setup  
+- [docs/ROADMAP.md](docs/ROADMAP.md) — planned features (webhooks, paper mode, observability, …)  
 - [CONTRIBUTING.md](CONTRIBUTING.md)  
 - [SECURITY.md](SECURITY.md)  
 
 ---
 
+## Roadmap
+
+RexAlgo is **Mudrex-centric** (crypto futures). Planned direction:
+
+| Theme | Direction |
+|-------|-----------|
+| **Safety** | Paper / dry-run flows, optional approval before live orders |
+| **Integrations** | Signed webhooks (e.g. TradingView-style signals) |
+| **Realtime** | Live dashboard updates when APIs allow |
+| **Ops** | Rate limits, structured logs, basic latency/error visibility |
+
+Full backlog: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Architecture visuals: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+---
+
 ## Credits
 
-- **UI / design workflow**: Evolved from [**Lovable**](https://lovable.dev) and the [**rex-trader-playground**](https://github.com/DecentralizedJM/rex-trader-playground) repo — merged here as **`frontend/`** for a single canonical app.
+- **UI / design workflow**: Evolved from [**Lovable**](https://lovable.dev) and the [**rex-trader-playground**](https://github.com/DecentralizedJM/rex-trader-playground) repo — merged here as **`frontend/`** for a single canonical app (supersedes maintaining UI-only in that repo).
 - **Execution**: [**Mudrex**](https://mudrex.com) Futures API — see [official API docs](https://docs.trade.mudrex.com/docs/overview).
 - **SDK reference** (unofficial): [mudrex-api-trading-python-sdk](https://github.com/DecentralizedJM/mudrex-api-trading-python-sdk).
 

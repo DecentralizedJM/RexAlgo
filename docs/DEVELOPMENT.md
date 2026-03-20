@@ -50,3 +50,16 @@ Set `JWT_SECRET` and `ENCRYPTION_KEY` (see `backend/.env.example`). Optional: `R
 ## Docker
 
 See root [README.md](../README.md#docker-full-stack).
+
+## Product direction
+
+- **Architecture**: [ARCHITECTURE.md](./ARCHITECTURE.md)  
+- **Roadmap**: [ROADMAP.md](./ROADMAP.md)
+
+## Troubleshooting
+
+| Issue | Try |
+|--------|-----|
+| **401 on `/api/*` after login** | Same-origin: use UI URL (`:8080` in dev) so the session cookie is sent; check proxy in `frontend/vite.config.ts`. |
+| **DB errors** | Ensure `REXALGO_DB_PATH` (if set) is writable; delete dev SQLite only if you accept data loss. |
+| **Build failures** | Node 20+, run `npm install` from **repo root** (workspaces). |

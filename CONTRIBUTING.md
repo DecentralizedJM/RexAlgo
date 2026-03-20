@@ -26,3 +26,11 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
 ## Design (Lovable)
 
 Frontend changes can be prototyped in Lovable and synced into `frontend/` (or developed directly in this repo). Keep `src/lib/api.ts` aligned with backend routes.
+
+## Third-party code & licenses
+
+- RexAlgo is **MIT**. Contributions must be **MIT-compatible** (avoid pasting in code that forces AGPL or other copyleft on this repo without maintainer approval).
+
+## Roadmap & larger features
+
+Check [docs/ROADMAP.md](docs/ROADMAP.md). For substantial features (webhooks, paper trading, new auth), open an issue with a short design first.

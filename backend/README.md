@@ -11,4 +11,4 @@
 
 **Env**: `cp .env.example .env.local` and set `JWT_SECRET`, `ENCRYPTION_KEY`.
 
-See [**root README**](../README.md) and [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+See [**root README**](../README.md), [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md), [docs/ROADMAP.md](../docs/ROADMAP.md), and [SECURITY.md](../SECURITY.md).

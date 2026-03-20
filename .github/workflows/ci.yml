@@ -21,9 +21,10 @@ jobs:
       - name: Install root + workspaces
         run: npm install
 
+      # Remove continue-on-error when lint is clean — see docs/ROADMAP.md
       - name: Lint frontend
         run: npm run lint -w @rexalgo/frontend
-        continue-on-error: true # shadcn/Lovable generated UI; tighten over time
+        continue-on-error: true
 
       - name: Lint backend
         run: npm run lint -w @rexalgo/backend
