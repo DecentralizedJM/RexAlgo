@@ -8,6 +8,7 @@
     "backend"
   ],
   "scripts": {
+    "predev": "node -e \"const fs=require('fs');const p='backend/.env.local';if(!fs.existsSync(p)){fs.copyFileSync('backend/.env.example',p);console.log('Created backend/.env.local from .env.example');}\"",
     "dev": "concurrently -n web,api -c green,blue \"npm run dev -w @rexalgo/frontend\" \"npm run dev -w @rexalgo/backend\"",
     "build": "npm run build -w @rexalgo/frontend && npm run build -w @rexalgo/backend",
     "lint": "npm run lint -w @rexalgo/frontend --if-present && npm run lint -w @rexalgo/backend --if-present",
