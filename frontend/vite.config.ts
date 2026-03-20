@@ -15,8 +15,8 @@ export default defineConfig(({ mode }) => ({
     host: INTERNAL ? "127.0.0.1" : "::",
     port: INTERNAL ? 5174 : 8080,
     strictPort: true,
-    // Asset / module URLs in HTML point at the public dev URL (gateway)
-    ...(INTERNAL ? { origin: `http://127.0.0.1:${GATEWAY}` } : {}),
+    // Match browser URL (localhost) so Vite doesn’t fight the Host header from the gateway
+    ...(INTERNAL ? { origin: `http://localhost:${GATEWAY}` } : {}),
     hmr: {
       overlay: false,
       ...(INTERNAL

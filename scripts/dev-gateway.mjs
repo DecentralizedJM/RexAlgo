@@ -2,6 +2,9 @@
 /**
  * Single URL for local dev: browser only talks to this port.
  * /api/* → Next.js (loopback) · everything else → Vite (loopback), including HMR WebSockets.
+ *
+ * Important: requests with Upgrade: websocket must NOT go through proxy.web — only proxy.ws
+ * on the "upgrade" event. Otherwise Vite returns 426 "Upgrade Required" as the page body.
  */
 import http from "node:http";
 import httpProxy from "http-proxy";
@@ -28,13 +31,17 @@ function pickTarget(url) {
 }
 
 const server = http.createServer((req, res) => {
+  // WebSocket handshakes: handled only in server.on("upgrade"). Never proxy.web these.
+  if (req.headers.upgrade) {
+    return;
+  }
   const url = req.url || "/";
-  proxy.web(req, res, { target: pickTarget(url) });
+  proxy.web(req, res, { target: pickTarget(url), changeOrigin: true });
 });
 
 server.on("upgrade", (req, socket, head) => {
   const url = req.url || "/";
-  proxy.ws(req, socket, head, { target: pickTarget(url) });
+  proxy.ws(req, socket, head, { target: pickTarget(url), changeOrigin: true });
 });
 
 server.listen(GATEWAY_PORT, "0.0.0.0", () => {
