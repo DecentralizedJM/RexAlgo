@@ -21,15 +21,13 @@ flowchart TB
 flowchart LR
   subgraph dev [Developer machine]
     BR[Browser]
-    GW[Gateway :8080]
-    V[Vite 127.0.0.1:5174]
+    V["Vite :8080"]
     N[Next 127.0.0.1:3000]
     DB[(SQLite file)]
   end
   MR[Mudrex API]
-  BR -->|one origin| GW
-  GW -->|/api/*| N
-  GW -->|SPA assets| V
+  BR -->|UI + HMR| V
+  V -->|proxy /api/*| N
   N --> DB
   N --> MR
 

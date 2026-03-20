@@ -73,7 +73,7 @@ npm run dev
 |-----------|-----|
 | **Everything (UI + API)** | **[http://localhost:8080](http://localhost:8080)** |
 
-One browser origin: a small **gateway** on **8080** sends `/api/*` to Next on **127.0.0.1:3000** and everything else to Vite on **127.0.0.1:5174** (you don’t need to open those).
+**Vite** listens on **:8080** (your only tab). It **proxies `/api`** to Next on **127.0.0.1:3000** (wait until Next is up — `dev:web` uses `wait-on`). HMR stays on **8080**, so no extra proxy/gateway.
 
 Sign in at **`/auth`** with your **Mudrex API secret**.
 
@@ -95,8 +95,8 @@ npm run dev
 
 | What | URL / notes |
 |------|----------------|
-| **Use in browser** | **http://localhost:8080** only |
-| Next + Vite | Bound to **127.0.0.1** (internal); started by `npm run dev` |
+| **Use in browser** | **http://localhost:8080** only (Vite + `/api` proxy) |
+| **Next API** | **127.0.0.1:3000** — don’t open for normal use; must be running for `/api` |
 
 **Workspace-only** (two URLs again — for debugging):
 
@@ -117,13 +117,13 @@ Set `JWT_SECRET` and `ENCRYPTION_KEY`. Optional: `REXALGO_DB_PATH` for a custom 
 
 1. Open the UI → **Connect** / **Auth**
 2. Enter your **Mudrex API secret** (validated against [Mudrex Futures API](https://docs.trade.mudrex.com/docs/overview))
-3. Session cookie is set for **localhost:8080**; the gateway forwards `/api` to Next so cookies stay same-origin
+3. Session cookie is set for **localhost:8080**; Vite’s dev proxy forwards `/api` to Next (same origin)
 
 ### Troubleshooting
 
 | Issue | Try |
 |--------|-----|
-| **401 on `/api/*` after login** | Use **http://localhost:8080** (gateway), not 3000 or 5174 directly |
+| **401 on `/api/*` after login** | Use **http://localhost:8080**, not **127.0.0.1:3000** (cookies are for :8080) |
 | **DB errors** | Ensure `REXALGO_DB_PATH` (if set) is writable |
 | **Build failures** | Node 20+; run `npm install` from **repo root** (workspaces) |
 
@@ -161,16 +161,14 @@ flowchart TB
 flowchart LR
   subgraph dev [Developer machine]
     BR[Browser]
-    GW["Gateway :8080"]
-    V[Vite 127.0.0.1:5174]
+    V["Vite :8080"]
     N[Next 127.0.0.1:3000]
     DB[(SQLite file)]
   end
   MR[Mudrex API]
 
-  BR -->|one origin| GW
-  GW -->|/api/*| N
-  GW -->|everything else| V
+  BR -->|UI + HMR| V
+  V -->|proxy /api/*| N
   N --> DB
   N --> MR
 ```
@@ -303,7 +301,7 @@ npm run docker:down
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev` | Gateway **:8080** + Next **127.0.0.1:3000** + Vite **127.0.0.1:5174** |
+| `npm run dev` | Next **127.0.0.1:3000** + Vite **:8080** (`wait-on` then UI) |
 | `npm run build` | Build both workspaces |
 | `npm run lint` | Lint frontend & backend (if configured) |
 | `npm run docker:up` | `docker compose up --build -d` |

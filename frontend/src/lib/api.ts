@@ -1,6 +1,6 @@
 /**
  * Browser → relative `/api/*` with credentials (session cookie).
- * Dev: open **localhost:8080** (gateway → Vite + Next). Standalone Vite proxies /api. Prod: nginx.
+ * Dev: open **localhost:8080** (Vite; `/api` proxied to Next on 3000). Prod: nginx.
  * @see vite.config.ts | README.md#development | README.md#architecture
  */
 
