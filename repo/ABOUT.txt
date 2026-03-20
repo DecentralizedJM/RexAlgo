@@ -1,0 +1,8 @@
+RexAlgo — repository metadata (non-Markdown)
+
+README.md          Human-readable overview, architecture diagrams, dev guide, roadmap.
+repo/project.json  Same roadmap/security/stack as structured JSON for scripts and IDEs.
+repo/architecture.mmd  Mermaid diagram source (one file); blocks also embedded in README.md.
+
+Contributing policy: ../CONTRIBUTING.md
+Security policy:    ../SECURITY.md

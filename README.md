@@ -5,6 +5,8 @@
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
   <a href="#repository-layout">Layout</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#development">Development</a> ·
   <a href="#docker-full-stack">Docker</a> ·
   <a href="#roadmap">Roadmap</a> ·
   <a href="#credits">Credits</a>
@@ -28,20 +30,19 @@
 
 ```
 RexAlgo/
-├── frontend/          # Premium SPA — Vite, React Router, shadcn (Lovable design lineage)
-│   ├── src/
-│   │   ├── lib/api.ts # Calls /api (proxied to backend in dev & Docker)
-│   │   └── pages/
-│   ├── Dockerfile     # Production: static build + nginx
-│   └── nginx.conf     # Reverse-proxy /api → backend
-├── backend/           # Next.js 16 API — Mudrex client, Drizzle, auth
-│   ├── src/app/       # App Router (API routes + optional dashboard pages)
-│   └── Dockerfile     # Standalone Node server
-├── docs/              # Architecture diagrams, dev guide, roadmap
-├── docker-compose.yml # Run web + api together
-├── package.json       # npm workspaces (root scripts)
+├── frontend/          # Vite + React Router + shadcn (Lovable / rex-trader-playground lineage)
+│   ├── src/lib/api.ts # HTTP client → /api (see file header)
+├── backend/           # Next.js 16 — Mudrex client, Drizzle, auth (see src/lib/* headers)
+│   ├── src/app/api/   # REST routes
+├── repo/              # project.json (roadmap/stack), architecture.mmd (diagram source), ABOUT.txt
+├── docker-compose.yml
+├── package.json       # npm workspaces
+├── CONTRIBUTING.md
+├── SECURITY.md
 └── LICENSE            # MIT
 ```
+
+Structured metadata (roadmap, stack pointers): **`repo/project.json`**. Mermaid source (all diagrams): **`repo/architecture.mmd`**.
 
 ---
 
@@ -77,7 +78,205 @@ The dev server proxies `frontend` → `/api` → `backend`, so cookies stay same
 
 Sign in at **`/auth`** with your **Mudrex API secret**.
 
-More detail: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+---
+
+## Development
+
+### Prerequisites
+
+- **Node.js 20+**, **npm 10+**
+
+### Install & run
+
+From the repository root, `npm install` pulls **both** workspaces. Run:
+
+```bash
+npm run dev
+```
+
+| App | URL | Notes |
+|-----|-----|--------|
+| Frontend | http://localhost:8080 | Vite; `/api` proxied to Next on 3000 |
+| Backend | http://localhost:3000 | Next.js App Router |
+
+Run individually:
+
+```bash
+npm run dev -w @rexalgo/frontend
+npm run dev -w @rexalgo/backend
+```
+
+### Backend environment
+
+```bash
+cp backend/.env.example backend/.env.local
+```
+
+Set `JWT_SECRET` and `ENCRYPTION_KEY`. Optional: `REXALGO_DB_PATH` for a custom SQLite path.
+
+### Auth flow
+
+1. Open the UI → **Connect** / **Auth**
+2. Enter your **Mudrex API secret** (validated against [Mudrex Futures API](https://docs.trade.mudrex.com/docs/overview))
+3. Session cookie is set on the UI origin; the dev proxy forwards `/api` so cookies stay same-origin
+
+### Troubleshooting
+
+| Issue | Try |
+|--------|-----|
+| **401 on `/api/*` after login** | Use the UI URL (`:8080` in dev) so the session cookie is sent; check `frontend/vite.config.ts` proxy |
+| **DB errors** | Ensure `REXALGO_DB_PATH` (if set) is writable |
+| **Build failures** | Node 20+; run `npm install` from **repo root** (workspaces) |
+
+---
+
+## Architecture
+
+RexAlgo is a **browser client**, an optional **reverse proxy**, **Next.js**, **SQLite**, and the **Mudrex REST API**. Diagrams render on GitHub; the same blocks live in **`repo/architecture.mmd`**.
+
+### System context
+
+```mermaid
+flowchart TB
+  subgraph actors [Actors]
+    U[Trader / user]
+  end
+
+  subgraph rexalgo [RexAlgo — your deployment]
+    APP[RexAlgo app\nVite UI + Next API]
+    DB[(SQLite)]
+  end
+
+  subgraph external [External]
+    MR[Mudrex Futures API]
+  end
+
+  U -->|HTTPS| APP
+  APP --> DB
+  APP -->|REST + API secret| MR
+```
+
+### Development topology
+
+```mermaid
+flowchart LR
+  subgraph dev [Developer machine]
+    BR[Browser]
+    V[Vite :8080]
+    N[Next.js :3000]
+    DB[(SQLite file)]
+  end
+  MR[Mudrex API]
+
+  BR -->|page assets| V
+  BR -->|/api/* proxied| V
+  V -->|forward /api| N
+  N --> DB
+  N --> MR
+```
+
+### Production (Docker)
+
+```mermaid
+flowchart TB
+  BR[Browser] -->|HTTP/S| NG[nginx]
+  NG -->|static SPA| DIST[frontend dist]
+  NG -->|proxy /api/*| API[Next.js API]
+  API --> VOL[(Docker volume\nSQLite)]
+  API --> MR[Mudrex API]
+```
+
+### Logical request path
+
+```mermaid
+flowchart LR
+  UI[Vite SPA]
+  PX[Proxy\nVite or nginx]
+  NX[Next.js App Router]
+  DB[(SQLite)]
+  MR[Mudrex REST]
+
+  UI -->|"/api/*"| PX
+  PX --> NX
+  NX --> DB
+  NX --> MR
+```
+
+### Backend modules
+
+```mermaid
+flowchart TB
+  subgraph routes [app/api]
+    A1["/api/auth/*"]
+    A2["/api/strategies/*"]
+    A3["/api/subscriptions"]
+    A4["/api/mudrex/*"]
+  end
+
+  subgraph lib [lib]
+    AUTH[auth.ts\nJWT + encrypt secret]
+    MR[mudrex.ts\nHTTP client]
+    DBL[db.ts + schema.ts\nDrizzle]
+  end
+
+  MW[middleware.ts]
+
+  MW --> routes
+  routes --> AUTH
+  routes --> MR
+  routes --> DBL
+  AUTH --> DBL
+  MR -->|outbound HTTPS| EXT[Mudrex]
+```
+
+### Authentication sequence
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant V as Vite :8080
+  participant N as Next API
+  participant M as Mudrex API
+
+  B->>V: POST /api/auth/login (secret)
+  V->>N: forward + cookie jar
+  N->>M: validate credentials
+  M-->>N: OK / error
+  N-->>V: Set-Cookie HttpOnly JWT
+  V-->>B: response + cookie
+  Note over B,N: Later requests include cookie; secret stored encrypted in SQLite
+```
+
+### Strategy subscription sequence
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant N as Next API
+  participant D as SQLite
+  participant M as Mudrex
+
+  B->>N: GET /api/strategies/:id (public)
+  N->>D: load strategy
+  N-->>B: strategy detail
+
+  B->>N: POST /api/subscriptions + margin (auth)
+  N->>N: verify JWT + user
+  N->>D: persist subscription
+  N->>M: trading calls with user secret
+  M-->>N: result
+  N-->>B: subscription state
+```
+
+### Stack summary
+
+| Layer | Tech | Where |
+|-------|------|--------|
+| UI | Vite, React Router, shadcn, TanStack Query, Tailwind | `frontend/` |
+| API | Next.js 16 App Router | `backend/src/app/` |
+| Data | SQLite + Drizzle | `backend/src/lib/db.ts`, `schema.ts` |
+| Execution | Mudrex REST | `backend/src/lib/mudrex.ts` |
+| Session | JWT HttpOnly cookie + encrypted secret | `backend/src/lib/auth.ts`, `middleware.ts` |
 
 ---
 
@@ -118,35 +317,54 @@ npm run dev -w @rexalgo/backend
 
 ---
 
-## Documentation
+## Roadmap
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — **Mermaid diagrams** (context, deployment, auth, subscriptions)  
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — local setup  
-- [docs/ROADMAP.md](docs/ROADMAP.md) — planned features (webhooks, paper mode, observability, …)  
-- [CONTRIBUTING.md](CONTRIBUTING.md)  
-- [SECURITY.md](SECURITY.md)  
+Priorities are **Mudrex-first**. Structured copy: **`repo/project.json`** → `roadmap`.
+
+### Near term
+
+| Item | Notes |
+|------|--------|
+| **Frontend lint clean pass** | Then remove `continue-on-error` for lint in `.github/workflows/ci.yml` |
+| **CI hardening** | Optional `npm audit` reporting |
+| **Env templates** | Keep `.env.example` / `backend/.env.example` in sync |
+
+### Medium term
+
+| Item | Notes |
+|------|--------|
+| **Webhook ingress** | Signed HTTP → validate → Mudrex actions |
+| **Paper / dry-run mode** | Where API allows; clear UI state |
+| **Rate limiting** | Login and sensitive `/api/*` routes |
+
+### Longer term
+
+| Item | Notes |
+|------|--------|
+| **Realtime updates** | WebSocket/SSE if Mudrex exposes streams |
+| **Telegram / MCP** | Alerts; read-only agents first |
+| **Observability** | Latency, Mudrex errors, structured logs |
+
+### Out of scope (by default)
+
+| Item | Reason |
+|------|--------|
+| **Non-Mudrex execution** | Intentional single-venue adapter; fork for other venues |
+| **Incompatible copyleft in tree** | Conflicts with MIT unless maintainers approve |
 
 ---
 
-## Roadmap
+## Policies & links
 
-RexAlgo is **Mudrex-centric** (crypto futures). Planned direction:
-
-| Theme | Direction |
-|-------|-----------|
-| **Safety** | Paper / dry-run flows, optional approval before live orders |
-| **Integrations** | Signed webhooks (e.g. TradingView-style signals) |
-| **Realtime** | Live dashboard updates when APIs allow |
-| **Ops** | Rate limits, structured logs, basic latency/error visibility |
-
-Full backlog: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Architecture visuals: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — PRs, Lovable workflow, licenses  
+- **[SECURITY.md](SECURITY.md)** — secrets, hardening, disclosure  
 
 ---
 
 ## Credits
 
-- **UI / design workflow**: Evolved from [**Lovable**](https://lovable.dev) and the [**rex-trader-playground**](https://github.com/DecentralizedJM/rex-trader-playground) repo — merged here as **`frontend/`** for a single canonical app (supersedes maintaining UI-only in that repo).
-- **Execution**: [**Mudrex**](https://mudrex.com) Futures API — see [official API docs](https://docs.trade.mudrex.com/docs/overview).
+- **UI / design workflow**: [**Lovable**](https://lovable.dev) and [**rex-trader-playground**](https://github.com/DecentralizedJM/rex-trader-playground) → merged as **`frontend/`**.
+- **Execution**: [**Mudrex**](https://mudrex.com) — [API docs](https://docs.trade.mudrex.com/docs/overview).
 - **SDK reference** (unofficial): [mudrex-api-trading-python-sdk](https://github.com/DecentralizedJM/mudrex-api-trading-python-sdk).
 
 ---

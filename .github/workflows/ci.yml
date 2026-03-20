@@ -21,7 +21,7 @@ jobs:
       - name: Install root + workspaces
         run: npm install
 
-      # Remove continue-on-error when lint is clean — see docs/ROADMAP.md
+      # Remove continue-on-error when lint is clean — README.md#roadmap + repo/project.json
       - name: Lint frontend
         run: npm run lint -w @rexalgo/frontend
         continue-on-error: true

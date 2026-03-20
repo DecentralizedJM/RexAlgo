@@ -1,6 +1,7 @@
 /**
- * All requests go to same origin; Vite dev server proxies `/api` → Next.js backend.
- * @see vite.config.ts
+ * Browser → relative `/api/*` with credentials (session cookie).
+ * Dev: Vite proxies to Next :3000 (same-origin on :8080). Prod: nginx proxies to API.
+ * @see vite.config.ts | README.md#development | README.md#architecture
  */
 
 export class ApiError extends Error {

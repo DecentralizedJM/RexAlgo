@@ -15,7 +15,7 @@ npm run dev
 - UI: [http://localhost:8080](http://localhost:8080) (Vite; proxies `/api` → Next)
 - API: [http://localhost:3000](http://localhost:3000)
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for details.
+See the root **[README.md](README.md#development)** (development + troubleshooting).
 
 ## Pull requests
 
@@ -33,4 +33,4 @@ Frontend changes can be prototyped in Lovable and synced into `frontend/` (or de
 
 ## Roadmap & larger features
 
-Check [docs/ROADMAP.md](docs/ROADMAP.md). For substantial features (webhooks, paper trading, new auth), open an issue with a short design first.
+See **[README.md#roadmap](README.md#roadmap)** and **`repo/project.json`** (`roadmap`). For substantial features, open an issue with a short design first.

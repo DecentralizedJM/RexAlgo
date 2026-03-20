@@ -18,7 +18,7 @@ RexAlgo handles **Mudrex API secrets** and **session tokens**. Treat this like p
 | Area | Status / goal |
 |------|----------------|
 | **HTTPS** | Required in production; terminate TLS at reverse proxy or host. |
-| **Rate limiting** | Planned — login and sensitive `/api/*` routes (see [docs/ROADMAP.md](docs/ROADMAP.md)). |
+| **Rate limiting** | Planned — login and sensitive `/api/*` routes (see [README.md#roadmap](README.md#roadmap)). |
 | **CORS** | Restrict origins in production; dev may be permissive via Next/Vite. |
 | **Headers** | Consider strict CSP, `Secure` cookies, `SameSite` for session cookie in prod. |
 | **Dependency audit** | Run `npm audit`; address high/critical in lockstep with upgrades. |

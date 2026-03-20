@@ -1,3 +1,8 @@
+/**
+ * Protects /dashboard and most /api/* except public GET /api/strategies.
+ * Validates JWT from cookie; API returns 401, pages redirect to /login.
+ * @see README.md#architecture — backend modules
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 

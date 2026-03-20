@@ -1,3 +1,9 @@
+/**
+ * Outbound Mudrex Futures REST client (https://trade.mudrex.com/fapi/v1).
+ * Used by API routes after loading the user's encrypted API secret via auth.ts.
+ * @see README.md#architecture — backend module diagram
+ * @see repo/project.json — stack.frontend / stack.backend
+ */
 import type {
   MudrexWalletBalance,
   MudrexFuturesBalance,

@@ -1,3 +1,7 @@
+/**
+ * Drizzle schema: users (encrypted Mudrex secret), strategies, subscriptions, trade logs.
+ * @see backend/src/lib/db.ts | README.md#architecture
+ */
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {

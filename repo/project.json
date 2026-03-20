@@ -1,0 +1,54 @@
+{
+  "name": "RexAlgo",
+  "description": "Mudrex-integrated algo & copy-trading monorepo (Vite + Next.js + SQLite).",
+  "documentation": {
+    "narrative": "README.md",
+    "diagramsSource": "repo/architecture.mmd",
+    "thisFile": "Structured metadata for tooling; keep in sync with README when roadmap changes."
+  },
+  "stack": {
+    "frontend": {
+      "path": "frontend",
+      "runtime": "Vite + React + React Router + shadcn + TanStack Query",
+      "apiClient": "frontend/src/lib/api.ts"
+    },
+    "backend": {
+      "path": "backend",
+      "runtime": "Next.js 16 App Router",
+      "mudrexClient": "backend/src/lib/mudrex.ts",
+      "auth": "backend/src/lib/auth.ts",
+      "database": "backend/src/lib/db.ts",
+      "schema": "backend/src/lib/schema.ts",
+      "routeGuard": "backend/src/middleware.ts"
+    },
+    "external": {
+      "executionApi": "https://docs.trade.mudrex.com/docs/overview"
+    }
+  },
+  "roadmap": {
+    "nearTerm": [
+      { "id": "lint-frontend", "title": "Frontend lint clean pass", "note": "Then remove continue-on-error for lint in .github/workflows/ci.yml" },
+      { "id": "ci-audit", "title": "CI hardening", "note": "Optional npm audit reporting" },
+      { "id": "env-sync", "title": "Env templates", "note": "Keep .env.example and backend/.env.example in sync" }
+    ],
+    "mediumTerm": [
+      { "id": "webhooks", "title": "Webhook ingress", "note": "Signed HTTP → Mudrex actions" },
+      { "id": "paper", "title": "Paper / dry-run mode", "note": "Where API allows" },
+      { "id": "rate-limit", "title": "Rate limiting", "note": "Login and sensitive /api routes" }
+    ],
+    "longerTerm": [
+      { "id": "realtime", "title": "Realtime updates", "note": "WS/SSE if Mudrex supports" },
+      { "id": "telegram-mcp", "title": "Telegram / MCP", "note": "Alerts; read-only agents first" },
+      { "id": "observability", "title": "Observability", "note": "Latency, errors, structured logs" }
+    ],
+    "outOfScope": [
+      { "id": "multi-venue", "title": "Non-Mudrex execution", "reason": "Separate product or fork" },
+      { "id": "copyleft-deps", "title": "Incompatible copyleft code in tree", "reason": "Conflicts with MIT unless approved" }
+    ]
+  },
+  "security": {
+    "secrets": ["JWT_SECRET", "ENCRYPTION_KEY", "Mudrex API secret (user-provided)"],
+    "templates": [".env.example", "backend/.env.example"],
+    "hardening": ["HTTPS in prod", "Rate limits (planned)", "Restrict CORS in prod", "Secure/SameSite cookies", "npm audit", "2FA if adding password auth"]
+  }
+}
