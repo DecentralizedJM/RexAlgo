@@ -1,0 +1,24 @@
+{
+  "name": "rexalgo",
+  "private": true,
+  "description": "RexAlgo — Mudrex-integrated algo & copy-trading platform (monorepo)",
+  "license": "MIT",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,api -c green,blue \"npm run dev -w @rexalgo/frontend\" \"npm run dev -w @rexalgo/backend\"",
+    "build": "npm run build -w @rexalgo/frontend && npm run build -w @rexalgo/backend",
+    "lint": "npm run lint -w @rexalgo/frontend --if-present && npm run lint -w @rexalgo/backend --if-present",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

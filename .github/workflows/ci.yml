@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install root + workspaces
+        run: npm install
+
+      - name: Lint frontend
+        run: npm run lint -w @rexalgo/frontend
+        continue-on-error: true # shadcn/Lovable generated UI; tighten over time
+
+      - name: Lint backend
+        run: npm run lint -w @rexalgo/backend
+        continue-on-error: true
+
+      - name: Build frontend
+        run: npm run build -w @rexalgo/frontend
+
+      - name: Build backend
+        run: npm run build -w @rexalgo/backend

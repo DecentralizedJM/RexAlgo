@@ -1,0 +1,75 @@
+import { NextRequest, NextResponse } from "next/server";
+import { v4 as uuidv4 } from "uuid";
+import { validateApiSecret } from "@/lib/mudrex";
+import { encryptApiSecret, createSession, COOKIE_NAME } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { users } from "@/lib/schema";
+import { eq } from "drizzle-orm";
+
+export async function POST(req: NextRequest) {
+  try {
+    const { apiSecret, displayName } = await req.json();
+
+    if (!apiSecret || typeof apiSecret !== "string") {
+      return NextResponse.json(
+        { error: "API secret is required" },
+        { status: 400 }
+      );
+    }
+
+    const isValid = await validateApiSecret(apiSecret.trim());
+    if (!isValid) {
+      return NextResponse.json(
+        { error: "Invalid API secret. Could not authenticate with Mudrex." },
+        { status: 401 }
+      );
+    }
+
+    const encrypted = encryptApiSecret(apiSecret.trim());
+
+    const secretHash = Buffer.from(apiSecret.trim()).toString("base64").slice(0, 16);
+    const existingUsers = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, secretHash));
+
+    let userId: string;
+    let userName: string;
+
+    if (existingUsers.length > 0) {
+      userId = existingUsers[0].id;
+      userName = existingUsers[0].displayName;
+      await db
+        .update(users)
+        .set({ apiSecretEncrypted: encrypted })
+        .where(eq(users.id, userId));
+    } else {
+      userId = secretHash;
+      userName = displayName?.trim() || `Trader_${uuidv4().slice(0, 6)}`;
+      await db.insert(users).values({
+        id: userId,
+        displayName: userName,
+        apiSecretEncrypted: encrypted,
+      });
+    }
+
+    const token = await createSession(userId, userName, encrypted);
+
+    const response = NextResponse.json({ success: true, user: { id: userId, displayName: userName } });
+    response.cookies.set(COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60,
+      path: "/",
+    });
+
+    return response;
+  } catch (error) {
+    console.error("Login error:", error);
+    return NextResponse.json(
+      { error: "Authentication failed" },
+      { status: 500 }
+    );
+  }
+}

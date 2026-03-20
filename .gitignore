@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Builds
+dist/
+**/dist/
+.next/
+**/.next/
+*.tsbuildinfo
+
+# Env & local
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Database (local / SQLite)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# OS / IDE
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test / coverage
+coverage/
+playwright-report/
+test-results/
+
+# Turbo / misc
+.turbo

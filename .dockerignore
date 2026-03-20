@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/.next
+**/.git
+**/*.md
+!README.md
+.env
+.env.*
+!.env.example
+**/rexalgo.db
+**/rexalgo.db-*
