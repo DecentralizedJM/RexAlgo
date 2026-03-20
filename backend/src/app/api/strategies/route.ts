@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const creatorId = req.nextUrl.searchParams.get("creatorId");
 
   try {
-    let query = db.select().from(strategies).orderBy(desc(strategies.createdAt));
+    const query = db.select().from(strategies).orderBy(desc(strategies.createdAt));
 
     const results = await query;
 
