@@ -361,14 +361,6 @@ Priorities are **Mudrex-first**. Structured copy: **`repo/project.json`** → `r
 
 ---
 
-## Credits
-
-- **UI / design workflow**: [**Lovable**](https://lovable.dev) and [**rex-trader-playground**](https://github.com/DecentralizedJM/rex-trader-playground) → merged as **`frontend/`**.
-- **Execution**: [**Mudrex**](https://mudrex.com) — [API docs](https://docs.trade.mudrex.com/docs/overview).
-- **SDK reference** (unofficial): [mudrex-api-trading-python-sdk](https://github.com/DecentralizedJM/mudrex-api-trading-python-sdk).
-
----
-
 ## Disclaimer
 
 RexAlgo is **not** official Mudrex software. Crypto futures trading involves **substantial risk**. No investment advice. Use at your own risk.
