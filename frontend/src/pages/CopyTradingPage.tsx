@@ -81,7 +81,7 @@ export default function CopyTradingPage() {
 
         {!isLoading && sorted.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
-            No copy-trading strategies yet. Publish one from the dashboard flow (backend) or seed data.
+            No copy-trading strategies yet. Add strategies via the API or seed data.
           </div>
         )}
       </div>

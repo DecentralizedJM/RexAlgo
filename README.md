@@ -22,7 +22,7 @@
 | **Wallet / trading** | Spot & futures balances, transfers, positions, orders (via Mudrex) |
 | **Algo marketplace** | Browse & subscribe to `algo` strategies with **margin per trade** |
 | **Copy trading** | Browse `copy_trading` strategies, subscribe, same margin model |
-| **Backend UI** | Optional Next.js dashboard pages (`/dashboard/*`) for power users |
+| **Single UI** | All product screens live in **`frontend/`** (Lovable / Vite). **`backend/`** is API-only (+ tiny root status page). |
 
 ---
 
@@ -32,7 +32,7 @@
 RexAlgo/
 ├── frontend/          # Vite + React Router + shadcn (Lovable / rex-trader-playground lineage)
 │   ├── src/lib/api.ts # HTTP client → /api (see file header)
-├── backend/           # Next.js 16 — Mudrex client, Drizzle, auth (see src/lib/* headers)
+├── backend/           # Next.js 16 — API only (no duplicate app UI)
 │   ├── src/app/api/   # REST routes
 ├── repo/              # project.json (roadmap/stack), architecture.mmd (diagram source), ABOUT.txt
 ├── docker-compose.yml

@@ -14,7 +14,7 @@
     },
     "backend": {
       "path": "backend",
-      "runtime": "Next.js 16 App Router",
+      "runtime": "Next.js 16 — REST API only (UI is frontend/)",
       "mudrexClient": "backend/src/lib/mudrex.ts",
       "auth": "backend/src/lib/auth.ts",
       "database": "backend/src/lib/db.ts",
