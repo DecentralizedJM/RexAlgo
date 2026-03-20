@@ -162,8 +162,8 @@ flowchart TB
 flowchart LR
   subgraph dev [Developer machine]
     BR[Browser]
-    V[Vite :8080]
-    N[Next.js :3000]
+    V["Vite port 8080"]
+    N["Next port 3000"]
     DB[(SQLite file)]
   end
   MR[Mudrex API]
@@ -234,7 +234,7 @@ flowchart TB
 ```mermaid
 sequenceDiagram
   participant B as Browser
-  participant V as Vite :8080
+  participant V as Vite dev proxy
   participant N as Next API
   participant M as Mudrex API
 
@@ -244,7 +244,7 @@ sequenceDiagram
   M-->>N: OK / error
   N-->>V: Set-Cookie HttpOnly JWT
   V-->>B: response + cookie
-  Note over B,N: Later requests include cookie; secret stored encrypted in SQLite
+  Note over B,N: Later requests send cookie. API secret stays encrypted in SQLite.
 ```
 
 ### Strategy subscription sequence
@@ -256,7 +256,7 @@ sequenceDiagram
   participant D as SQLite
   participant M as Mudrex
 
-  B->>N: GET /api/strategies/:id (public)
+  B->>N: GET /api/strategies/by-id (public)
   N->>D: load strategy
   N-->>B: strategy detail
 
