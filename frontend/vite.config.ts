@@ -12,7 +12,8 @@ export default defineConfig(({ mode }) => ({
     host: true,
     port: 8080,
     strictPort: true,
-    hmr: { overlay: false },
+    // Show runtime errors in-browser during dev (helps when the screen would otherwise stay blank)
+    hmr: { overlay: true },
     proxy: {
       "/api": {
         target: API_TARGET,

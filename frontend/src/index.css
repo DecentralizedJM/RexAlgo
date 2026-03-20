@@ -92,13 +92,11 @@
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(16px);
-    filter: blur(4px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
   }
 }
 
@@ -116,24 +114,39 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* `forwards` only — avoid `both`, which applies opacity:0 before the first frame and can
+   leave the UI invisible if animations never run (reduced motion, GPU quirks, etc.). */
 .animate-fade-up {
-  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-fade-up-delay-1 {
-  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
 }
 
 .animate-fade-up-delay-2 {
-  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
 }
 
 .animate-fade-up-delay-3 {
-  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
 }
 
 .animate-fade-up-delay-4 {
-  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
+  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-up-delay-1,
+  .animate-fade-up-delay-2,
+  .animate-fade-up-delay-3,
+  .animate-fade-up-delay-4 {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
 }
 
 .animate-pulse-glow {
