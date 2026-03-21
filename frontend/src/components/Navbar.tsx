@@ -12,6 +12,7 @@ import {
   LifeBuoy,
   RefreshCw,
   KeyRound,
+  ExternalLink,
 } from "lucide-react";
 import { useState, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { refreshAppData } from "@/lib/refreshAppData";
 import { toast } from "sonner";
 import { useMudrexKeyInvalid } from "@/contexts/MudrexKeyInvalidContext";
+import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
 
 const SUPPORT_EMAIL = "help@mudrex.com";
 
@@ -223,24 +225,52 @@ export default function Navbar() {
               <div className="min-w-0">
                 <p className="font-medium text-loss">Rotate your Mudrex API key</p>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Mudrex rejected the key we have on file (expired or revoked). Create a new API key in the
-                  Mudrex app, then sign in here again.
+                  Mudrex rejected the key we have on file (expired or revoked).{" "}
+                  <a
+                    href={MUDREX_PRO_TRADING_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary font-medium underline-offset-2 hover:underline inline-flex items-center gap-1"
+                  >
+                    Open Mudrex Pro Trading
+                    <ExternalLink className="w-3 h-3 shrink-0" aria-hidden />
+                  </a>{" "}
+                  to generate or rotate your API key, then sign in here again.
                 </p>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 border-loss/45 w-full sm:w-auto"
-              onClick={() => {
-                navigate("/auth", { state: { from: location.pathname } });
-                setMobileOpen(false);
-              }}
-            >
-              <KeyRound className="w-4 h-4" />
-              Rotate key & sign in
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="w-full sm:w-auto"
+                asChild
+              >
+                <a
+                  href={MUDREX_PRO_TRADING_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Mudrex: keys &amp; API
+                </a>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-loss/45 w-full sm:w-auto"
+                onClick={() => {
+                  navigate("/auth", { state: { from: location.pathname } });
+                  setMobileOpen(false);
+                }}
+              >
+                <KeyRound className="w-4 h-4" />
+                Rotate key & sign in
+              </Button>
+            </div>
           </div>
         </div>
       )}

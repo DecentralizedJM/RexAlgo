@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, ExternalLink } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { login, ApiError, fetchSessionInfo } from "@/lib/api";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
@@ -74,8 +74,19 @@ export default function AuthPage() {
             />
             <h1 className="text-xl font-bold text-center">Mudrex</h1>
           </div>
-          <p className="text-sm text-muted-foreground text-center mb-8">
+          <p className="text-sm text-muted-foreground text-center mb-4">
             Paste your Mudrex API secret (from the Mudrex app). Display name is optional.
+          </p>
+          <p className="text-center mb-8">
+            <a
+              href={MUDREX_PRO_TRADING_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-primary hover:underline underline-offset-2"
+            >
+              Generate or rotate API key on Mudrex
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            </a>
           </p>
 
           <form onSubmit={handleConnect} className="space-y-4">
@@ -151,7 +162,17 @@ export default function AuthPage() {
               <span className="text-foreground font-medium">{sessionDays} days</span> (JWT + cookie expire
               together; there is no auto-refresh). Mudrex usually rotates API keys after about{" "}
               <span className="text-foreground font-medium">{mudrexKeyDays} days</span>—if wallet or orders
-              start failing with an auth error, create a new key in Mudrex and sign in here again.
+              start failing with an auth error, create a new key on{" "}
+              <a
+                href={MUDREX_PRO_TRADING_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground font-medium underline-offset-2 hover:underline inline-flex items-center gap-0.5"
+              >
+                Mudrex Pro Trading
+                <ExternalLink className="w-3 h-3 shrink-0" aria-hidden />
+              </a>{" "}
+              and sign in here again.
             </span>
             <span className="block pt-2 border-t border-border/60">
               Secrets are encrypted at rest and only used to call Mudrex. We never hold your funds; balances
