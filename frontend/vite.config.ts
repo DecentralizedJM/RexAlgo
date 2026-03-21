@@ -3,7 +3,8 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-// Dev: only open http://localhost:8080 — Vite proxies /api → Next (127.0.0.1:3000).
+// Dev: use http://127.0.0.1:8080 in the browser — Vite proxies /api → Next (127.0.0.1:3000).
+// (localhost shares cookies across all localhost:* tabs; 127.0.0.1 is a separate cookie jar.)
 // HMR + HTTP share :8080, so no separate gateway (avoids WebSocket / 426 issues).
 const API_TARGET = process.env.VITE_API_PROXY_TARGET || "http://127.0.0.1:3000";
 

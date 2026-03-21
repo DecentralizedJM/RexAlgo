@@ -1,6 +1,7 @@
 import Navbar from "@/components/Navbar";
 import TraderCard from "@/components/TraderCard";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchStrategies, type ApiStrategy } from "@/lib/api";
 import { initials } from "@/lib/format";
@@ -80,8 +81,15 @@ export default function CopyTradingPage() {
         )}
 
         {!isLoading && sorted.length === 0 && (
-          <div className="text-center py-16 text-muted-foreground">
-            No copy-trading strategies yet. Add strategies via the API or seed data.
+          <div className="text-center py-16 text-muted-foreground space-y-3">
+            <p>No copy-trading strategies yet.</p>
+            <p className="text-sm">
+              Masters can publish a listing and webhook from{" "}
+              <Link to="/copy-trading/studio" className="text-primary hover:underline font-medium">
+                Master studio
+              </Link>
+              .
+            </p>
           </div>
         )}
       </div>

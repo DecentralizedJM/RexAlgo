@@ -10,7 +10,7 @@
   "scripts": {
     "predev": "node -e \"const fs=require('fs');const p='backend/.env.local';if(!fs.existsSync(p)){fs.copyFileSync('backend/.env.example',p);console.log('Created backend/.env.local from .env.example');}\"",
     "dev:api": "npm run dev -w @rexalgo/backend -- -H 127.0.0.1 -p 3000",
-    "dev:web": "wait-on tcp:127.0.0.1:3000 && npm run dev -w @rexalgo/frontend",
+    "dev:web": "wait-on -t 120000 http-get://127.0.0.1:3000/api/health && npm run dev -w @rexalgo/frontend",
     "dev": "concurrently -k -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
     "build": "npm run build -w @rexalgo/frontend && npm run build -w @rexalgo/backend",
     "lint": "npm run lint -w @rexalgo/frontend --if-present && npm run lint -w @rexalgo/backend --if-present",

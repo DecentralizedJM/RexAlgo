@@ -12,6 +12,7 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-me-32-char-hex-or-string!!}
       REXALGO_DB_PATH: /data/rexalgo.db
       NODE_ENV: production
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
     volumes:
       - rexalgo_data:/data
     expose:

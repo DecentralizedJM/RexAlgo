@@ -1,6 +1,7 @@
 /**
  * Protects authenticated /api/* routes. No HTML UI on this server — always JSON 401.
  * Public: GET /api/strategies (and GET /api/strategies/[id]).
+ * Public (HMAC): POST /api/webhooks/copy-trading/* — not matched here.
  * @see README.md#architecture
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -42,5 +43,11 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/mudrex/:path*", "/api/strategies/:path*", "/api/subscriptions/:path*"],
+  matcher: [
+    "/api/mudrex/:path*",
+    "/api/strategies/:path*",
+    "/api/subscriptions/:path*",
+    "/api/copy-trading/:path*",
+    "/api/marketplace/studio/:path*",
+  ],
 };

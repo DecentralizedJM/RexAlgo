@@ -12,13 +12,19 @@ RexAlgo handles **Mudrex API secrets** and **session tokens**. Treat this like p
 
 - Mudrex API secret **encrypted at rest**; **JWT** in **HttpOnly** cookie for session.
 - API routes that touch Mudrex should remain **authenticated** where appropriate (see `backend/src/middleware.ts`).
+- **Copy-trading webhooks** (`POST /api/webhooks/copy-trading/*`) are **unauthenticated** but **HMAC-signed** (see `backend/src/lib/copyWebhookHmac.ts`). Signing secrets are **encrypted** in SQLite like user secrets. **Rotate** a leaked secret from Master studio. A simple **per-strategy rate limit** applies in-process (`backend/src/lib/copyWebhookRateLimit.ts`); add gateway rate limits in production.
+
+## Copy-trading mirroring risk
+
+- A verified webhook can cause **real orders** on **followers’** Mudrex accounts. Masters must protect bot credentials and webhook URLs.
+- **Partial failures** are expected (margin, exchange rules); check studio **signal history** and server logs. This is **not** a guarantee of identical fills across accounts.
 
 ## Hardening checklist (ongoing)
 
 | Area | Status / goal |
 |------|----------------|
 | **HTTPS** | Required in production; terminate TLS at reverse proxy or host. |
-| **Rate limiting** | Planned — login and sensitive `/api/*` routes (see [README.md#roadmap](README.md#roadmap)). |
+| **Rate limiting** | In-process limit on copy webhooks; extend with gateway limits for login and other `/api/*` routes (see [README.md#roadmap](README.md#roadmap)). |
 | **CORS** | Restrict origins in production; dev may be permissive via Next/Vite. |
 | **Headers** | Consider strict CSP, `Secure` cookies, `SameSite` for session cookie in prod. |
 | **Dependency audit** | Run `npm audit`; address high/critical in lockstep with upgrades. |

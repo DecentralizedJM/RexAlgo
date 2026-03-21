@@ -7,7 +7,9 @@ export function useSession() {
   return useQuery({
     queryKey: ["session", "me"],
     queryFn: getMe,
-    staleTime: 60_000,
+    // Always revalidate on mount so we don’t redirect with a stale `{ user: null }` cache
+    staleTime: 0,
+    gcTime: 30 * 60_000,
   });
 }
 
@@ -17,11 +19,12 @@ export function useRequireAuth() {
   const q = useSession();
 
   useEffect(() => {
-    if (q.isPending) return;
+    // Wait until the session request settles (avoids kicking back to /auth while refetching)
+    if (q.isPending || q.isFetching) return;
     if (!q.data?.user) {
       navigate("/auth", { replace: true, state: { from: window.location.pathname } });
     }
-  }, [q.isPending, q.data?.user, navigate]);
+  }, [q.isPending, q.isFetching, q.data?.user, navigate]);
 
   return q;
 }

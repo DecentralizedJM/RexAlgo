@@ -56,39 +56,136 @@ async function mudrexFetch(
   return data;
 }
 
-// ─── Wallet ──────────────────────────────────────────────────────────
+function asRecord(v: unknown): Record<string, unknown> | null {
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    return v as Record<string, unknown>;
+  }
+  return null;
+}
 
-export async function getSpotBalance(
-  apiSecret: string
-): Promise<MudrexWalletBalance> {
-  const res = (await mudrexFetch("/wallet/funds", apiSecret, {
-    method: "POST",
-  })) as { data?: MudrexWalletBalance };
-  return (
-    res.data ?? {
+/** Prefer `data`, else root (Mudrex may wrap or return flat fields). */
+function unwrapPayload(res: unknown): Record<string, unknown> | null {
+  const r = asRecord(res);
+  if (!r) return null;
+  const inner = asRecord(r.data);
+  if (inner) return inner;
+  return r;
+}
+
+function pickStr(payload: Record<string, unknown>, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = payload[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      return String(v);
+    }
+  }
+  return "0";
+}
+
+function pickBool(payload: Record<string, unknown>, ...keys: string[]): boolean {
+  for (const k of keys) {
+    const v = payload[k];
+    if (v === true || v === "true") return true;
+    if (v === false || v === "false") return false;
+  }
+  return false;
+}
+
+function mapSpotPayload(payload: Record<string, unknown> | null): MudrexWalletBalance {
+  if (!payload) {
+    return {
       total: "0",
       withdrawable: "0",
       invested: "0",
       rewards: "0",
       currency: "USDT",
-    }
-  );
+    };
+  }
+  return {
+    total: pickStr(payload, "total", "total_balance", "balance"),
+    withdrawable: pickStr(
+      payload,
+      "withdrawable",
+      "available",
+      "available_balance",
+      "transferable"
+    ),
+    invested: pickStr(payload, "invested", "invested_amount", "in_orders"),
+    rewards: pickStr(payload, "rewards", "reward"),
+    currency:
+      payload.currency != null && String(payload.currency).trim() !== ""
+        ? String(payload.currency)
+        : "USDT",
+  };
+}
+
+function mapFuturesPayload(payload: Record<string, unknown> | null): MudrexFuturesBalance {
+  if (!payload) {
+    return {
+      balance: "0",
+      locked_amount: "0",
+      unrealized_pnl: "0",
+      first_time_user: false,
+    };
+  }
+  return {
+    balance: pickStr(
+      payload,
+      "balance",
+      "wallet_balance",
+      "available_balance",
+      "futures_balance",
+      "total",
+      "total_balance"
+    ),
+    locked_amount: pickStr(
+      payload,
+      "locked_amount",
+      "locked",
+      "margin_locked"
+    ),
+    unrealized_pnl: pickStr(
+      payload,
+      "unrealized_pnl",
+      "unrealizedPnl",
+      "unrealised_pnl"
+    ),
+    first_time_user: pickBool(payload, "first_time_user", "firstTimeUser"),
+  };
+}
+
+// ─── Wallet ──────────────────────────────────────────────────────────
+
+export async function getSpotBalance(
+  apiSecret: string
+): Promise<MudrexWalletBalance> {
+  // Docs: GET /wallet/funds; fallback POST for older / alternate gateways
+  try {
+    const res = await mudrexFetch("/wallet/funds", apiSecret, { method: "GET" });
+    return mapSpotPayload(unwrapPayload(res));
+  } catch {
+    const res = await mudrexFetch("/wallet/funds", apiSecret, {
+      method: "POST",
+      body: "{}",
+    });
+    return mapSpotPayload(unwrapPayload(res));
+  }
 }
 
 export async function getFuturesBalance(
   apiSecret: string
 ): Promise<MudrexFuturesBalance> {
-  const res = (await mudrexFetch("/futures/funds", apiSecret)) as {
-    data?: MudrexFuturesBalance;
-  };
-  return (
-    res.data ?? {
-      balance: "0",
-      locked_amount: "0",
-      unrealized_pnl: "0",
-      first_time_user: false,
-    }
-  );
+  // Docs: POST /futures/funds; fallback GET for compatibility
+  try {
+    const res = await mudrexFetch("/futures/funds", apiSecret, {
+      method: "POST",
+      body: "{}",
+    });
+    return mapFuturesPayload(unwrapPayload(res));
+  } catch {
+    const res = await mudrexFetch("/futures/funds", apiSecret, { method: "GET" });
+    return mapFuturesPayload(unwrapPayload(res));
+  }
 }
 
 export async function transferFunds(

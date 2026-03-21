@@ -2,12 +2,10 @@ import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom"
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
-import PerformanceChart from "@/components/PerformanceChart";
 import AllocationModal from "@/components/AllocationModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { fetchStrategy, subscribe, ApiError } from "@/lib/api";
-import { mockChartData } from "@/data/mockData";
 import {
   TrendingUp,
   Target,
@@ -120,14 +118,6 @@ export default function StrategyDetailPage() {
     );
   }
 
-  const chartData =
-    strategy.totalTrades > 0
-      ? mockChartData.map((d, i) => ({
-          ...d,
-          value: 35000 + strategy.totalPnl * 80 + i * 100,
-        }))
-      : mockChartData;
-
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -179,7 +169,15 @@ export default function StrategyDetailPage() {
 
         <div className="glass rounded-xl p-6 mb-8 animate-fade-up-delay-2">
           <h2 className="font-semibold mb-4">Performance</h2>
-          <PerformanceChart data={chartData} />
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Marketplace strategies show <strong className="text-foreground">aggregate stats</strong> stored in
+            RexAlgo (total PnL %, win rate, trades, subscribers). There is no exchange-verified equity curve
+            for third-party listings. Your own closed-trade P&amp;L curve is on the{" "}
+            <Link to="/dashboard" className="text-primary hover:underline">
+              Dashboard
+            </Link>
+            .
+          </p>
         </div>
 
         <div className="glass rounded-xl p-6 text-sm text-muted-foreground animate-fade-up-delay-3">

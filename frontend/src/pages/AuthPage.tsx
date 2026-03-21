@@ -26,10 +26,12 @@ export default function AuthPage() {
     setState("loading");
     setMessage("");
     try {
-      await login(secret.trim(), displayName.trim() || undefined);
-      await queryClient.invalidateQueries({ queryKey: ["session"] });
+      const result = await login(secret.trim(), displayName.trim() || undefined);
+      // Avoid race: dashboard used to read a stale cached `{ user: null }` and redirect to /auth
+      queryClient.setQueryData(["session", "me"], { user: result.user });
+      await queryClient.refetchQueries({ queryKey: ["session", "me"] });
       setState("success");
-      setTimeout(() => navigate(from, { replace: true }), 600);
+      navigate(from, { replace: true });
     } catch (err) {
       setState("error");
       setMessage(

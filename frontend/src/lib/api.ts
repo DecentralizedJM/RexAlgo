@@ -1,6 +1,6 @@
 /**
  * Browser → relative `/api/*` with credentials (session cookie).
- * Dev: open **localhost:8080** (Vite; `/api` proxied to Next on 3000). Prod: nginx.
+ * Dev: **127.0.0.1:8080** (Vite; `/api` → Next on 3000). Verify API: `curl http://127.0.0.1:3000/api/health` → `rexalgo-api`. Prod: nginx.
  * @see vite.config.ts | README.md#development | README.md#architecture
  */
 
@@ -114,6 +114,138 @@ export async function fetchStrategy(id: string) {
   return apiFetch<{ strategy: ApiStrategy }>(`/api/strategies/${id}`);
 }
 
+export async function patchStrategy(
+  id: string,
+  body: Partial<{
+    name: string;
+    description: string;
+    symbol: string;
+    side: "LONG" | "SHORT" | "BOTH";
+    leverage: string;
+    stoplossPct: number | null;
+    takeprofitPct: number | null;
+    riskLevel: "low" | "medium" | "high";
+    timeframe: string | null;
+    isActive: boolean;
+  }>
+) {
+  return apiFetch<{ strategy: ApiStrategy }>(`/api/strategies/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+// ─── Copy trading — Master studio ───────────────────────────────────
+
+export type StudioStrategyRow = ApiStrategy & {
+  webhookEnabled: boolean;
+  webhookUrl: string | null;
+  webhookPath: string;
+};
+
+export async function fetchCopyStudioStrategies() {
+  return apiFetch<{
+    strategies: StudioStrategyRow[];
+    publicBaseUrl: string | null;
+  }>("/api/copy-trading/studio/strategies");
+}
+
+export async function createCopyStudioStrategy(body: {
+  name: string;
+  description: string;
+  symbol: string;
+  side: "LONG" | "SHORT" | "BOTH";
+  leverage?: string;
+  riskLevel?: "low" | "medium" | "high";
+  timeframe?: string;
+  stoplossPct?: number | null;
+  takeprofitPct?: number | null;
+}) {
+  return apiFetch<{ strategy: StudioStrategyRow }>(
+    "/api/copy-trading/studio/strategies",
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
+export async function setCopyStrategyWebhook(
+  strategyId: string,
+  action: "enable" | "disable" | "rotate"
+) {
+  return apiFetch<{
+    ok: boolean;
+    enabled: boolean;
+    secretPlain?: string | null;
+    shownOnce?: boolean;
+    message?: string;
+  }>(`/api/copy-trading/studio/strategies/${strategyId}/webhook`, {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
+}
+
+export type CopySignalRow = {
+  id: string;
+  idempotencyKey: string;
+  receivedAt: string;
+  clientIp: string | null;
+  payload: unknown;
+  mirror: { ok: number; err: number };
+};
+
+export async function fetchCopyStrategySignals(strategyId: string) {
+  return apiFetch<{ signals: CopySignalRow[] }>(
+    `/api/copy-trading/studio/strategies/${strategyId}/signals`
+  );
+}
+
+// ─── Marketplace — Strategy studio (algo) ───────────────────────────
+
+export async function fetchMarketplaceStudioStrategies() {
+  return apiFetch<{
+    strategies: StudioStrategyRow[];
+    publicBaseUrl: string | null;
+  }>("/api/marketplace/studio/strategies");
+}
+
+export async function createMarketplaceStudioStrategy(body: {
+  name: string;
+  description: string;
+  symbol: string;
+  side: "LONG" | "SHORT" | "BOTH";
+  leverage?: string;
+  riskLevel?: "low" | "medium" | "high";
+  timeframe?: string;
+  stoplossPct?: number | null;
+  takeprofitPct?: number | null;
+}) {
+  return apiFetch<{ strategy: StudioStrategyRow }>(
+    "/api/marketplace/studio/strategies",
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
+export async function setMarketplaceStrategyWebhook(
+  strategyId: string,
+  action: "enable" | "disable" | "rotate"
+) {
+  return apiFetch<{
+    ok: boolean;
+    enabled: boolean;
+    secretPlain?: string | null;
+    shownOnce?: boolean;
+    message?: string;
+  }>(`/api/marketplace/studio/strategies/${strategyId}/webhook`, {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
+}
+
+export async function fetchMarketplaceStrategySignals(strategyId: string) {
+  return apiFetch<{ signals: CopySignalRow[] }>(
+    `/api/marketplace/studio/strategies/${strategyId}/signals`
+  );
+}
+
 export async function subscribe(strategyId: string, marginPerTrade: string) {
   return apiFetch<{ success: boolean; subscriptionId: string }>(
     "/api/subscriptions",
@@ -153,11 +285,22 @@ export type ApiPosition = {
   mark_price: string;
   leverage: string;
   unrealized_pnl: string;
+  realized_pnl?: string;
   margin?: string;
+  status?: string;
+  closed_at?: string;
+  updated_at?: string;
+  created_at?: string;
 };
 
 export async function fetchPositions() {
   return apiFetch<{ positions: ApiPosition[] }>("/api/mudrex/positions");
+}
+
+export async function fetchPositionHistory() {
+  return apiFetch<{ positions: ApiPosition[] }>(
+    "/api/mudrex/positions?history=true"
+  );
 }
 
 export type ApiSubscription = {

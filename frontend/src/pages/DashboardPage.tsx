@@ -8,19 +8,34 @@ import { TrendingUp, BarChart3, Users, ArrowUpRight, ArrowDownRight, Wallet } fr
 import {
   fetchWallet,
   fetchPositions,
+  fetchPositionHistory,
   fetchSubscriptions,
   ApiError,
+  type ApiPosition,
 } from "@/lib/api";
 import { formatPair } from "@/lib/format";
 import { useRequireAuth } from "@/hooks/useAuth";
 
-function buildChartFromPnl(totalUnrealized: number) {
-  const base = 10000;
-  return Array.from({ length: 30 }, (_, i) => ({
-    date: `D${i + 1}`,
-    value: base + (totalUnrealized / 30) * i + Math.sin(i / 3) * 120,
-    pnl: (Math.random() - 0.4) * (Math.abs(totalUnrealized) / 10 + 50),
-  }));
+/** Cumulative realized P&L from Mudrex position history (one API page). */
+function buildRealizedPnlCurve(positions: ApiPosition[]): { date: string; value: number }[] {
+  if (!positions.length) return [];
+  const indexed = positions.map((p, i) => ({ p, i }));
+  indexed.sort((a, b) => {
+    const ta = a.p.closed_at || a.p.updated_at || a.p.created_at || "";
+    const tb = b.p.closed_at || b.p.updated_at || b.p.created_at || "";
+    if (ta && tb) return ta.localeCompare(tb);
+    return a.i - b.i;
+  });
+  let cum = 0;
+  return indexed.map(({ p }, n) => {
+    cum += parseFloat(p.realized_pnl ?? "0");
+    const dateLabel =
+      (p.closed_at && p.closed_at.slice(0, 10)) ||
+      (p.updated_at && p.updated_at.slice(0, 10)) ||
+      (p.created_at && p.created_at.slice(0, 10)) ||
+      `#${n + 1}`;
+    return { date: dateLabel, value: cum };
+  });
 }
 
 export default function DashboardPage() {
@@ -42,13 +57,18 @@ export default function DashboardPage() {
     queryFn: fetchSubscriptions,
     retry: false,
   });
+  const historyQ = useQuery({
+    queryKey: ["positions", "history"],
+    queryFn: fetchPositionHistory,
+    retry: false,
+  });
 
   useEffect(() => {
-    const err = walletQ.error || posQ.error || subQ.error;
+    const err = walletQ.error || posQ.error || subQ.error || historyQ.error;
     if (err instanceof ApiError && err.status === 401) {
       navigate("/auth", { replace: true });
     }
-  }, [walletQ.error, posQ.error, subQ.error, navigate]);
+  }, [walletQ.error, posQ.error, subQ.error, historyQ.error, navigate]);
 
   const loading = walletQ.isPending || posQ.isPending || subQ.isPending;
   const spot = walletQ.data?.spot;
@@ -63,7 +83,7 @@ export default function DashboardPage() {
     (s, p) => s + parseFloat(p.unrealized_pnl ?? "0"),
     0
   );
-  const chartData = buildChartFromPnl(unrealized);
+  const chartData = buildRealizedPnlCurve(historyQ.data?.positions ?? []);
 
   const statCards = [
     {
@@ -157,9 +177,22 @@ export default function DashboardPage() {
         <div className="glass rounded-xl p-6 mb-8 animate-fade-up-delay-3">
           <h2 className="font-semibold mb-4 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-primary" />
-            Performance (illustrative)
+            Realized P&amp;L (closed positions)
           </h2>
-          <PerformanceChart data={chartData} />
+          <p className="text-xs text-muted-foreground mb-4">
+            Built from your Mudrex position history (latest page). Not a full account audit — use Mudrex
+            statements for tax and reconciliation.
+          </p>
+          {historyQ.isPending ? (
+            <p className="text-sm text-muted-foreground py-12 text-center">Loading history from Mudrex…</p>
+          ) : chartData.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-12 text-center">
+              No closed positions with realized P&amp;L in this history window, or amounts are zero. Open
+              P&amp;L is shown above.
+            </p>
+          ) : (
+            <PerformanceChart data={chartData} valueLabel="Cumulative realized P&amp;L" />
+          )}
         </div>
 
         <div className="glass rounded-xl p-6 animate-fade-up-delay-4">

@@ -2,9 +2,14 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "rec
 
 interface PerformanceChartProps {
   data: { date: string; value: number }[];
+  /** Tooltip / series name (e.g. cumulative realized P&L). */
+  valueLabel?: string;
 }
 
-export default function PerformanceChart({ data }: PerformanceChartProps) {
+export default function PerformanceChart({
+  data,
+  valueLabel = "Value",
+}: PerformanceChartProps) {
   return (
     <div className="w-full h-[300px]">
       <ResponsiveContainer width="100%" height="100%">
@@ -26,7 +31,11 @@ export default function PerformanceChart({ data }: PerformanceChartProps) {
             axisLine={false}
             tickLine={false}
             tick={{ fill: "hsl(215, 12%, 50%)", fontSize: 12 }}
-            tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+            tickFormatter={(v) =>
+              Math.abs(v) >= 1000
+                ? `$${(v / 1000).toFixed(1)}k`
+                : `$${Number(v).toFixed(0)}`
+            }
           />
           <Tooltip
             contentStyle={{
@@ -36,7 +45,10 @@ export default function PerformanceChart({ data }: PerformanceChartProps) {
               color: "hsl(210, 20%, 92%)",
               fontSize: "13px",
             }}
-            formatter={(value: number) => [`$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, "Portfolio"]}
+            formatter={(value: number) => [
+              `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+              valueLabel,
+            ]}
           />
           <Area
             type="monotone"

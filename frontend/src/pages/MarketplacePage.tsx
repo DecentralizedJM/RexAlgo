@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import StrategyCard from "@/components/StrategyCard";
@@ -30,7 +31,8 @@ export default function MarketplacePage() {
   });
 
   const strategies = data?.strategies ?? [];
-  const filtered = strategies
+  const activeList = strategies.filter((s) => s.isActive);
+  const filtered = activeList
     .filter((s) => riskFilter === "all" || s.riskLevel === riskFilter)
     .sort((a, b) => b[sort] - a[sort])
     .map(mapStrategy);
@@ -94,7 +96,26 @@ export default function MarketplacePage() {
           </div>
         )}
 
-        {!isLoading && filtered.length === 0 && (
+        {!isLoading && strategies.length === 0 && (
+          <div className="text-center py-16 text-muted-foreground space-y-3">
+            <p>No algo strategies on the marketplace yet.</p>
+            <p className="text-sm">
+              Publish one from{" "}
+              <Link to="/marketplace/studio" className="text-primary hover:underline font-medium">
+                Strategy studio
+              </Link>
+              .
+            </p>
+          </div>
+        )}
+
+        {!isLoading && strategies.length > 0 && activeList.length === 0 && (
+          <div className="text-center py-16 text-muted-foreground">
+            All algo listings are paused. Creators can re-enable them in Strategy studio.
+          </div>
+        )}
+
+        {!isLoading && activeList.length > 0 && filtered.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
             No strategies match your filters.
           </div>

@@ -21,7 +21,10 @@
 | **Auth** | Connect with your **Mudrex API secret**; encrypted storage + JWT session |
 | **Wallet / trading** | Spot & futures balances, transfers, positions, orders (via Mudrex) |
 | **Algo marketplace** | Browse & subscribe to `algo` strategies with **margin per trade** |
+| **Strategy studio** | Masters create **algo** listings, **webhooks** (HMAC), pause/edit — **`/marketplace/studio`** |
 | **Copy trading** | Browse `copy_trading` strategies, subscribe, same margin model |
+| **Master studio** | Masters create **copy_trading** listings + **webhooks** — **`/copy-trading/studio`** |
+| **Signal mirroring** | Signed `POST /api/webhooks/copy-trading/{strategyId}` → mirror **open/close** to subscribers via Mudrex |
 | **Single UI** | All product screens live in **`frontend/`** (Lovable / Vite). **`backend/`** is API-only (+ tiny root status page). |
 
 ---
@@ -46,7 +49,9 @@ Structured metadata (roadmap, stack pointers): **`repo/project.json`**. Mermaid 
 
 ---
 
-## Quick start
+## Quick start (localhost)
+
+End state: **one browser URL** (**127.0.0.1:8080**) for the UI; the API runs on **127.0.0.1:3000** behind Vite’s proxy.
 
 ### 1. Clone & install
 
@@ -56,12 +61,25 @@ cd RexAlgo
 npm install
 ```
 
-### 2. Backend env
+### 2. Environment file (backend)
+
+On the **first** `npm run dev`, the root **`predev`** script creates **`backend/.env.local`** from **`backend/.env.example`** if it does not exist.
+
+**You must edit `backend/.env.local` before relying on auth or encryption in dev:**
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `JWT_SECRET` | **Yes** | Long random string (e.g. `openssl rand -hex 32`) |
+| `ENCRYPTION_KEY` | **Yes** | Strong passphrase; used to encrypt Mudrex secrets & webhook signing secrets at rest |
+| `PUBLIC_APP_URL` | Optional | No trailing slash. Full webhook URLs in **Master** / **Strategy** studio (use ngrok URL → port **3000** for external bots) |
+| `REXALGO_DB_PATH` | Optional | Custom SQLite file path (default: under `backend/`) |
 
 ```bash
+# If you skipped dev and want to create the file manually:
 cp backend/.env.example backend/.env.local
-# Set JWT_SECRET and ENCRYPTION_KEY
 ```
+
+After changing secrets, **restart** `npm run dev`.
 
 ### 3. Run both apps
 
@@ -71,11 +89,20 @@ npm run dev
 
 | Open this | URL |
 |-----------|-----|
-| **Everything (UI + API)** | **[http://localhost:8080](http://localhost:8080)** |
+| **Everything (UI + API)** | **[http://127.0.0.1:8080](http://127.0.0.1:8080)** (recommended) |
 
-**Vite** listens on **:8080** (your only tab). It **proxies `/api`** to Next on **127.0.0.1:3000** (wait until Next is up — `dev:web` uses `wait-on`). HMR stays on **8080**, so no extra proxy/gateway.
+**Prefer `127.0.0.1` over `localhost`:** browsers keep **separate cookie jars** for `localhost` vs `127.0.0.1`. If you use `http://localhost:8080`, the session cookie is shared with **every other tab** on `http://localhost:*`, which can break other local apps.
+
+**Vite** listens on **:8080** (your only tab). It **proxies `/api`** to Next on **127.0.0.1:3000**. `dev:web` waits until **`GET /api/health`** returns **200** (so another random app on port **3000** won’t fool the dev script). HMR stays on **8080**. The session cookie is scoped to **`Path=/api`** so it is not sent to non-API paths on the same host.
 
 Sign in at **`/auth`** with your **Mudrex API secret**.
+
+### 4. Verify the API (optional)
+
+```bash
+curl -s http://127.0.0.1:3000/api/health
+# Expect JSON including "service":"rexalgo-api"
+```
 
 ---
 
@@ -95,35 +122,51 @@ npm run dev
 
 | What | URL / notes |
 |------|----------------|
-| **Use in browser** | **http://localhost:8080** only (Vite + `/api` proxy) |
+| **Use in browser** | **http://127.0.0.1:8080** (Vite + `/api` proxy). Avoid `localhost` if you run other dev servers on `localhost` too. |
 | **Next API** | **127.0.0.1:3000** — don’t open for normal use; must be running for `/api` |
 
 **Workspace-only** (two URLs again — for debugging):
 
 ```bash
 npm run dev -w @rexalgo/backend    # http://127.0.0.1:3000
-npm run dev -w @rexalgo/frontend   # http://localhost:8080 + Vite proxy /api → 3000
+npm run dev -w @rexalgo/frontend   # http://127.0.0.1:8080 + Vite proxy /api → 3000
 ```
 
 ### Backend environment
 
-```bash
-cp backend/.env.example backend/.env.local
-```
+Same as [Quick start §2](#2-environment-file-backend). Reference: **`backend/.env.example`**.
 
-Set `JWT_SECRET` and `ENCRYPTION_KEY`. Optional: `REXALGO_DB_PATH` for a custom SQLite path.
+- **`REXALGO_SESSION_COOKIE_PATH`** — default **`/api`** (cookie not sent on non-API paths).
+- **`PUBLIC_APP_URL`** — prod API origin or **ngrok** tunnel to **Next :3000** so studio UIs show absolute webhook URLs.
+
+### Copy trading (Master studio + webhooks)
+
+1. Sign in → **Master studio** (`/copy-trading/studio`) → create a **copy_trading** strategy → **Enable webhook** and copy the **signing secret** (shown once).
+2. Your bot runs **outside** RexAlgo (VPS, laptop, cloud). It `POST`s JSON signals to **`POST /api/webhooks/copy-trading/{strategyId}`** with header **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** where **`v1`** is **HMAC-SHA256** of **`${t}.${rawBody}`** (UTF-8) using the signing secret as the HMAC key (UTF-8 bytes of the secret string).
+3. **Subscribers** (users who subscribed to that strategy in the app) get **mirrored** **open** / **close** actions on **their** Mudrex account via the API secret they stored at login. Sizing uses each subscriber’s **margin per trade** and the strategy’s **leverage**.
+4. **Local dev**: external bots cannot reach `localhost`; use **ngrok** (or similar) to **`127.0.0.1:3000`** and set **`PUBLIC_APP_URL`** to the tunnel URL. Vite on **8080** is only for the browser; webhooks hit Next directly unless you add a proxy rule.
+
+### Algo strategies (Strategy studio + webhooks)
+
+1. Sign in → **Strategy studio** (`/marketplace/studio`) → create an **algo** listing → **Enable webhook** and copy the **signing secret** (shown once).
+2. **Same** webhook endpoint and **HMAC** contract as copy trading: **`POST /api/webhooks/copy-trading/{strategyId}`** with **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** (HMAC-SHA256 of **`${t}.${rawBody}`**).
+3. **Subscribers** use the marketplace → strategy detail → subscribe; **mirroring** to their Mudrex account works the same as for copy-trading strategies.
+4. **`PUBLIC_APP_URL`** and **ngrok to :3000** apply the same way as in Master studio.
 
 ### Auth flow
 
 1. Open the UI → **Connect** / **Auth**
 2. Enter your **Mudrex API secret** (validated against [Mudrex Futures API](https://docs.trade.mudrex.com/docs/overview))
-3. Session cookie is set for **localhost:8080**; Vite’s dev proxy forwards `/api` to Next (same origin)
+3. Session cookie (**`Path=/api`**) is set for the host you use (**`127.0.0.1:8080`** recommended); Vite’s dev proxy forwards `/api` to Next (same origin)
 
 ### Troubleshooting
 
 | Issue | Try |
 |--------|-----|
-| **401 on `/api/*` after login** | Use **http://localhost:8080**, not **127.0.0.1:3000** (cookies are for :8080) |
+| **401 on `/api/*` after login** | Open the UI at **http://127.0.0.1:8080** (Vite), not **127.0.0.1:3000** (API only — no session from the SPA) |
+| **Other localhost dev apps acting weird** | Use **127.0.0.1:8080** for RexAlgo, or clear site data for `localhost`. Cookies for `localhost` apply to **all ports** on that name. |
+| **UI loads but `/api` fails / wrong responses** | Something else may be using **port 3000**. Run `curl -s http://127.0.0.1:3000/api/health` — you should see **`\"service\":\"rexalgo-api\"`**. If not, stop the other process or set **`VITE_API_PROXY_TARGET`** (frontend) and start Next on that port. |
+| **`npm run dev` hangs before Vite starts** | RexAlgo API didn’t become healthy in time. Ensure **`npm run dev:api`** works (no **EADDRINUSE** on 3000) and **`/api/health`** returns JSON as above. |
 | **DB errors** | Ensure `REXALGO_DB_PATH` (if set) is writable |
 | **Build failures** | Node 20+; run `npm install` from **repo root** (workspaces) |
 
@@ -184,6 +227,16 @@ flowchart TB
   API --> MR[Mudrex API]
 ```
 
+**Production checklist (before going live)**
+
+| Item | Notes |
+|------|--------|
+| **Secrets** | Strong `JWT_SECRET` and `ENCRYPTION_KEY` (see `backend/.env.example`, root `.env.example` for Docker). Never use dev defaults. |
+| **HTTPS** | Terminate TLS at nginx or your host; session cookies use `Secure` when `NODE_ENV=production`. |
+| **Mudrex** | Live trading uses your real API secret; balances come from [Mudrex FAPI](https://docs.trade.mudrex.com/docs/quick-reference) (`GET /wallet/funds`, `POST /futures/funds`). |
+| **CORS / origin** | Serve SPA and `/api` from the **same site** (nginx pattern in-repo) so cookies stay first-party. |
+| **Ops** | Back up SQLite volume; monitor API errors; plan rate limits for public login (see [SECURITY.md](SECURITY.md)). |
+
 ### Logical request path
 
 ```mermaid
@@ -209,12 +262,16 @@ flowchart TB
     A2["/api/strategies/*"]
     A3["/api/subscriptions"]
     A4["/api/mudrex/*"]
+    A5["/api/webhooks/copy-trading/*"]
+    A6["/api/copy-trading/studio/*"]
+    A7["/api/marketplace/studio/*"]
   end
 
   subgraph lib [lib]
     AUTH[auth.ts\nJWT + encrypt secret]
     MR[mudrex.ts\nHTTP client]
     DBL[db.ts + schema.ts\nDrizzle]
+    CM[copyMirror.ts\nsignal fan-out]
   end
 
   MW[middleware.ts]
@@ -223,7 +280,9 @@ flowchart TB
   routes --> AUTH
   routes --> MR
   routes --> DBL
+  routes --> CM
   AUTH --> DBL
+  CM --> MR
   MR -->|outbound HTTPS| EXT[Mudrex]
 ```
 
@@ -282,7 +341,9 @@ sequenceDiagram
 
 ```bash
 cp .env.example .env
-# Edit JWT_SECRET, ENCRYPTION_KEY. Optional: HOST_PORT=8080
+# Set JWT_SECRET, ENCRYPTION_KEY (never use example values in production).
+# Optional: HOST_PORT=8080 (avoids binding host :80 without sudo on many machines)
+# Optional: PUBLIC_APP_URL=https://your-public-host (webhook URLs in studio)
 
 docker compose up --build -d
 ```
@@ -301,7 +362,7 @@ npm run docker:down
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev` | Next **127.0.0.1:3000** + Vite **:8080** (`wait-on` then UI) |
+| `npm run dev` | Runs **`predev`** (creates `backend/.env.local` from example if missing), then Next **127.0.0.1:3000** + Vite **:8080** (`wait-on` then UI) |
 | `npm run build` | Build both workspaces |
 | `npm run lint` | Lint frontend & backend (if configured) |
 | `npm run docker:up` | `docker compose up --build -d` |
@@ -331,9 +392,9 @@ Priorities are **Mudrex-first**. Structured copy: **`repo/project.json`** → `r
 
 | Item | Notes |
 |------|--------|
-| **Webhook ingress** | Signed HTTP → validate → Mudrex actions |
 | **Paper / dry-run mode** | Where API allows; clear UI state |
-| **Rate limiting** | Login and sensitive `/api/*` routes |
+| **Rate limiting** | Expand beyond webhook route; login and sensitive `/api/*` routes |
+| **Strategy performance** | Auto **PnL / win rate** from Mudrex with clear attribution rules |
 
 ### Longer term
 

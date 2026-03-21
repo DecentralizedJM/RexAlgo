@@ -1,5 +1,14 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { TrendingUp, BarChart3, Users, LayoutDashboard, Menu, X, LogOut } from "lucide-react";
+import {
+  TrendingUp,
+  BarChart3,
+  Users,
+  LayoutDashboard,
+  Menu,
+  X,
+  LogOut,
+  Radio,
+} from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useAuth";
@@ -57,6 +66,32 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+          {user && (
+            <>
+              <Link
+                to="/marketplace/studio"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                  location.pathname.startsWith("/marketplace/studio")
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Strategy studio
+              </Link>
+              <Link
+                to="/copy-trading/studio"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                  location.pathname.startsWith("/copy-trading/studio")
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                }`}
+              >
+                <Radio className="w-4 h-4" />
+                Master studio
+              </Link>
+            </>
+          )}
         </div>
 
         <div className="hidden md:flex items-center gap-3">
@@ -118,6 +153,34 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+            {user && (
+              <>
+                <Link
+                  to="/marketplace/studio"
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                    location.pathname.startsWith("/marketplace/studio")
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  Strategy studio
+                </Link>
+                <Link
+                  to="/copy-trading/studio"
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                    location.pathname.startsWith("/copy-trading/studio")
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Radio className="w-4 h-4" />
+                  Master studio
+                </Link>
+              </>
+            )}
             <Link to="/about" onClick={() => setMobileOpen(false)}>
               <Button variant="ghost" size="sm" className="w-full justify-start">
                 About

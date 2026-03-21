@@ -66,6 +66,10 @@ export interface MudrexPosition {
   stoploss_price?: string;
   takeprofit_price?: string;
   status: string;
+  /** History rows may include timestamps (field names vary by Mudrex version). */
+  closed_at?: string;
+  updated_at?: string;
+  created_at?: string;
   stoploss?: { price: string; order_id: string };
   takeprofit?: { price: string; order_id: string };
 }

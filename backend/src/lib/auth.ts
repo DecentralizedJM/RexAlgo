@@ -5,6 +5,7 @@
  */
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 import crypto from "crypto";
 import type { AuthUser } from "@/types";
 
@@ -15,6 +16,10 @@ const JWT_SECRET = new TextEncoder().encode(
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "rexalgo-enc-key-32chars-changeme!";
 const ALGORITHM = "aes-256-gcm";
 const COOKIE_NAME = "rexalgo_session";
+
+/** Only sent on `/api/*` so other apps on the same host (e.g. localhost:3001) don’t get this cookie. */
+export const SESSION_COOKIE_PATH =
+  process.env.REXALGO_SESSION_COOKIE_PATH || "/api";
 
 export function encryptApiSecret(apiSecret: string): string {
   const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
@@ -100,6 +105,20 @@ export async function getSession(): Promise<{
 export async function getSessionUser(): Promise<AuthUser | null> {
   const session = await getSession();
   return session?.user ?? null;
+}
+
+/**
+ * Clear any legacy session cookie that was set with Path=/ (shared with other localhost apps).
+ * Call from login/logout responses so only Path=/api remains.
+ */
+export function clearLegacySessionCookie(response: NextResponse) {
+  response.cookies.set(COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+    path: "/",
+  });
 }
 
 export { COOKIE_NAME };

@@ -72,6 +72,36 @@ export function initializeDatabase() {
       status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed', 'cancelled')),
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    CREATE TABLE IF NOT EXISTS copy_webhook_config (
+      strategy_id TEXT PRIMARY KEY REFERENCES strategies(id) ON DELETE CASCADE,
+      secret_encrypted TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      rotated_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS copy_signal_events (
+      id TEXT PRIMARY KEY,
+      strategy_id TEXT NOT NULL REFERENCES strategies(id) ON DELETE CASCADE,
+      idempotency_key TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      received_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      client_ip TEXT
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS copy_signal_strategy_idem
+      ON copy_signal_events(strategy_id, idempotency_key);
+
+    CREATE TABLE IF NOT EXISTS copy_mirror_attempts (
+      id TEXT PRIMARY KEY,
+      signal_id TEXT NOT NULL REFERENCES copy_signal_events(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      status TEXT NOT NULL CHECK(status IN ('ok', 'error')),
+      detail TEXT NOT NULL,
+      mudrex_order_id TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
   `);
 }
 

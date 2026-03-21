@@ -9,12 +9,21 @@ import AboutPage from "./pages/AboutPage";
 import AuthPage from "./pages/AuthPage";
 import DashboardPage from "./pages/DashboardPage";
 import MarketplacePage from "./pages/MarketplacePage";
+import MarketplaceStudioPage from "./pages/MarketplaceStudioPage";
 import CopyTradingPage from "./pages/CopyTradingPage";
+import CopyTradingStudioPage from "./pages/CopyTradingStudioPage";
 import StrategyDetailPage from "./pages/StrategyDetailPage";
 import TraderProfilePage from "./pages/TraderProfilePage";
 import NotFound from "./pages/NotFound.tsx";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: true,
+    },
+  },
+});
 
 const App = () => (
   <ErrorBoundary>
@@ -29,7 +38,9 @@ const App = () => (
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/marketplace" element={<MarketplacePage />} />
+            <Route path="/marketplace/studio" element={<MarketplaceStudioPage />} />
             <Route path="/copy-trading" element={<CopyTradingPage />} />
+            <Route path="/copy-trading/studio" element={<CopyTradingStudioPage />} />
             <Route path="/strategy/:id" element={<StrategyDetailPage />} />
             <Route path="/trader/:id" element={<TraderProfilePage />} />
             <Route path="*" element={<NotFound />} />

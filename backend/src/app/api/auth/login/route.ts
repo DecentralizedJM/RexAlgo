@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { validateApiSecret } from "@/lib/mudrex";
-import { encryptApiSecret, createSession, COOKIE_NAME } from "@/lib/auth";
+import {
+  encryptApiSecret,
+  createSession,
+  COOKIE_NAME,
+  SESSION_COOKIE_PATH,
+  clearLegacySessionCookie,
+} from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -56,12 +62,13 @@ export async function POST(req: NextRequest) {
     const token = await createSession(userId, userName, encrypted);
 
     const response = NextResponse.json({ success: true, user: { id: userId, displayName: userName } });
+    clearLegacySessionCookie(response);
     response.cookies.set(COOKIE_NAME, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60,
-      path: "/",
+      path: SESSION_COOKIE_PATH,
     });
 
     return response;
