@@ -149,21 +149,17 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-2xl text-center">
-          <div className="glass rounded-2xl p-12 animate-pulse-glow">
-            <div className="flex flex-col items-center gap-2 mb-4">
-              <RexAlgoLogo size={56} className="rounded-xl" />
-              <RexAlgoWordmark className="text-xl" />
-            </div>
-            <h2 className="text-2xl font-bold mb-3">Ready to connect?</h2>
-            <p className="text-muted-foreground mb-8">
+      <section className="py-16 px-4">
+        <div className="container mx-auto max-w-md text-center">
+          <div className="glass rounded-xl p-6 sm:p-8 animate-pulse-glow">
+            <h2 className="text-xl sm:text-2xl font-bold mb-2">Ready to connect?</h2>
+            <p className="text-sm text-muted-foreground mb-6">
               Sign in with your Mudrex API secret and open the dashboard.
             </p>
             <Link to="/auth">
-              <Button variant="hero" size="lg">
+              <Button variant="hero" size="default" className="w-full sm:w-auto">
                 Connect Mudrex
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
           </div>
@@ -172,43 +168,41 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border py-8 px-4">
-        <div className="container mx-auto flex flex-col gap-4">
-          <div className="flex flex-col items-center gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-            <div className="flex shrink-0 items-center gap-2">
+        <div className="container mx-auto flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col items-center gap-3 sm:items-start">
+            <div className="flex items-center gap-2">
               <RexAlgoLogo size={28} className="rounded-md" />
               <RexAlgoWordmark className="text-sm font-semibold" />
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 lg:justify-end">
-              <a
-                href="mailto:help@mudrex.com?subject=RexAlgo%20support"
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-              >
-                <LifeBuoy className="w-3.5 h-3.5 shrink-0" />
-                help@mudrex.com
-              </a>
-              <span className="hidden h-3 w-px bg-border sm:inline" aria-hidden />
-              <span className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-                <span className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-300">
-                  Developed by
-                </span>
-                <a
-                  href="https://github.com/DecentralizedJM"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/85 transition-colors"
-                  aria-label="Jithin Mohandas on GitHub"
-                >
-                  <Github className="h-4 w-4 shrink-0" aria-hidden />
-                  Jithin Mohandas
-                </a>
+            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 sm:justify-start">
+              <span className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-300">
+                Developed by
               </span>
+              <a
+                href="https://github.com/DecentralizedJM"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/85 transition-colors"
+                aria-label="Jithin Mohandas on GitHub"
+              >
+                <Github className="h-4 w-4 shrink-0" aria-hidden />
+                Jithin Mohandas
+              </a>
             </div>
           </div>
-          <p className="text-center text-xs text-muted-foreground lg:text-right">
-            © 2026{" "}
-            <RexAlgoWordmark className="inline text-xs font-semibold align-baseline" />. All rights reserved.
-            Not financial advice.
-          </p>
+          <div className="flex flex-col items-center gap-2 text-center sm:items-end sm:text-right">
+            <a
+              href="mailto:help@mudrex.com?subject=RexAlgo%20support"
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              <LifeBuoy className="w-3.5 h-3.5 shrink-0" />
+              help@mudrex.com
+            </a>
+            <p className="text-xs text-muted-foreground">
+              © 2026{" "}
+              <RexAlgoWordmark className="inline text-xs font-semibold align-baseline" />. All rights reserved.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
