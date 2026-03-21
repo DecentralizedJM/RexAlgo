@@ -136,7 +136,8 @@
   }
 
   html:not(.dark) .glass {
-    @apply bg-white/88 backdrop-blur-md border-border/40 shadow-[0_1px_2px_hsl(220_16%_10%/0.04),0_8px_24px_-8px_hsl(220_16%_10%/0.08)];
+    /* /90 — Tailwind only generates opacity steps from its scale (no /88) */
+    @apply bg-white/90 backdrop-blur-md border-border/40 shadow-[0_1px_2px_hsl(220_16%_10%/0.04),0_8px_24px_-8px_hsl(220_16%_10%/0.08)];
   }
 }
 
