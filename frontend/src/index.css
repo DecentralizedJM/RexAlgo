@@ -126,6 +126,40 @@
     padding-top: calc(var(--app-nav-offset, 4rem) + 5rem);
   }
 
+  /* Landing: Bybit ticker marquee (two identical halves; -50% = one loop). */
+  @keyframes landing-ticker-scroll {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+
+  .landing-ticker-track {
+    animation: landing-ticker-scroll 55s linear infinite;
+  }
+
+  .group:hover .landing-ticker-track {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .landing-ticker-track {
+      animation: none;
+      transform: none;
+      flex-wrap: wrap;
+      justify-content: center;
+      row-gap: 0.5rem;
+      width: 100% !important;
+      max-width: 100%;
+    }
+
+    .landing-ticker-track > div:last-child {
+      display: none;
+    }
+  }
+
   .text-profit {
     color: hsl(var(--profit));
   }

@@ -4,6 +4,7 @@ import { Shield, Zap, BarChart3, ArrowRight, Users, Bot, LifeBuoy } from "lucide
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import Navbar from "@/components/Navbar";
+import BybitLinearTickerStrip from "@/components/BybitLinearTickerStrip";
 
 const stats = [
   { label: "Trading Volume", value: "$2.4B+" },
@@ -40,8 +41,16 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background">
       <Navbar />
 
+      {/* Live Bybit linear prices — sits under the nav (fills former dead space) */}
+      <section
+        className="border-b border-border/60 bg-muted/25 pt-[var(--app-nav-offset)] dark:bg-muted/15"
+        aria-label="Market ticker"
+      >
+        <BybitLinearTickerStrip />
+      </section>
+
       {/* Hero */}
-      <section className="hero-with-nav-pad pb-20 px-4">
+      <section className="pb-20 px-4 pt-12 sm:pt-16">
         <div className="container mx-auto max-w-4xl text-center">
           <div className="animate-fade-up">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-6">
