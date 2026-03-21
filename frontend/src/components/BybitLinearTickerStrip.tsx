@@ -80,7 +80,7 @@ function mergeWsRow(
 }
 
 export default function BybitLinearTickerStrip() {
-  const { data, isError, isLoading } = useQuery({
+  const { data } = useQuery({
     queryKey: ["market", "linear-usdt-tickers"],
     queryFn: async (): Promise<TickerApiResponse> => {
       const res = await fetch("/api/market/linear-usdt-tickers", {
@@ -110,13 +110,14 @@ export default function BybitLinearTickerStrip() {
     staleTime: 8_000,
     retry: 2,
     retryDelay: (i) => Math.min(1500 * 2 ** i, 10_000),
+    /** Ticker renders from client fallback + WS until REST returns; avoids flash on refetch/focus. */
+    refetchOnWindowFocus: false,
   });
 
   const fallbackSnapshot = useMemo(() => buildClientFallback(), []);
 
-  /** If the snapshot API fails (e.g. static hosting without /api proxy), still stream via WebSocket. */
-  const displayData: TickerApiResponse | null =
-    data ?? (isError ? fallbackSnapshot : null);
+  /** Always show something: REST snapshot when available, else majors shell until WS fills prices. */
+  const displayData: TickerApiResponse = data ?? fallbackSnapshot;
 
   const [livePatch, setLivePatch] = useState<
     Record<string, { lastPrice?: string; changeFrac?: number }>
@@ -255,11 +256,6 @@ export default function BybitLinearTickerStrip() {
   }, [symbolsKey]);
 
   const rows = useMemo(() => {
-    if (!displayData)
-      return {
-        majors: [] as LinearTickerItem[],
-        gainers: [] as LinearTickerItem[],
-      };
     const patch = livePatch;
     const apply = (item: LinearTickerItem) => {
       const p = patch[item.symbol];
@@ -276,18 +272,7 @@ export default function BybitLinearTickerStrip() {
     };
   }, [displayData, livePatch]);
 
-  if (isLoading && !displayData) {
-    return (
-      <div
-        className="py-2 text-center text-xs text-muted-foreground animate-pulse"
-        aria-hidden
-      >
-        Loading market data…
-      </div>
-    );
-  }
-
-  if (!displayData || (rows.majors.length === 0 && rows.gainers.length === 0)) {
+  if (rows.majors.length === 0 && rows.gainers.length === 0) {
     return null;
   }
 
