@@ -1,6 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { Shield, Zap, BarChart3, ArrowRight, Users, Bot, LifeBuoy } from "lucide-react";
+import {
+  Shield,
+  Zap,
+  BarChart3,
+  ArrowRight,
+  Users,
+  Bot,
+  LifeBuoy,
+  Github,
+} from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import Navbar from "@/components/Navbar";
@@ -153,25 +162,41 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border py-8 px-4">
-        <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <RexAlgoLogo size={28} className="rounded-md" />
-            <RexAlgoWordmark className="text-sm font-semibold" />
+        <div className="container mx-auto flex flex-col gap-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <RexAlgoLogo size={28} className="rounded-md" />
+              <RexAlgoWordmark className="text-sm font-semibold" />
+            </div>
+            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6">
+              <a
+                href="mailto:help@mudrex.com?subject=RexAlgo%20support"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                <LifeBuoy className="w-3.5 h-3.5" />
+                help@mudrex.com
+              </a>
+              <p className="text-xs text-muted-foreground text-center sm:text-right">
+                © 2026{" "}
+                <RexAlgoWordmark className="inline text-xs font-semibold align-baseline" />. All rights reserved.
+                Not financial advice.
+              </p>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6">
+          <p className="text-center text-xs text-muted-foreground border-t border-border/60 pt-6">
+            Developed by{" "}
+            <span className="text-foreground font-medium">Jithin Mohandas</span>
+            .{" "}
             <a
-              href="mailto:help@mudrex.com?subject=RexAlgo%20support"
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+              href="https://github.com/DecentralizedJM"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline underline-offset-2"
             >
-              <LifeBuoy className="w-3.5 h-3.5" />
-              help@mudrex.com
+              <Github className="w-3.5 h-3.5 shrink-0" aria-hidden />
+              GitHub — @DecentralizedJM
             </a>
-            <p className="text-xs text-muted-foreground text-center sm:text-right">
-              © 2026{" "}
-              <RexAlgoWordmark className="inline text-xs font-semibold align-baseline" />. All rights reserved.
-              Not financial advice.
-            </p>
-          </div>
+          </p>
         </div>
       </footer>
     </div>
