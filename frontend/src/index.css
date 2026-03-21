@@ -5,50 +5,50 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light mode (default) — olive accent aligned with RexAlgo brand */
+  /* Light: cool neutrals, softer contrast; primary tuned for clear CTAs on white */
   :root {
-    --background: 45 20% 97%;
-    --foreground: 220 25% 12%;
+    --background: 220 16% 97%;
+    --foreground: 222 18% 18%;
 
-    --card: 45 18% 95%;
-    --card-foreground: 220 25% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 18% 18%;
 
-    --popover: 45 18% 98%;
-    --popover-foreground: 220 25% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 18% 18%;
 
-    --primary: 78 32% 38%;
-    --primary-foreground: 45 25% 99%;
+    --primary: 158 52% 36%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 92%;
-    --secondary-foreground: 220 22% 20%;
+    --secondary: 220 14% 93%;
+    --secondary-foreground: 222 16% 26%;
 
-    --muted: 220 12% 90%;
-    --muted-foreground: 220 12% 42%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 10% 46%;
 
-    --accent: 78 28% 36%;
-    --accent-foreground: 45 25% 99%;
+    --accent: 158 48% 34%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 48%;
+    --destructive: 0 70% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 14% 88%;
-    --input: 220 14% 88%;
-    --ring: 78 32% 38%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 158 52% 36%;
 
     --radius: 0.75rem;
 
-    --profit: 142 55% 32%;
-    --loss: 0 72% 48%;
-    --warning: 32 92% 44%;
+    --profit: 152 50% 32%;
+    --loss: 0 70% 46%;
+    --warning: 32 90% 42%;
 
-    --sidebar-background: 45 18% 95%;
-    --sidebar-foreground: 220 25% 12%;
-    --sidebar-primary: 78 32% 38%;
-    --sidebar-primary-foreground: 45 25% 99%;
-    --sidebar-accent: 220 12% 90%;
-    --sidebar-accent-foreground: 220 22% 20%;
-    --sidebar-border: 220 14% 88%;
-    --sidebar-ring: 78 32% 38%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 18% 18%;
+    --sidebar-primary: 158 52% 36%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 94%;
+    --sidebar-accent-foreground: 222 16% 26%;
+    --sidebar-border: 220 13% 90%;
+    --sidebar-ring: 158 52% 36%;
   }
 
   .dark {
@@ -130,6 +130,10 @@
   }
   .glass {
     @apply bg-card/80 backdrop-blur-xl border border-border/50;
+  }
+
+  html:not(.dark) .glass {
+    @apply bg-white/90 backdrop-blur-md border-border/55 shadow-[0_1px_3px_hsl(220_13%_18%/0.06)];
   }
 }
 

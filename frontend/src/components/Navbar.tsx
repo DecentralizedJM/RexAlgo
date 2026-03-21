@@ -57,7 +57,7 @@ export default function Navbar() {
     setRefreshing(true);
     try {
       await refreshAppData(queryClient);
-      toast.success("Data refreshed");
+      toast.success("Updated");
     } catch {
       toast.error("Could not refresh");
     } finally {
@@ -146,7 +146,7 @@ export default function Navbar() {
                   <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Refresh data (Mudrex)</TooltipContent>
+              <TooltipContent side="bottom">Pull latest from Mudrex</TooltipContent>
             </Tooltip>
           )}
           {isLanding ? (

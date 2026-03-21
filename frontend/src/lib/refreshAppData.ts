@@ -1,9 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-/**
- * Refetch all active Mudrex-backed and app data queries (manual refresh).
- * Avoids always-on polling; use after tab focus (handled by React Query) or user click.
- */
+/** Invalidate active wallet, positions, strategies, studio, and session queries. */
 export async function refreshAppData(queryClient: QueryClient): Promise<void> {
   await queryClient.invalidateQueries({
     predicate: (q) => {

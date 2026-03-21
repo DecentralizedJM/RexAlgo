@@ -3,10 +3,10 @@ import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { Shield, Target, Code, Globe } from "lucide-react";
 
 const values = [
-  { icon: Shield, title: "Security First", desc: "Your API keys are encrypted locally. We never hold your funds." },
-  { icon: Target, title: "Data-Driven", desc: "Every strategy is backtested against 3+ years of market data." },
-  { icon: Code, title: "Open Algorithms", desc: "Full transparency on strategy logic, parameters, and trade history." },
-  { icon: Globe, title: "Multi-Exchange", desc: "Works with Binance, Bybit, OKX, and more. One interface, all exchanges." },
+  { icon: Shield, title: "Keys", desc: "API secrets encrypted at rest; used only to talk to Mudrex." },
+  { icon: Target, title: "Listings", desc: "Creators publish strategies; subscribers choose margin and risk." },
+  { icon: Code, title: "Webhooks", desc: "Studio flows use signed webhooks so bots can post signals safely." },
+  { icon: Globe, title: "Mudrex", desc: "Execution and balances live on Mudrex; RexAlgo is the control layer." },
 ];
 
 export default function AboutPage() {
@@ -22,7 +22,8 @@ export default function AboutPage() {
             </h1>
           </div>
           <p className="text-lg text-muted-foreground mb-12 leading-relaxed">
-            RexAlgo was built by traders who were tired of clunky interfaces, opaque strategies, and platforms that treat risk as an afterthought. We believe algorithmic trading should be accessible, transparent, and safe.
+            RexAlgo is a front end for Mudrex futures: algos, copy trading, and subscriptions in one place. We
+            don’t custody funds; trades stay on your exchange account.
           </p>
         </div>
 

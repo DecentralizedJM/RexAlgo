@@ -121,7 +121,7 @@ export default function CopyTradingStudioPage() {
       void queryClient.invalidateQueries({ queryKey: ["copy-studio", "strategies"] });
       if (data.secretPlain) {
         setSecretFlash(data.secretPlain);
-        toast.message(data.message ?? "Secret shown once — copy it now.");
+        toast.message(data.message ?? "Copy this secret now; it won't show again.");
       } else {
         toast.success(data.enabled ? "Webhook enabled" : "Webhook disabled");
       }
@@ -197,9 +197,8 @@ with urllib.request.urlopen(req, timeout=30) as res:
               Master studio
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Publish a copy-trading listing, enable a signed webhook, and send signals from your bot
-              (Python, etc.) on your own server. Followers who subscribed in RexAlgo will mirror orders on
-              their Mudrex accounts.
+              List a copy strategy, enable the webhook, and POST signals from your bot. Subscribers mirror
+              into their Mudrex accounts.
             </p>
           </div>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -220,16 +219,14 @@ with urllib.request.urlopen(req, timeout=30) as res:
 
         {!publicBase && (
           <div className="mb-6 p-4 rounded-xl border border-warning/30 bg-warning/10 text-sm text-foreground">
-            Set <code className="px-1 bg-background/50 rounded">PUBLIC_APP_URL</code> on the API server so
-            webhook URLs show correctly (e.g. your prod domain or an ngrok URL pointing at port{" "}
-            <strong>3000</strong>). Until then, URLs use this browser origin (works only if your bot can
-            reach the same host).
+            Set <code className="px-1 bg-background/50 rounded">PUBLIC_APP_URL</code> on the API to your public
+            base URL. Until then, webhooks use this browser origin (your bot must reach the same host).
           </div>
         )}
 
         {secretFlash && (
           <div className="mb-6 p-4 rounded-xl border border-profit/30 bg-profit/10 text-sm">
-            <p className="font-medium text-profit mb-2">Signing secret (copy now — not shown again)</p>
+            <p className="font-medium text-profit mb-2">Signing secret (copy now; one-time display)</p>
             <div className="flex gap-2 items-center">
               <code className="text-xs break-all flex-1 font-mono bg-background/80 p-2 rounded">
                 {secretFlash}

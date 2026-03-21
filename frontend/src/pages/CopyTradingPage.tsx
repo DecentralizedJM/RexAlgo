@@ -41,14 +41,13 @@ export default function CopyTradingPage() {
         <div className="mb-8 animate-fade-up">
           <h1 className="text-2xl font-bold mb-1">Copy trading</h1>
           <p className="text-sm text-muted-foreground">
-            Published copy strategies — open a profile to subscribe with your margin
+            Copy-trading listings. Open one to subscribe with your margin.
           </p>
         </div>
 
         {isError && (
           <div className="mb-6 p-4 rounded-xl bg-loss/10 border border-loss/20 text-sm text-loss">
-            {(error as Error).message}. Start the backend:{" "}
-            <code className="text-foreground/90">cd backend && npm run dev</code>
+            {(error as Error).message}. Check that the API is up and try again.
           </div>
         )}
 

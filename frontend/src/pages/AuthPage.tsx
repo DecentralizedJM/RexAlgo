@@ -64,8 +64,7 @@ export default function AuthPage() {
             <h1 className="text-xl font-bold text-center">Mudrex</h1>
           </div>
           <p className="text-sm text-muted-foreground text-center mb-8">
-            Connect with your <strong className="text-foreground">Mudrex API secret</strong> (shown once in
-            the Mudrex dashboard). Optional: set a display name for the community.
+            Paste your Mudrex API secret (from the Mudrex app). Display name is optional.
           </p>
 
           <form onSubmit={handleConnect} className="space-y-4">
@@ -127,7 +126,7 @@ export default function AuthPage() {
             >
               {state === "loading" ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Validating with Mudrex…
+                  <Loader2 className="w-4 h-4 animate-spin" /> Checking with Mudrex…
                 </>
               ) : (
                 "Connect & sign in"
@@ -136,10 +135,8 @@ export default function AuthPage() {
           </form>
 
           <p className="text-xs text-muted-foreground text-center mt-6 leading-relaxed">
-            Your API keys are stored with <strong className="text-foreground">encryption at rest</strong> and
-            used only to call Mudrex on your behalf. <strong className="text-foreground">RexAlgo never takes
-            custody of funds</strong> — your assets stay in your{" "}
-            <strong className="text-foreground">Mudrex wallet</strong>.
+            Secrets are encrypted at rest and only used to call Mudrex. We never hold your funds; balances
+            stay on Mudrex.
           </p>
         </div>
       </div>

@@ -160,11 +160,9 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 animate-fade-up">
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Live balances & positions via Mudrex API</p>
-            <p className="text-xs text-muted-foreground/80 mt-1">
-              Data refreshes when you return to this tab (if older than ~15s), or anytime via{" "}
-              <strong className="text-foreground/90">Refresh</strong> in the header — no constant polling, to
-              protect API limits.
+            <p className="text-sm text-muted-foreground">
+              Balances and positions from Mudrex. Refreshes when you focus this tab or use Refresh in the
+              header.
             </p>
           </div>
           <div className="flex gap-3 flex-wrap">
@@ -188,9 +186,8 @@ export default function DashboardPage() {
               <p className="font-medium text-warning">Futures balance may be too low</p>
               <p className="text-muted-foreground text-xs mt-1">
                 {underfundedSubs.length} active{" "}
-                {underfundedSubs.length === 1 ? "subscription" : "subscriptions"} need at least your
-                margin per trade (~${futAvailable.toFixed(2)} available). Add USDT to Mudrex futures or lower
-                margin in{" "}
+                {underfundedSubs.length === 1 ? "subscription needs" : "subscriptions need"} more futures
+                margin (~${futAvailable.toFixed(2)} free). Add USDT on Mudrex or lower margin in{" "}
                 <Link to="/subscriptions" className="text-primary font-medium hover:underline">
                   Subscriptions
                 </Link>
@@ -270,15 +267,13 @@ export default function DashboardPage() {
             Realized P&amp;L (closed positions)
           </h2>
           <p className="text-xs text-muted-foreground mb-4">
-            Built from your Mudrex position history (latest page). Not a full account audit — use Mudrex
-            statements for tax and reconciliation.
+            From Mudrex closed-trade history (latest page). For taxes, use Mudrex statements.
           </p>
           {historyQ.isPending ? (
             <p className="text-sm text-muted-foreground py-12 text-center">Loading history from Mudrex…</p>
           ) : chartData.length === 0 ? (
             <p className="text-sm text-muted-foreground py-12 text-center">
-              No closed positions with realized P&amp;L in this history window, or amounts are zero. Open
-              P&amp;L is shown above.
+              No closed P&amp;L in this window yet. Open P&amp;L is above.
             </p>
           ) : (
             <PerformanceChart data={chartData} valueLabel="Cumulative realized P&amp;L" />
@@ -292,9 +287,7 @@ export default function DashboardPage() {
               <Users className="w-4 h-4 text-primary" />
               Open positions
             </h2>
-            <p className="text-xs text-muted-foreground mb-4">
-              Live futures positions on your Mudrex account (same source as the unrealized P&amp;L above).
-            </p>
+            <p className="text-xs text-muted-foreground mb-4">Open futures on your Mudrex account.</p>
             {loading ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
             ) : positions.length === 0 ? (
@@ -388,10 +381,8 @@ export default function DashboardPage() {
               Position history
             </h2>
             <p className="text-xs text-muted-foreground mb-4">
-              Recently closed positions from Mudrex (latest API page, newest first). Realized P&amp;L uses
-              the exchange field when present (including{" "}
-              <code className="text-[10px]">realised_pnl</code> / camelCase aliases). If the API omits it, we
-              estimate from entry vs close/mark prices and size (fees not included).
+              Recent closes from Mudrex (newest first). P&amp;L uses exchange data when available; otherwise
+              we estimate from prices and size (fees not included).
             </p>
             {historyQ.isPending ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading position history…</p>

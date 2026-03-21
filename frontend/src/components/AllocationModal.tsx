@@ -166,9 +166,9 @@ export default function AllocationModal({
             <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 text-xs text-warning flex gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
-                Margin per trade (${capital[0]}) is above your estimated futures balance ($
-                {futuresAvailableUsdt.toFixed(2)}). Add USDT to your <strong>Mudrex futures wallet</strong>{" "}
-                or lower the slider — otherwise mirrored orders may fail.
+                Margin per trade (${capital[0]}) is above your free futures balance ($
+                {futuresAvailableUsdt.toFixed(2)}). Add USDT on Mudrex or lower the slider so mirrors don’t
+                fail.
               </span>
             </div>
           )}

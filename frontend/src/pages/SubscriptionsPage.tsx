@@ -141,8 +141,7 @@ export default function SubscriptionsPage() {
         <div className="mb-8 animate-fade-up">
           <h1 className="text-2xl font-bold mb-2">Subscriptions</h1>
           <p className="text-sm text-muted-foreground">
-            Manage algo and copy-trading subscriptions: margin per trade, cancel mirroring, and funding
-            checks against your Mudrex futures wallet.
+            Edit margin per trade, cancel subs, and see funding vs your Mudrex futures balance.
           </p>
         </div>
 
@@ -151,9 +150,7 @@ export default function SubscriptionsPage() {
             <Wallet className="w-4 h-4 text-primary shrink-0" />
             <span className="text-muted-foreground">Futures wallet (available):</span>
             <span className="font-mono font-semibold">${available.toFixed(2)} USDT</span>
-            <span className="text-xs text-muted-foreground">
-              (balance − locked margin). Add funds on Mudrex if low.
-            </span>
+            <span className="text-xs text-muted-foreground">Balance minus locked margin.</span>
           </div>
         )}
 
@@ -164,15 +161,13 @@ export default function SubscriptionsPage() {
               <p className="font-medium text-warning mb-1">Add futures funds</p>
               <p className="text-muted-foreground">
                 {underfunded.length} active{" "}
-                {underfunded.length === 1 ? "subscription needs" : "subscriptions need"} at least the{" "}
-                <strong className="text-foreground">margin per trade</strong> you set in USDT. Your
-                estimated available balance is below that for:
+                {underfunded.length === 1 ? "subscription needs" : "subscriptions need"} more USDT per signal
+                than you have free (~${available.toFixed(2)}):
               </p>
               <ul className="mt-2 list-disc list-inside text-foreground space-y-1">
                 {underfunded.map((s) => (
                   <li key={s.id}>
-                    <strong>{s.strategy.name}</strong> — needs ${parseFloat(s.marginPerTrade).toFixed(2)}{" "}
-                    per signal, you have ~${available.toFixed(2)} available
+                    {s.strategy.name}: ${parseFloat(s.marginPerTrade).toFixed(2)} per trade required
                   </li>
                 ))}
               </ul>
@@ -318,9 +313,8 @@ export default function SubscriptionsPage() {
             <DialogTitle>Margin per trade</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground mb-4">
-            Each mirrored <strong className="text-foreground">open</strong> signal uses this USDT margin
-            with the strategy leverage ({editTarget?.strategy.leverage}x on{" "}
-            {editTarget?.strategy.name}).
+            Each open signal uses this USDT margin at {editTarget?.strategy.leverage}x on{" "}
+            {editTarget?.strategy.name}.
           </p>
           <div className="bg-secondary/50 rounded-xl p-4 mb-4">
             <div className="text-2xl font-mono font-bold text-center mb-3">${editMargin[0]}</div>

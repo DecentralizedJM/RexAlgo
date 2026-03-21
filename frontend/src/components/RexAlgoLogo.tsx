@@ -6,7 +6,7 @@ type RexAlgoLogoProps = {
   size?: number;
 };
 
-/** Brand mark — uses `/rexalgo-logo.png` from `public/`. */
+/** RexAlgo mark (`/rexalgo-logo.png`). */
 export function RexAlgoLogo({ className, size = 32 }: RexAlgoLogoProps) {
   return (
     <img

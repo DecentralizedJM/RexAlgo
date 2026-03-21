@@ -15,22 +15,22 @@ const features = [
   {
     icon: Bot,
     title: "Algo Strategies",
-    description: "Access battle-tested algorithms that trade 24/7 across multiple crypto pairs.",
+    description: "Automated strategies on crypto futures, listed in one place.",
   },
   {
     icon: Users,
     title: "Copy Trading",
-    description: "Mirror the trades of top performers. One click to replicate proven strategies.",
+    description: "Subscribe to listings and mirror signals to your own Mudrex account.",
   },
   {
     icon: Shield,
-    title: "Risk Management",
-    description: "Configurable stop-losses, position sizing, and drawdown limits built into every strategy.",
+    title: "Risk Controls",
+    description: "Stops, sizing, and risk labels per strategy so you know what you’re taking on.",
   },
   {
     icon: Zap,
-    title: "Instant Execution",
-    description: "Sub-millisecond order routing. Your strategies execute before the market moves.",
+    title: "Fast path",
+    description: "Connect API, pick a strategy, set margin. No extra stack to run.",
   },
 ];
 
@@ -55,7 +55,7 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10 animate-fade-up-delay-2" style={{ textWrap: "pretty" }}>
-            Deploy proven strategies, copy top traders, and manage risk — all from one clean interface. No coding required.
+            Run algos and copy-trading on Mudrex futures from a single UI. No code.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-up-delay-3">
@@ -93,9 +93,9 @@ export default function LandingPage() {
       <section className="py-24 px-4">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-16 animate-fade-up">
-            <h2 className="text-3xl font-bold mb-4">Everything you need to trade smarter</h2>
+            <h2 className="text-3xl font-bold mb-4">What you get</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Professional-grade tools wrapped in an interface anyone can use.
+              Algos, copy trading, and subs in one flow on top of Mudrex.
             </p>
           </div>
 
@@ -122,13 +122,13 @@ export default function LandingPage() {
         <div className="container mx-auto max-w-2xl text-center">
           <div className="glass rounded-2xl p-12 animate-pulse-glow">
             <RexAlgoLogo size={56} className="mx-auto mb-4 rounded-xl" />
-            <h2 className="text-2xl font-bold mb-3">Ready to automate your trading?</h2>
+            <h2 className="text-2xl font-bold mb-3">Ready to connect?</h2>
             <p className="text-muted-foreground mb-8">
-              Connect your exchange API and start running strategies in under 2 minutes.
+              Sign in with your Mudrex API secret and open the dashboard.
             </p>
             <Link to="/auth">
               <Button variant="hero" size="lg">
-                Connect Exchange
+                Connect Mudrex
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </Link>
