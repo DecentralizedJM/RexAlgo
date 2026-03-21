@@ -57,7 +57,7 @@ export default function AuthPage() {
           <div className="flex items-center justify-center gap-2 mb-2">
             <img
               src="/mudrex-logo.png"
-              alt=""
+              alt="Mudrex"
               width={36}
               height={36}
               className="rounded-lg shrink-0"
