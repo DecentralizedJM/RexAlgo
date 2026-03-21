@@ -103,11 +103,11 @@ export default function LandingPage() {
             {stats.map((stat, i) => (
               <div
                 key={stat.label}
-                className="group/stat relative px-2 pt-5 pb-1 text-center animate-fade-up rounded-lg"
+                className="group/stat relative overflow-visible px-3 py-5 pb-2 text-center animate-fade-up rounded-xl"
                 style={{ animationDelay: `${i * 80}ms` }}
               >
                 <div
-                  className="landing-stat-glow-bar pointer-events-none absolute left-1/2 top-1 z-0 h-1 w-[4.5rem] -translate-x-1/2 rounded-full bg-primary/35 opacity-0 blur-[2px] transition-opacity duration-300 group-hover/stat:opacity-100"
+                  className="landing-stat-glow-bar pointer-events-none absolute -inset-3 z-0 rounded-2xl bg-primary/45 opacity-0 blur-2xl transition-opacity duration-300 group-hover/stat:opacity-100"
                   aria-hidden
                 />
                 <p className="relative z-[1] text-2xl md:text-3xl font-mono font-bold text-foreground">

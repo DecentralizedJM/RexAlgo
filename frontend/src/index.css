@@ -255,28 +255,41 @@
   animation: pulse-glow 3s ease-in-out infinite;
 }
 
-/* Landing stats: subtle “strobe” above each cell on hover (lighter than full CTA pulse-glow). */
+/* Landing stats: full-cell wash + zoom-out / snap-back strobe on hover */
 @keyframes landing-stat-glow-pulse {
   0%,
   100% {
+    transform: scale(1);
+    opacity: 0.92;
     box-shadow:
-      0 -2px 12px hsl(var(--primary) / 0.2),
-      0 0 20px hsl(var(--primary) / 0.08);
+      0 0 0 1px hsl(var(--primary) / 0.12),
+      0 -8px 56px hsl(var(--primary) / 0.38),
+      0 10px 72px hsl(var(--primary) / 0.22),
+      0 0 100px hsl(var(--primary) / 0.12);
   }
   50% {
+    transform: scale(0.68);
+    opacity: 0.75;
     box-shadow:
-      0 -4px 22px hsl(var(--primary) / 0.35),
-      0 0 32px hsl(var(--primary) / 0.14);
+      0 0 0 1px hsl(var(--primary) / 0.08),
+      0 -3px 32px hsl(var(--primary) / 0.22),
+      0 4px 40px hsl(var(--primary) / 0.12),
+      0 0 48px hsl(var(--primary) / 0.08);
   }
 }
 
 .group\/stat:hover .landing-stat-glow-bar {
-  animation: landing-stat-glow-pulse 2.8s ease-in-out infinite;
+  animation: landing-stat-glow-pulse 2.4s ease-in-out infinite;
+  transform-origin: center center;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .group\/stat:hover .landing-stat-glow-bar {
     animation: none !important;
-    box-shadow: 0 -2px 14px hsl(var(--primary) / 0.22);
+    transform: scale(1);
+    opacity: 0.85;
+    box-shadow:
+      0 -6px 40px hsl(var(--primary) / 0.28),
+      0 8px 48px hsl(var(--primary) / 0.16);
   }
 }
