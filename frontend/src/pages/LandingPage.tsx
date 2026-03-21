@@ -101,9 +101,19 @@ export default function LandingPage() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, i) => (
-              <div key={stat.label} className="text-center animate-fade-up" style={{ animationDelay: `${i * 80}ms` }}>
-                <p className="text-2xl md:text-3xl font-mono font-bold text-foreground">{stat.value}</p>
-                <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
+              <div
+                key={stat.label}
+                className="group/stat relative px-2 pt-5 pb-1 text-center animate-fade-up rounded-lg"
+                style={{ animationDelay: `${i * 80}ms` }}
+              >
+                <div
+                  className="landing-stat-glow-bar pointer-events-none absolute left-1/2 top-1 z-0 h-1 w-[4.5rem] -translate-x-1/2 rounded-full bg-primary/35 opacity-0 blur-[2px] transition-opacity duration-300 group-hover/stat:opacity-100"
+                  aria-hidden
+                />
+                <p className="relative z-[1] text-2xl md:text-3xl font-mono font-bold text-foreground">
+                  {stat.value}
+                </p>
+                <p className="relative z-[1] mt-1 text-sm text-muted-foreground">{stat.label}</p>
               </div>
             ))}
           </div>
@@ -162,42 +172,43 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border py-8 px-4">
-        <div className="container mx-auto flex flex-col gap-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
+        <div className="container mx-auto flex flex-col gap-4">
+          <div className="flex flex-col items-center gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+            <div className="flex shrink-0 items-center gap-2">
               <RexAlgoLogo size={28} className="rounded-md" />
               <RexAlgoWordmark className="text-sm font-semibold" />
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6">
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 lg:justify-end">
               <a
                 href="mailto:help@mudrex.com?subject=RexAlgo%20support"
                 className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
               >
-                <LifeBuoy className="w-3.5 h-3.5" />
+                <LifeBuoy className="w-3.5 h-3.5 shrink-0" />
                 help@mudrex.com
               </a>
-              <p className="text-xs text-muted-foreground text-center sm:text-right">
-                © 2026{" "}
-                <RexAlgoWordmark className="inline text-xs font-semibold align-baseline" />. All rights reserved.
-                Not financial advice.
-              </p>
+              <span className="hidden h-3 w-px bg-border sm:inline" aria-hidden />
+              <span className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+                <span className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-300">
+                  Developed by
+                </span>
+                <a
+                  href="https://github.com/DecentralizedJM"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/85 transition-colors"
+                  aria-label="Jithin Mohandas on GitHub"
+                >
+                  <Github className="h-4 w-4 shrink-0" aria-hidden />
+                  Jithin Mohandas
+                </a>
+              </span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-border/60 pt-6">
-            <span className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-300">
-              Developed by
-            </span>
-            <a
-              href="https://github.com/DecentralizedJM"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/85 transition-colors"
-              aria-label="Jithin Mohandas on GitHub"
-            >
-              <Github className="h-4 w-4 shrink-0" aria-hidden />
-              Jithin Mohandas
-            </a>
-          </div>
+          <p className="text-center text-xs text-muted-foreground lg:text-right">
+            © 2026{" "}
+            <RexAlgoWordmark className="inline text-xs font-semibold align-baseline" />. All rights reserved.
+            Not financial advice.
+          </p>
         </div>
       </footer>
     </div>
