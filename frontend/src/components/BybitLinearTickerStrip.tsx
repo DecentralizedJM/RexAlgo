@@ -302,12 +302,6 @@ export default function BybitLinearTickerStrip() {
 
   const Segment = ({ id }: { id: string }) => (
     <>
-      <span className="inline-flex items-center gap-2 pr-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground sm:text-xs">
-        USDT perpetuals
-      </span>
-      <span className="inline-flex items-center pr-1 text-[10px] font-bold uppercase tracking-wider text-primary/90 sm:text-xs">
-        Top market cap
-      </span>
       {rows.majors.map((item) => (
         <Pill key={`${id}-m-${item.symbol}`} item={item} />
       ))}
@@ -328,7 +322,7 @@ export default function BybitLinearTickerStrip() {
   return (
     <div
       className="group relative overflow-hidden py-2.5"
-      aria-label="Live USDT perpetual futures prices; scrolls horizontally. Pause by hovering."
+      aria-label="Live market prices; scrolls horizontally. Pause by hovering."
     >
       <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-background to-transparent sm:w-20" />
       <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-background to-transparent sm:w-20" />
