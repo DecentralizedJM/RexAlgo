@@ -107,7 +107,7 @@ export default function LandingPage() {
                 style={{ animationDelay: `${i * 80}ms` }}
               >
                 <div
-                  className="landing-stat-glow-bar pointer-events-none absolute -inset-3 z-0 rounded-2xl bg-primary/45 opacity-0 blur-2xl transition-opacity duration-300 group-hover/stat:opacity-100"
+                  className="landing-stat-glow-bar pointer-events-none absolute inset-0 z-0 rounded-xl bg-primary/20 opacity-0 blur-lg transition-opacity duration-500 group-hover/stat:opacity-100"
                   aria-hidden
                 />
                 <p className="relative z-[1] text-2xl md:text-3xl font-mono font-bold text-foreground">
