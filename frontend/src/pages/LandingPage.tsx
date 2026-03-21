@@ -183,20 +183,18 @@ export default function LandingPage() {
               </p>
             </div>
           </div>
-          <p className="text-center text-xs text-muted-foreground border-t border-border/60 pt-6">
-            Developed by{" "}
-            <span className="text-foreground font-medium">Jithin Mohandas</span>
-            .{" "}
+          <div className="flex justify-center border-t border-border/60 pt-6">
             <a
               href="https://github.com/DecentralizedJM"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline underline-offset-2"
+              className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/85 transition-colors"
+              aria-label="Jithin Mohandas on GitHub"
             >
-              <Github className="w-3.5 h-3.5 shrink-0" aria-hidden />
-              GitHub — @DecentralizedJM
+              <Github className="h-4 w-4 shrink-0" aria-hidden />
+              Jithin Mohandas
             </a>
-          </p>
+          </div>
         </div>
       </footer>
     </div>
