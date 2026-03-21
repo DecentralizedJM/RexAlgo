@@ -189,8 +189,9 @@ export default function LandingPage() {
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/85 transition-colors"
-              aria-label="Jithin Mohandas on GitHub"
+              aria-label="Developed by Jithin Mohandas on GitHub"
             >
+              <span>Developed by</span>
               <Github className="h-4 w-4 shrink-0" aria-hidden />
               Jithin Mohandas
             </a>
