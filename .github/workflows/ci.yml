@@ -6,20 +6,29 @@ on:
   pull_request:
     branches: [main, master]
 
+# Explicit token scope (default is fine; keeps forks read-only safe)
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: package-lock.json
+          # Do not use built-in npm cache here: monorepo + single path often breaks the
+          # cache step fast (~few seconds) if paths/hash inputs don’t match the runner.
+          # `npm ci` is deterministic without it.
 
-      - name: Install root + workspaces
-        run: npm install
+      - name: Verify lockfile (required for npm ci)
+        run: test -f package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Lint frontend
         run: npm run lint -w @rexalgo/frontend
