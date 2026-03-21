@@ -5,7 +5,53 @@
 @tailwind utilities;
 
 @layer base {
+  /* Light mode (default) — olive accent aligned with RexAlgo brand */
   :root {
+    --background: 45 20% 97%;
+    --foreground: 220 25% 12%;
+
+    --card: 45 18% 95%;
+    --card-foreground: 220 25% 12%;
+
+    --popover: 45 18% 98%;
+    --popover-foreground: 220 25% 12%;
+
+    --primary: 78 32% 38%;
+    --primary-foreground: 45 25% 99%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 220 22% 20%;
+
+    --muted: 220 12% 90%;
+    --muted-foreground: 220 12% 42%;
+
+    --accent: 78 28% 36%;
+    --accent-foreground: 45 25% 99%;
+
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 88%;
+    --input: 220 14% 88%;
+    --ring: 78 32% 38%;
+
+    --radius: 0.75rem;
+
+    --profit: 142 55% 32%;
+    --loss: 0 72% 48%;
+    --warning: 32 92% 44%;
+
+    --sidebar-background: 45 18% 95%;
+    --sidebar-foreground: 220 25% 12%;
+    --sidebar-primary: 78 32% 38%;
+    --sidebar-primary-foreground: 45 25% 99%;
+    --sidebar-accent: 220 12% 90%;
+    --sidebar-accent-foreground: 220 22% 20%;
+    --sidebar-border: 220 14% 88%;
+    --sidebar-ring: 78 32% 38%;
+  }
+
+  .dark {
     --background: 220 20% 7%;
     --foreground: 210 20% 92%;
 
@@ -33,8 +79,6 @@
     --border: 220 14% 18%;
     --input: 220 14% 18%;
     --ring: 160 84% 39%;
-
-    --radius: 0.75rem;
 
     --profit: 160 84% 39%;
     --loss: 0 72% 51%;

@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { login, ApiError } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -47,9 +48,7 @@ export default function AuthPage() {
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-md animate-fade-up">
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-            <TrendingUp className="w-6 h-6 text-primary-foreground" />
-          </div>
+          <RexAlgoLogo size={40} className="rounded-xl" />
           <span className="text-xl font-bold">RexAlgo</span>
         </div>
 

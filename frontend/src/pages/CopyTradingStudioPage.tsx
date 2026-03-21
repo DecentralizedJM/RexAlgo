@@ -35,6 +35,7 @@ import {
   fetchCopyStrategySignals,
   ApiError,
 } from "@/lib/api";
+import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -68,6 +69,7 @@ export default function CopyTradingStudioPage() {
   const studioQ = useQuery({
     queryKey: ["copy-studio", "strategies"],
     queryFn: fetchCopyStudioStrategies,
+    ...liveDataQueryOptions,
   });
 
   const strategies = useMemo(
@@ -91,6 +93,7 @@ export default function CopyTradingStudioPage() {
     queryKey: ["copy-studio", "signals", selectedId],
     queryFn: () => fetchCopyStrategySignals(selectedId!),
     enabled: Boolean(selectedId),
+    ...liveDataQueryOptions,
   });
 
   const createMut = useMutation({

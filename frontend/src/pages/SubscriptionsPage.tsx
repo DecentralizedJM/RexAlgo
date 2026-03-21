@@ -31,6 +31,7 @@ import {
   type ApiSubscription,
 } from "@/lib/api";
 import { futuresAvailableUsdt, MIN_MARGIN_PER_TRADE_USD } from "@/lib/walletFunding";
+import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { formatPair } from "@/lib/format";
 import { useRequireAuth } from "@/hooks/useAuth";
 import {
@@ -58,13 +59,13 @@ export default function SubscriptionsPage() {
   const walletQ = useQuery({
     queryKey: ["wallet", "futures"],
     queryFn: () => fetchWallet({ futuresOnly: true }),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
+    ...liveDataQueryOptions,
     retry: false,
   });
   const subsQ = useQuery({
     queryKey: ["subscriptions"],
     queryFn: fetchSubscriptions,
+    ...liveDataQueryOptions,
     retry: false,
   });
 

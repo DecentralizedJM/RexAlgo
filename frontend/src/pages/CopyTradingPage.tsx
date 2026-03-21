@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchStrategies, type ApiStrategy } from "@/lib/api";
+import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { initials } from "@/lib/format";
 
 function mapCopyStrategy(s: ApiStrategy) {
@@ -27,6 +28,7 @@ export default function CopyTradingPage() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["strategies", "copy"],
     queryFn: () => fetchStrategies({ type: "copy_trading" }),
+    ...liveDataQueryOptions,
   });
 
   const rows = (data?.strategies ?? []).map(mapCopyStrategy);

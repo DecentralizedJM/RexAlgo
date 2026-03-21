@@ -1,6 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  TrendingUp,
   BarChart3,
   Users,
   LayoutDashboard,
@@ -10,12 +9,21 @@ import {
   Radio,
   BookmarkCheck,
   Sparkles,
+  LifeBuoy,
+  RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSession } from "@/hooks/useAuth";
 import { logout } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { RexAlgoLogo } from "@/components/RexAlgoLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { refreshAppData } from "@/lib/refreshAppData";
+import { toast } from "sonner";
+
+const SUPPORT_EMAIL = "help@mudrex.com";
 
 const navLinks = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -29,6 +37,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const isLanding = location.pathname === "/";
   const { data: session } = useSession();
   const user = session?.user;
@@ -44,13 +53,24 @@ export default function Navbar() {
     setMobileOpen(false);
   }
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await refreshAppData(queryClient);
+      toast.success("Data refreshed");
+    } catch {
+      toast.error("Could not refresh");
+    } finally {
+      setRefreshing(false);
+      setMobileOpen(false);
+    }
+  }
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass">
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <TrendingUp className="w-5 h-5 text-primary-foreground" />
-          </div>
+          <RexAlgoLogo size={32} className="rounded-lg" />
           <span className="text-lg font-bold tracking-tight">RexAlgo</span>
         </Link>
 
@@ -97,7 +117,38 @@ export default function Navbar() {
           )}
         </div>
 
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden md:flex items-center gap-2 md:gap-3">
+          <ThemeToggle />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a
+                href={`mailto:${SUPPORT_EMAIL}?subject=RexAlgo%20support`}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+                aria-label={`Email ${SUPPORT_EMAIL}`}
+              >
+                <LifeBuoy className="h-4 w-4" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Support: {SUPPORT_EMAIL}</TooltipContent>
+          </Tooltip>
+          {user && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0 h-9 w-9"
+                  disabled={refreshing}
+                  onClick={() => void handleRefresh()}
+                  aria-label="Refresh balances and positions"
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Refresh data (Mudrex)</TooltipContent>
+            </Tooltip>
+          )}
           {isLanding ? (
             <>
               <Link to="/about">
@@ -113,7 +164,7 @@ export default function Navbar() {
             </>
           ) : user ? (
             <>
-              <span className="text-xs text-muted-foreground max-w-[140px] truncate">
+              <span className="text-xs text-muted-foreground max-w-[120px] truncate hidden lg:inline">
                 {user.displayName}
               </span>
               <Button variant="outline" size="sm" onClick={handleSignOut}>
@@ -133,6 +184,7 @@ export default function Navbar() {
         <button
           className="md:hidden p-2 text-muted-foreground hover:text-foreground"
           onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -141,6 +193,30 @@ export default function Navbar() {
       {mobileOpen && (
         <div className="md:hidden glass border-t border-border">
           <div className="container mx-auto px-4 py-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between py-2 border-b border-border/60 mb-1">
+              <span className="text-xs font-medium text-muted-foreground">Theme</span>
+              <ThemeToggle />
+            </div>
+            <a
+              href={`mailto:${SUPPORT_EMAIL}?subject=RexAlgo%20support`}
+              className="flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => setMobileOpen(false)}
+            >
+              <LifeBuoy className="w-4 h-4" />
+              Support ({SUPPORT_EMAIL})
+            </a>
+            {user && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2"
+                disabled={refreshing}
+                onClick={() => void handleRefresh()}
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+                Refresh data
+              </Button>
+            )}
             {navLinks.map((link) => (
               <Link
                 key={link.to}

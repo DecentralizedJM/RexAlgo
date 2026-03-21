@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { TrendingUp, Shield, Zap, BarChart3, ArrowRight, Users, Bot } from "lucide-react";
+import { Shield, Zap, BarChart3, ArrowRight, Users, Bot, LifeBuoy } from "lucide-react";
+import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import Navbar from "@/components/Navbar";
 
 const stats = [
@@ -120,7 +121,7 @@ export default function LandingPage() {
       <section className="py-24 px-4">
         <div className="container mx-auto max-w-2xl text-center">
           <div className="glass rounded-2xl p-12 animate-pulse-glow">
-            <TrendingUp className="w-10 h-10 text-primary mx-auto mb-4" />
+            <RexAlgoLogo size={56} className="mx-auto mb-4 rounded-xl" />
             <h2 className="text-2xl font-bold mb-3">Ready to automate your trading?</h2>
             <p className="text-muted-foreground mb-8">
               Connect your exchange API and start running strategies in under 2 minutes.
@@ -139,12 +140,21 @@ export default function LandingPage() {
       <footer className="border-t border-border py-8 px-4">
         <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-primary-foreground" />
-            </div>
+            <RexAlgoLogo size={28} className="rounded-md" />
             <span className="text-sm font-semibold">RexAlgo</span>
           </div>
-          <p className="text-xs text-muted-foreground">© 2026 RexAlgo. All rights reserved. Not financial advice.</p>
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6">
+            <a
+              href="mailto:help@mudrex.com?subject=RexAlgo%20support"
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              <LifeBuoy className="w-3.5 h-3.5" />
+              help@mudrex.com
+            </a>
+            <p className="text-xs text-muted-foreground text-center sm:text-right">
+              © 2026 RexAlgo. All rights reserved. Not financial advice.
+            </p>
+          </div>
         </div>
       </footer>
     </div>

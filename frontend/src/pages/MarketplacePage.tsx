@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import StrategyCard from "@/components/StrategyCard";
 import { fetchStrategies, type ApiStrategy } from "@/lib/api";
+import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 
 const riskFilters = ["all", "low", "medium", "high"] as const;
 
@@ -28,6 +29,7 @@ export default function MarketplacePage() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["strategies", "algo"],
     queryFn: () => fetchStrategies({ type: "algo" }),
+    ...liveDataQueryOptions,
   });
 
   const strategies = data?.strategies ?? [];

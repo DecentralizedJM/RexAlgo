@@ -38,6 +38,7 @@ import {
   patchStrategy,
   ApiError,
 } from "@/lib/api";
+import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -71,6 +72,7 @@ export default function MarketplaceStudioPage() {
   const studioQ = useQuery({
     queryKey: ["marketplace-studio", "strategies"],
     queryFn: fetchMarketplaceStudioStrategies,
+    ...liveDataQueryOptions,
   });
 
   const strategies = useMemo(
@@ -94,6 +96,7 @@ export default function MarketplaceStudioPage() {
     queryKey: ["marketplace-studio", "signals", selectedId],
     queryFn: () => fetchMarketplaceStrategySignals(selectedId!),
     enabled: Boolean(selectedId),
+    ...liveDataQueryOptions,
   });
 
   const createMut = useMutation({

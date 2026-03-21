@@ -1,4 +1,5 @@
 import Navbar from "@/components/Navbar";
+import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { Shield, Target, Code, Globe } from "lucide-react";
 
 const values = [
@@ -14,7 +15,12 @@ export default function AboutPage() {
       <Navbar />
       <div className="container mx-auto px-4 pt-28 pb-20 max-w-3xl">
         <div className="animate-fade-up">
-          <h1 className="text-4xl font-bold mb-6" style={{ lineHeight: 1.1 }}>About RexAlgo</h1>
+          <div className="flex items-center gap-3 mb-6">
+            <RexAlgoLogo size={48} className="rounded-xl shrink-0" />
+            <h1 className="text-4xl font-bold" style={{ lineHeight: 1.1 }}>
+              About RexAlgo
+            </h1>
+          </div>
           <p className="text-lg text-muted-foreground mb-12 leading-relaxed">
             RexAlgo was built by traders who were tired of clunky interfaces, opaque strategies, and platforms that treat risk as an afterthought. We believe algorithmic trading should be accessible, transparent, and safe.
           </p>

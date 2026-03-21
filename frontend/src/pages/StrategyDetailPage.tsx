@@ -13,6 +13,7 @@ import {
   ApiError,
 } from "@/lib/api";
 import { futuresAvailableUsdt } from "@/lib/walletFunding";
+import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import {
   TrendingUp,
   Target,
@@ -45,19 +46,20 @@ export default function StrategyDetailPage() {
     queryKey: ["strategy", id],
     queryFn: () => fetchStrategy(id!),
     enabled: Boolean(id),
+    ...liveDataQueryOptions,
   });
 
   const { data: subsData } = useQuery({
     queryKey: ["subscriptions"],
     queryFn: fetchSubscriptions,
+    ...liveDataQueryOptions,
     retry: false,
   });
 
   const { data: walletData } = useQuery({
     queryKey: ["wallet", "futures"],
     queryFn: () => fetchWallet({ futuresOnly: true }),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
+    ...liveDataQueryOptions,
     retry: false,
   });
 

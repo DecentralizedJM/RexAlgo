@@ -25,6 +25,7 @@ import {
 import { formatPair } from "@/lib/format";
 import { useRequireAuth } from "@/hooks/useAuth";
 import { futuresAvailableUsdt } from "@/lib/walletFunding";
+import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 
 /** Cumulative realized P&L from Mudrex position history (one API page). */
 function buildRealizedPnlCurve(positions: ApiPosition[]): { date: string; value: number }[] {
@@ -83,23 +84,25 @@ export default function DashboardPage() {
   const walletQ = useQuery({
     queryKey: ["wallet", "futures"],
     queryFn: () => fetchWallet({ futuresOnly: true }),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
+    ...liveDataQueryOptions,
     retry: false,
   });
   const posQ = useQuery({
     queryKey: ["positions"],
     queryFn: fetchPositions,
+    ...liveDataQueryOptions,
     retry: false,
   });
   const subQ = useQuery({
     queryKey: ["subscriptions"],
     queryFn: fetchSubscriptions,
+    ...liveDataQueryOptions,
     retry: false,
   });
   const historyQ = useQuery({
     queryKey: ["positions", "history"],
     queryFn: fetchPositionHistory,
+    ...liveDataQueryOptions,
     retry: false,
   });
 
@@ -158,6 +161,11 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
             <p className="text-sm text-muted-foreground">Live balances & positions via Mudrex API</p>
+            <p className="text-xs text-muted-foreground/80 mt-1">
+              Data refreshes when you return to this tab (if older than ~15s), or anytime via{" "}
+              <strong className="text-foreground/90">Refresh</strong> in the header — no constant polling, to
+              protect API limits.
+            </p>
           </div>
           <div className="flex gap-3 flex-wrap">
             <Link to="/marketplace">

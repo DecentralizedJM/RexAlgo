@@ -1,8 +1,21 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          var d = document.documentElement;
+          if (t === "light") d.classList.remove("dark");
+          else d.classList.add("dark");
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/rexalgo-logo.png" type="image/png" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>RexAlgo</title>
     <meta
