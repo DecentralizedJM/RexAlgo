@@ -6,5 +6,9 @@ export async function GET() {
   if (!session) {
     return NextResponse.json({ user: null }, { status: 401 });
   }
-  return NextResponse.json({ user: session.user });
+  return NextResponse.json({
+    user: session.user,
+    sessionExpiresAt:
+      session.sessionExpiresAt?.toISOString() ?? null,
+  });
 }

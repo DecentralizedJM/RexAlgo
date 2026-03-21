@@ -25,7 +25,7 @@ export default function AuthPage() {
     queryFn: fetchSessionInfo,
     staleTime: 5 * 60_000,
   });
-  const sessionDays = sessionInfoQ.data?.sessionMaxAgeDays ?? 30;
+  const sessionDays = sessionInfoQ.data?.sessionMaxAgeDays ?? 90;
   const mudrexKeyDays = sessionInfoQ.data?.mudrexKeyMaxDays ?? 90;
 
   const handleConnect = async (e: React.FormEvent) => {
@@ -36,7 +36,10 @@ export default function AuthPage() {
     setMessage("");
     try {
       const result = await login(secret.trim(), displayName.trim() || undefined);
-      queryClient.setQueryData(["session", "me"], { user: result.user });
+      queryClient.setQueryData(["session", "me"], {
+        user: result.user,
+        sessionExpiresAt: null,
+      });
       await queryClient.refetchQueries({ queryKey: ["session", "me"] });
       void queryClient.invalidateQueries({ queryKey: ["wallet"] });
       navigate(from, { replace: true });
@@ -142,11 +145,11 @@ export default function AuthPage() {
 
           <p className="text-xs text-muted-foreground text-center mt-6 leading-relaxed space-y-2">
             <span className="block">
-              After you sign in, this browser stays connected for up to{" "}
-              <span className="text-foreground font-medium">{sessionDays} days</span> (then you’ll sign in
-              again with your API secret). Mudrex typically expires API keys after about{" "}
-              <span className="text-foreground font-medium">{mudrexKeyDays} days</span>—create a new key in
-              Mudrex and connect here if trades or balances start failing.
+              After you sign in, this browser keeps the same session for up to{" "}
+              <span className="text-foreground font-medium">{sessionDays} days</span> (JWT + cookie expire
+              together; there is no auto-refresh). Mudrex usually rotates API keys after about{" "}
+              <span className="text-foreground font-medium">{mudrexKeyDays} days</span>—if wallet or orders
+              start failing with an auth error, create a new key in Mudrex and sign in here again.
             </span>
             <span className="block pt-2 border-t border-border/60">
               Secrets are encrypted at rest and only used to call Mudrex. We never hold your funds; balances

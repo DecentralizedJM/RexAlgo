@@ -9,5 +9,10 @@ export function jsonFromMudrexError(error: unknown): NextResponse | null {
   const body: Record<string, unknown> = { error: error.message };
   if (status === 429) body.code = "MUDREX_RATE_LIMIT";
   if (status === 503) body.code = "MUDREX_UNAVAILABLE";
+  if (status === 401) {
+    body.code = "MUDREX_API_KEY_INVALID";
+    body.hint =
+      "Mudrex API keys typically expire after about 90 days. Generate a new key in Mudrex and reconnect at Sign in — your strategies and history stay under the same RexAlgo profile.";
+  }
   return NextResponse.json(body, { status });
 }

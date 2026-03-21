@@ -74,10 +74,14 @@ async function mudrexFetch(
     }));
 
     if (!res.ok) {
-      const msg =
+      let msg =
         typeof (data as { message?: string })?.message === "string"
           ? (data as { message: string }).message
           : `API error ${res.status}`;
+      if (res.status === 401) {
+        msg =
+          "Mudrex rejected this API key (expired, revoked, or invalid). Create a new API key in the Mudrex app and sign in again here.";
+      }
       throw new MudrexAPIError(msg, res.status, data);
     }
 

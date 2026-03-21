@@ -15,6 +15,18 @@ export class ApiError extends Error {
   }
 }
 
+export function getApiErrorCode(err: unknown): string | undefined {
+  if (!(err instanceof ApiError) || err.body == null || typeof err.body !== "object") return undefined;
+  const c = (err.body as { code?: unknown }).code;
+  return typeof c === "string" ? c : undefined;
+}
+
+export function getApiErrorHint(err: unknown): string | undefined {
+  if (!(err instanceof ApiError) || err.body == null || typeof err.body !== "object") return undefined;
+  const h = (err.body as { hint?: unknown }).hint;
+  return typeof h === "string" ? h : undefined;
+}
+
 async function parseJson(res: Response): Promise<unknown> {
   const text = await res.text();
   if (!text) return {};
@@ -68,13 +80,26 @@ export async function logout() {
   return apiFetch<{ success: boolean }>("/api/auth/logout", { method: "POST" });
 }
 
-export async function getMe() {
+export type SessionMe = {
+  user: { id: string; displayName: string } | null;
+  /** When the HttpOnly JWT/session cookie expires (browser must sign in again). */
+  sessionExpiresAt: string | null;
+};
+
+export async function getMe(): Promise<SessionMe> {
   const res = await fetch("/api/auth/me", { credentials: "include" });
   const data = (await res.json().catch(() => ({}))) as {
     user?: { id: string; displayName: string } | null;
+    sessionExpiresAt?: string | null;
   };
-  if (!res.ok) return { user: null };
-  return { user: data.user ?? null };
+  if (!res.ok) {
+    return { user: null, sessionExpiresAt: null };
+  }
+  return {
+    user: data.user ?? null,
+    sessionExpiresAt:
+      typeof data.sessionExpiresAt === "string" ? data.sessionExpiresAt : null,
+  };
 }
 
 /** Server-configured session length + Mudrex key rotation hint (sign-in page). */
@@ -88,10 +113,10 @@ export async function fetchSessionInfo(): Promise<{
     mudrexKeyMaxDays?: number;
   };
   if (!res.ok) {
-    return { sessionMaxAgeDays: 30, mudrexKeyMaxDays: 90 };
+    return { sessionMaxAgeDays: 90, mudrexKeyMaxDays: 90 };
   }
   return {
-    sessionMaxAgeDays: typeof data.sessionMaxAgeDays === "number" ? data.sessionMaxAgeDays : 30,
+    sessionMaxAgeDays: typeof data.sessionMaxAgeDays === "number" ? data.sessionMaxAgeDays : 90,
     mudrexKeyMaxDays: typeof data.mudrexKeyMaxDays === "number" ? data.mudrexKeyMaxDays : 90,
   };
 }

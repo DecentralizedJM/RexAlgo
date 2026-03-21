@@ -27,9 +27,10 @@ export const MUDREX_API_KEY_MAX_DAYS = 90;
  */
 export function getSessionMaxAgeDays(): number {
   const raw = process.env.REXALGO_SESSION_MAX_AGE_DAYS;
-  if (raw === undefined || raw === "") return 30;
+  /** Default 90 = same cap as a single Mudrex key lifetime — best for long-running strategy UIs. */
+  if (raw === undefined || raw === "") return MUDREX_API_KEY_MAX_DAYS;
   const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n)) return 30;
+  if (!Number.isFinite(n)) return MUDREX_API_KEY_MAX_DAYS;
   return Math.min(MUDREX_API_KEY_MAX_DAYS, Math.max(1, n));
 }
 
@@ -88,13 +89,19 @@ export async function verifySession(
   userId: string;
   displayName: string;
   apiSecretEncrypted: string;
+  sessionExpiresAt: Date | null;
 } | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
+    const exp =
+      typeof payload.exp === "number" && Number.isFinite(payload.exp)
+        ? new Date(payload.exp * 1000)
+        : null;
     return {
       userId: payload.userId as string,
       displayName: payload.displayName as string,
       apiSecretEncrypted: payload.apiSecretEncrypted as string,
+      sessionExpiresAt: exp,
     };
   } catch {
     return null;
@@ -104,6 +111,7 @@ export async function verifySession(
 export async function getSession(): Promise<{
   user: AuthUser;
   apiSecret: string;
+  sessionExpiresAt: Date | null;
 } | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
@@ -117,6 +125,7 @@ export async function getSession(): Promise<{
     return {
       user: { id: session.userId, displayName: session.displayName },
       apiSecret,
+      sessionExpiresAt: session.sessionExpiresAt,
     };
   } catch {
     return null;

@@ -20,6 +20,8 @@ import {
   fetchPositionHistory,
   fetchSubscriptions,
   ApiError,
+  getApiErrorCode,
+  getApiErrorHint,
   type ApiPosition,
 } from "@/lib/api";
 import { formatPair } from "@/lib/format";
@@ -77,8 +79,15 @@ function formatClosedWhen(p: ApiPosition): string {
   return raw.length >= 10 ? raw.slice(0, 16).replace("T", " ") : raw;
 }
 
+function formatSessionExpiry(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
 export default function DashboardPage() {
-  useRequireAuth();
+  const authQ = useRequireAuth();
   const navigate = useNavigate();
 
   const walletQ = useQuery({
@@ -108,10 +117,18 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const err = walletQ.error || posQ.error || subQ.error || historyQ.error;
-    if (err instanceof ApiError && err.status === 401) {
-      navigate("/auth", { replace: true });
-    }
+    if (!(err instanceof ApiError) || err.status !== 401) return;
+    // Session missing / expired → sign in. Mudrex key invalid → stay here; banner explains reconnect.
+    if (getApiErrorCode(err) === "MUDREX_API_KEY_INVALID") return;
+    navigate("/auth", { replace: true });
   }, [walletQ.error, posQ.error, subQ.error, historyQ.error, navigate]);
+
+  const mudrexKeyErr = useMemo(() => {
+    for (const e of [walletQ.error, posQ.error, subQ.error, historyQ.error]) {
+      if (e instanceof ApiError && getApiErrorCode(e) === "MUDREX_API_KEY_INVALID") return e;
+    }
+    return null;
+  }, [walletQ.error, posQ.error, subQ.error, historyQ.error]);
 
   const loading = walletQ.isPending || posQ.isPending || subQ.isPending;
   const futures = walletQ.data?.futures;
@@ -164,6 +181,15 @@ export default function DashboardPage() {
               Balances and positions from Mudrex. Refreshes when you focus this tab or use Refresh in the
               header.
             </p>
+            {formatSessionExpiry(authQ.data?.sessionExpiresAt) && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Browser session until{" "}
+                <span className="text-foreground font-medium">
+                  {formatSessionExpiry(authQ.data?.sessionExpiresAt)}
+                </span>
+                . Mudrex may reject the API key sooner (~90 days)—then reconnect at Sign in.
+              </p>
+            )}
           </div>
           <div className="flex gap-3 flex-wrap">
             <Link to="/marketplace">
@@ -178,6 +204,25 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
+
+        {mudrexKeyErr && (
+          <div className="rounded-xl border border-loss/40 bg-loss/10 p-4 mb-6 text-sm animate-fade-up">
+            <p className="font-medium text-loss">Mudrex API key problem</p>
+            <p className="text-muted-foreground mt-1">{mudrexKeyErr.message}</p>
+            {getApiErrorHint(mudrexKeyErr) && (
+              <p className="text-muted-foreground mt-2 text-xs leading-relaxed">{getApiErrorHint(mudrexKeyErr)}</p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 border-loss/40"
+              onClick={() => navigate("/auth", { state: { from: "/dashboard" } })}
+            >
+              Sign in with new Mudrex key
+            </Button>
+          </div>
+        )}
 
         {underfundedSubs.length > 0 && walletQ.data && (
           <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3 text-sm animate-fade-up">

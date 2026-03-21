@@ -75,7 +75,7 @@ On the **first** `npm run dev`, the root **`predev`** script creates **`backend/
 | `JWT_SECRET` | **Yes** | Long random string (e.g. `openssl rand -hex 32`) |
 | `ENCRYPTION_KEY` | **Yes** | Strong passphrase; used to encrypt Mudrex secrets & webhook signing secrets at rest |
 | `PUBLIC_APP_URL` | Optional | No trailing slash. Full webhook URLs in **Master** / **Strategy** studio (use ngrok URL → port **3000** for external bots) |
-| `REXALGO_SESSION_MAX_AGE_DAYS` | Optional | Browser session length (JWT + cookie), **1–90** (default **30**). Cap matches Mudrex’s typical API key lifetime. |
+| `REXALGO_SESSION_MAX_AGE_DAYS` | Optional | Browser session length (JWT + cookie), **1–90** (default **90**). Capped at Mudrex’s typical API key lifetime so the cookie doesn’t outlive a single key rotation. |
 | `REXALGO_DB_PATH` | Optional | Custom SQLite file path (default: under `backend/`) |
 
 ```bash
@@ -101,9 +101,9 @@ npm run dev
 
 Sign in at **`/auth`** with your **Mudrex API secret**.
 
-**Session length:** The HttpOnly session cookie and JWT are issued together and expire after the same period (**default 30 days**, configurable with **`REXALGO_SESSION_MAX_AGE_DAYS`**, max **90**). There is no sliding refresh—after that, the user signs in again with their API secret.
+**Session length:** The HttpOnly session cookie and JWT are issued together and expire after the same period (**default 90 days**, configurable with **`REXALGO_SESSION_MAX_AGE_DAYS`**, max **90**). There is **no sliding refresh**—when the JWT expires, the user signs in again with their API secret (same or newly rotated Mudrex key).
 
-**Mudrex API key expiry (~90 days):** RexAlgo does not extend Mudrex’s key lifetime. While your session JWT is valid, the app keeps using the secret that was validated at login. If Mudrex invalidates or rotates the key early, **Mudrex API calls** (wallet, orders, copy mirroring, etc.) will start failing with auth errors until the user **creates a new key in Mudrex** and **signs in again** at `/auth`.
+**Mudrex API key expiry (~90 days):** RexAlgo cannot extend Mudrex’s key lifetime. While your session JWT is valid, the app keeps using the encrypted secret from your last successful login. If Mudrex invalidates or rotates the key **before** the JWT expires, **Mudrex API calls** (wallet, orders, copy mirroring, etc.) return **401** with a clear error until the user **creates a new key in Mudrex** and **signs in again** at `/auth`. **Account id:** RexAlgo’s internal user id is derived from the API secret you used at login—**a different Mudrex key is a different RexAlgo user** (listings/subscriptions don’t carry over). To “refresh” the same key without changing identity, paste the **same** secret again before it expires, or sign in again after JWT expiry with the same key if Mudrex still accepts it. **`GET /api/auth/me`** returns **`sessionExpiresAt`** (ISO timestamp) for UI countdowns.
 
 ### 4. Verify the API (optional)
 
