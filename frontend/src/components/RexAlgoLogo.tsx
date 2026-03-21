@@ -15,7 +15,7 @@ export function RexAlgoLogo({ className, size = 32 }: RexAlgoLogoProps) {
       width={size}
       height={size}
       className={cn(
-        "object-contain rounded-md ring-1 ring-border/50 bg-card/80 shrink-0",
+        "object-contain shrink-0 rounded-xl shadow-sm ring-1 ring-primary/20",
         className
       )}
     />

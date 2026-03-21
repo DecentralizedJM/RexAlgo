@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp } from "lucide-react";
+import { LINEAR_USDT_MAJOR_BASES } from "@/lib/linearTickerMajors";
 
-const BYBIT_WS_LINEAR = "wss://stream.bybit.com/v5/public/linear";
+/** Public linear futures stream (USDT perps). */
+const LINEAR_PUBLIC_WS = "wss://stream.bybit.com/v5/public/linear";
 
-export type BybitTickerItem = {
+export type LinearTickerItem = {
   kind: "major" | "gainer";
   symbol: string;
   base: string;
@@ -13,11 +15,27 @@ export type BybitTickerItem = {
 };
 
 type TickerApiResponse = {
-  source: string;
+  source?: string;
   updatedAt: number;
-  majors: BybitTickerItem[];
-  topGainers: BybitTickerItem[];
+  majors: LinearTickerItem[];
+  topGainers: LinearTickerItem[];
 };
+
+function buildClientFallback(): TickerApiResponse {
+  const majors: LinearTickerItem[] = LINEAR_USDT_MAJOR_BASES.map((base) => ({
+    kind: "major",
+    symbol: `${base}USDT`,
+    base,
+    lastPrice: "—",
+    changeFrac: 0,
+  }));
+  return {
+    source: "client-fallback",
+    updatedAt: 0,
+    majors,
+    topGainers: [],
+  };
+}
 
 function fmtPrice(s: string): string {
   if (s === "—") return s;
@@ -51,7 +69,8 @@ function mergeWsRow(
 ): Record<string, { lastPrice?: string; changeFrac?: number }> {
   const sym = typeof row.symbol === "string" ? row.symbol : null;
   if (!sym) return prev;
-  const next = { ...prev[sym] };
+  const cur = prev[sym] ?? {};
+  const next = { ...cur };
   if (typeof row.lastPrice === "string") next.lastPrice = row.lastPrice;
   if (typeof row.price24hPcnt === "string") {
     const f = Number(row.price24hPcnt);
@@ -62,37 +81,62 @@ function mergeWsRow(
 
 export default function BybitLinearTickerStrip() {
   const { data, isError, isLoading } = useQuery({
-    queryKey: ["market", "bybit-linear-tickers"],
+    queryKey: ["market", "linear-usdt-tickers"],
     queryFn: async (): Promise<TickerApiResponse> => {
-      const res = await fetch("/api/market/bybit-linear-tickers", {
+      const res = await fetch("/api/market/linear-usdt-tickers", {
         credentials: "include",
       });
-      if (!res.ok) throw new Error(String(res.status));
-      return res.json() as Promise<TickerApiResponse>;
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`snapshot_${res.status}`);
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error("snapshot_bad_json");
+      }
+      if (
+        parsed == null ||
+        typeof parsed !== "object" ||
+        !("majors" in parsed) ||
+        !Array.isArray((parsed as TickerApiResponse).majors)
+      ) {
+        throw new Error("snapshot_shape");
+      }
+      return parsed as TickerApiResponse;
     },
     refetchInterval: 20_000,
     staleTime: 8_000,
+    retry: 2,
+    retryDelay: (i) => Math.min(1500 * 2 ** i, 10_000),
   });
+
+  const fallbackSnapshot = useMemo(() => buildClientFallback(), []);
+
+  /** If the snapshot API fails (e.g. static hosting without /api proxy), still stream via WebSocket. */
+  const displayData: TickerApiResponse | null =
+    data ?? (isError ? fallbackSnapshot : null);
 
   const [livePatch, setLivePatch] = useState<
     Record<string, { lastPrice?: string; changeFrac?: number }>
   >({});
 
   const symbolsKey = useMemo(() => {
-    if (!data) return "";
+    if (!displayData) return "";
     const s = new Set<string>();
-    data.majors.forEach((m) => s.add(m.symbol));
-    data.topGainers.forEach((g) => s.add(g.symbol));
+    displayData.majors.forEach((m) => s.add(m.symbol));
+    displayData.topGainers.forEach((g) => s.add(g.symbol));
     return [...s].sort().join(",");
-  }, [data]);
+  }, [displayData]);
 
   const applyWsData = useCallback((raw: unknown) => {
     if (raw == null || typeof raw !== "object") return;
     const o = raw as Record<string, unknown>;
     const dataField = o.data;
     setLivePatch((prev) => {
-      let next = prev;
       if (Array.isArray(dataField)) {
+        let next = prev;
         for (const row of dataField) {
           if (row && typeof row === "object")
             next = mergeWsRow(next, row as Record<string, unknown>);
@@ -100,7 +144,7 @@ export default function BybitLinearTickerStrip() {
         return next;
       }
       if (dataField && typeof dataField === "object") {
-        return mergeWsRow(next, dataField as Record<string, unknown>);
+        return mergeWsRow(prev, dataField as Record<string, unknown>);
       }
       return prev;
     });
@@ -118,18 +162,21 @@ export default function BybitLinearTickerStrip() {
     let closed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let attempt = 0;
+    let reqCounter = 0;
 
     const connect = () => {
       if (closed) return;
       try {
-        const ws = new WebSocket(BYBIT_WS_LINEAR);
+        const ws = new WebSocket(LINEAR_PUBLIC_WS);
         wsRef.current = ws;
 
         ws.onopen = () => {
           attempt = 0;
           for (const batch of chunk(symbols, 10)) {
+            reqCounter += 1;
             ws.send(
               JSON.stringify({
+                req_id: `rexalgo-t-${reqCounter}`,
                 op: "subscribe",
                 args: batch.map((s) => `tickers.${s}`),
               })
@@ -145,13 +192,18 @@ export default function BybitLinearTickerStrip() {
 
         ws.onmessage = (ev) => {
           try {
-            const msg = JSON.parse(ev.data as string) as {
-              topic?: string;
-              data?: unknown;
-              op?: string;
-              success?: boolean;
-            };
+            const raw = ev.data;
+            const msg =
+              typeof raw === "string"
+                ? (JSON.parse(raw) as {
+                    topic?: string;
+                    data?: unknown;
+                    op?: string;
+                  })
+                : null;
+            if (!msg) return;
             if (msg.op === "pong" || msg.op === "ping") return;
+            if (msg.op === "subscribe") return;
             if (msg.topic?.startsWith("tickers.")) {
               applyWsData({ data: msg.data });
             }
@@ -177,7 +229,10 @@ export default function BybitLinearTickerStrip() {
         };
       } catch {
         attempt += 1;
-        reconnectTimer = setTimeout(connect, Math.min(30_000, 2000 * 2 ** Math.min(attempt, 4)));
+        reconnectTimer = setTimeout(
+          connect,
+          Math.min(30_000, 2000 * 2 ** Math.min(attempt, 4))
+        );
       }
     };
 
@@ -200,13 +255,13 @@ export default function BybitLinearTickerStrip() {
   }, [symbolsKey]);
 
   const rows = useMemo(() => {
-    if (!data)
+    if (!displayData)
       return {
-        majors: [] as BybitTickerItem[],
-        gainers: [] as BybitTickerItem[],
+        majors: [] as LinearTickerItem[],
+        gainers: [] as LinearTickerItem[],
       };
     const patch = livePatch;
-    const apply = (item: BybitTickerItem) => {
+    const apply = (item: LinearTickerItem) => {
       const p = patch[item.symbol];
       return {
         ...item,
@@ -216,23 +271,12 @@ export default function BybitLinearTickerStrip() {
       };
     };
     return {
-      majors: data.majors.map(apply),
-      gainers: data.topGainers.map(apply),
+      majors: displayData.majors.map(apply),
+      gainers: displayData.topGainers.map(apply),
     };
-  }, [data, livePatch]);
+  }, [displayData, livePatch]);
 
-  if (isError && !data) {
-    return (
-      <div
-        className="py-2 text-center text-xs text-muted-foreground"
-        role="status"
-      >
-        Live prices temporarily unavailable (Bybit)
-      </div>
-    );
-  }
-
-  if (isLoading && !data) {
+  if (isLoading && !displayData) {
     return (
       <div
         className="py-2 text-center text-xs text-muted-foreground animate-pulse"
@@ -243,11 +287,12 @@ export default function BybitLinearTickerStrip() {
     );
   }
 
-  if (!data || (rows.majors.length === 0 && rows.gainers.length === 0)) {
+  if (!displayData || (rows.majors.length === 0 && rows.gainers.length === 0)) {
     return null;
   }
 
-  const Pill = ({ item }: { item: BybitTickerItem }) => {
+  const Pill = ({ item }: { item: LinearTickerItem }) => {
+    const noQuote = item.lastPrice === "—";
     const up = item.changeFrac >= 0;
     return (
       <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs sm:text-sm shadow-sm">
@@ -256,9 +301,15 @@ export default function BybitLinearTickerStrip() {
           {fmtPrice(item.lastPrice)}
         </span>
         <span
-          className={up ? "text-profit font-mono tabular-nums" : "text-loss font-mono tabular-nums"}
+          className={
+            noQuote
+              ? "font-mono tabular-nums text-muted-foreground"
+              : up
+                ? "text-profit font-mono tabular-nums"
+                : "text-loss font-mono tabular-nums"
+          }
         >
-          {fmtChange(item.changeFrac)}
+          {noQuote ? "—" : fmtChange(item.changeFrac)}
         </span>
       </span>
     );
@@ -267,7 +318,7 @@ export default function BybitLinearTickerStrip() {
   const Segment = ({ id }: { id: string }) => (
     <>
       <span className="inline-flex items-center gap-2 pr-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground sm:text-xs">
-        Bybit linear · USDT perp
+        USDT perpetuals
       </span>
       <span className="inline-flex items-center pr-1 text-[10px] font-bold uppercase tracking-wider text-primary/90 sm:text-xs">
         Top market cap
@@ -275,20 +326,24 @@ export default function BybitLinearTickerStrip() {
       {rows.majors.map((item) => (
         <Pill key={`${id}-m-${item.symbol}`} item={item} />
       ))}
-      <span className="inline-flex items-center gap-1 pl-4 pr-2 text-[10px] font-bold uppercase tracking-widest text-primary sm:text-xs">
-        <TrendingUp className="h-3.5 w-3.5" aria-hidden />
-        24h gainers
-      </span>
-      {rows.gainers.map((item) => (
-        <Pill key={`${id}-g-${item.symbol}`} item={item} />
-      ))}
+      {rows.gainers.length > 0 ? (
+        <>
+          <span className="inline-flex items-center gap-1 pl-4 pr-2 text-[10px] font-bold uppercase tracking-widest text-primary sm:text-xs">
+            <TrendingUp className="h-3.5 w-3.5" aria-hidden />
+            24h gainers
+          </span>
+          {rows.gainers.map((item) => (
+            <Pill key={`${id}-g-${item.symbol}`} item={item} />
+          ))}
+        </>
+      ) : null}
     </>
   );
 
   return (
     <div
       className="group relative overflow-hidden py-2.5"
-      aria-label="Live Bybit USDT perpetual prices; scrolls horizontally. Pause by hovering."
+      aria-label="Live USDT perpetual futures prices; scrolls horizontally. Pause by hovering."
     >
       <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-background to-transparent sm:w-20" />
       <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-background to-transparent sm:w-20" />
