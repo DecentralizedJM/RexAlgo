@@ -27,6 +27,15 @@ export function getApiErrorHint(err: unknown): string | undefined {
   return typeof h === "string" ? h : undefined;
 }
 
+/** Mudrex rejected the stored API key — user should rotate the key in Mudrex and sign in again. */
+export function isMudrexCredentialError(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (getApiErrorCode(err) === "MUDREX_API_KEY_INVALID") return true;
+  const msg = (err.message || "").toLowerCase();
+  if (msg.includes("mudrex rejected")) return true;
+  return false;
+}
+
 async function parseJson(res: Response): Promise<unknown> {
   const text = await res.text();
   if (!text) return {};

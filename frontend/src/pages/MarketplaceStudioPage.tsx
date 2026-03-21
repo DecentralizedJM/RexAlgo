@@ -193,7 +193,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="container mx-auto px-4 pt-24 pb-16 max-w-5xl">
+      <div className="container mx-auto px-4 main-nav-pad pb-16 max-w-5xl">
         <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <Link

@@ -130,7 +130,7 @@ export default function StrategyDetailPage() {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="container mx-auto px-4 pt-28 pb-16">
+        <div className="container mx-auto px-4 main-nav-pad-loose pb-16">
           <div className="glass rounded-xl h-96 animate-pulse" />
         </div>
       </div>
@@ -141,7 +141,7 @@ export default function StrategyDetailPage() {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="container mx-auto px-4 pt-28 pb-16 text-center text-muted-foreground">
+        <div className="container mx-auto px-4 main-nav-pad-loose pb-16 text-center text-muted-foreground">
           <p className="mb-4">{(error as Error)?.message || "Strategy not found"}</p>
           <Link to="/marketplace" className="text-primary hover:underline">
             Back to marketplace
@@ -154,7 +154,7 @@ export default function StrategyDetailPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="container mx-auto px-4 pt-24 pb-16 max-w-4xl">
+      <div className="container mx-auto px-4 main-nav-pad pb-16 max-w-4xl">
         <Link
           to={backTo}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"

@@ -152,7 +152,8 @@ Same as [Quick start §2](#2-environment-file-backend). Reference: **`backend/.e
 1. Sign in → **Master studio** (`/copy-trading/studio`) → create a **copy_trading** strategy → **Enable webhook** and copy the **signing secret** (shown once).
 2. Your bot runs **outside** RexAlgo (VPS, laptop, cloud). It `POST`s JSON signals to **`POST /api/webhooks/copy-trading/{strategyId}`** with header **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** where **`v1`** is **HMAC-SHA256** of **`${t}.${rawBody}`** (UTF-8) using the signing secret as the HMAC key (UTF-8 bytes of the secret string).
 3. **Subscribers** (users who subscribed to that strategy in the app) get **mirrored** **open** / **close** actions on **their** Mudrex account via the API secret they stored at login. Sizing uses each subscriber’s **margin per trade** and the strategy’s **leverage**.
-4. **Local dev**: external bots cannot reach `localhost`; use **ngrok** (or similar) to **`127.0.0.1:3000`** and set **`PUBLIC_APP_URL`** to the tunnel URL. Vite on **8080** is only for the browser; webhooks hit Next directly unless you add a proxy rule.
+4. **Sign out vs mirroring:** **Signing out** only removes the **browser JWT cookie**. The server still has each user’s **encrypted Mudrex API secret** in SQLite. Webhook handling (`executeMirror`) loads subscribers from the DB and calls Mudrex with those secrets—it does **not** use the UI session. So **subscribed strategies keep mirroring after logout** as long as **Mudrex still accepts** each subscriber’s stored key. If a key expires, that subscriber’s mirrors fail until they **sign in again** with a new key (see banner in the app).
+5. **Local dev**: external bots cannot reach `localhost`; use **ngrok** (or similar) to **`127.0.0.1:3000`** and set **`PUBLIC_APP_URL`** to the tunnel URL. Vite on **8080** is only for the browser; webhooks hit Next directly unless you add a proxy rule.
 
 ### Algo strategies (Strategy studio + webhooks)
 

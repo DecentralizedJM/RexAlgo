@@ -13,7 +13,7 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="container mx-auto px-4 pt-28 pb-20 max-w-3xl">
+      <div className="container mx-auto px-4 main-nav-pad-loose pb-20 max-w-3xl">
         <div className="animate-fade-up">
           <div className="flex items-center gap-3 mb-6">
             <RexAlgoLogo size={48} className="rounded-xl shrink-0" />

@@ -11,8 +11,9 @@ import {
   Sparkles,
   LifeBuoy,
   RefreshCw,
+  KeyRound,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSession } from "@/hooks/useAuth";
@@ -22,6 +23,7 @@ import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { refreshAppData } from "@/lib/refreshAppData";
 import { toast } from "sonner";
+import { useMudrexKeyInvalid } from "@/contexts/MudrexKeyInvalidContext";
 
 const SUPPORT_EMAIL = "help@mudrex.com";
 
@@ -36,11 +38,35 @@ export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const navRef = useRef<HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const isLanding = location.pathname === "/";
   const { data: session } = useSession();
   const user = session?.user;
+  const { mudrexKeyInvalid } = useMudrexKeyInvalid();
+  const showMudrexKeyBanner =
+    Boolean(user) && mudrexKeyInvalid && location.pathname !== "/auth";
+
+  useLayoutEffect(() => {
+    const el = navRef.current;
+    if (!el || typeof ResizeObserver === "undefined") {
+      document.documentElement.style.setProperty("--app-nav-offset", "4rem");
+      return;
+    }
+    const apply = () => {
+      document.documentElement.style.setProperty(
+        "--app-nav-offset",
+        `${el.offsetHeight}px`
+      );
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+    };
+  }, [showMudrexKeyBanner, mobileOpen]);
 
   async function handleSignOut() {
     try {
@@ -66,8 +92,8 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 glass">
-      <div className="container mx-auto flex items-center justify-between h-16 px-4">
+    <nav ref={navRef} className="fixed top-0 left-0 right-0 z-50 glass flex flex-col">
+      <div className="container mx-auto flex items-center justify-between h-16 px-4 shrink-0">
         <Link to="/" className="flex items-center gap-2 group">
           <RexAlgoLogo size={32} className="rounded-lg" />
           <span className="text-lg font-bold tracking-tight">RexAlgo</span>
@@ -188,6 +214,36 @@ export default function Navbar() {
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </div>
+
+      {showMudrexKeyBanner && (
+        <div className="border-t border-loss/35 bg-loss/10 px-4 py-2.5 shrink-0">
+          <div className="container mx-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 text-sm">
+            <div className="flex gap-2 items-start min-w-0">
+              <KeyRound className="w-4 h-4 text-loss shrink-0 mt-0.5" aria-hidden />
+              <div className="min-w-0">
+                <p className="font-medium text-loss">Rotate your Mudrex API key</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Mudrex rejected the key we have on file (expired or revoked). Create a new API key in the
+                  Mudrex app, then sign in here again.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-loss/45 w-full sm:w-auto"
+              onClick={() => {
+                navigate("/auth", { state: { from: location.pathname } });
+                setMobileOpen(false);
+              }}
+            >
+              <KeyRound className="w-4 h-4" />
+              Rotate key & sign in
+            </Button>
+          </div>
+        </div>
+      )}
 
       {mobileOpen && (
         <div className="md:hidden glass border-t border-border">

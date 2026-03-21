@@ -96,6 +96,11 @@
 }
 
 @layer base {
+  /* Navbar measures its own height (including Mudrex key banner) into this variable. */
+  :root {
+    --app-nav-offset: 4rem;
+  }
+
   * {
     @apply border-border;
   }
@@ -110,6 +115,17 @@
 }
 
 @layer utilities {
+  /* Replace fixed pt-24/pt-28 under Navbar so content clears the bar when the Mudrex banner is visible. */
+  .main-nav-pad {
+    padding-top: calc(var(--app-nav-offset, 4rem) + 2rem);
+  }
+  .main-nav-pad-loose {
+    padding-top: calc(var(--app-nav-offset, 4rem) + 3rem);
+  }
+  .hero-with-nav-pad {
+    padding-top: calc(var(--app-nav-offset, 4rem) + 5rem);
+  }
+
   .text-profit {
     color: hsl(var(--profit));
   }

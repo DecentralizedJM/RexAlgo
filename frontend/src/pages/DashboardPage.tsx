@@ -20,8 +20,7 @@ import {
   fetchPositionHistory,
   fetchSubscriptions,
   ApiError,
-  getApiErrorCode,
-  getApiErrorHint,
+  isMudrexCredentialError,
   type ApiPosition,
 } from "@/lib/api";
 import { formatPair } from "@/lib/format";
@@ -119,16 +118,9 @@ export default function DashboardPage() {
     const err = walletQ.error || posQ.error || subQ.error || historyQ.error;
     if (!(err instanceof ApiError) || err.status !== 401) return;
     // Session missing / expired → sign in. Mudrex key invalid → stay here; banner explains reconnect.
-    if (getApiErrorCode(err) === "MUDREX_API_KEY_INVALID") return;
+    if (isMudrexCredentialError(err)) return;
     navigate("/auth", { replace: true });
   }, [walletQ.error, posQ.error, subQ.error, historyQ.error, navigate]);
-
-  const mudrexKeyErr = useMemo(() => {
-    for (const e of [walletQ.error, posQ.error, subQ.error, historyQ.error]) {
-      if (e instanceof ApiError && getApiErrorCode(e) === "MUDREX_API_KEY_INVALID") return e;
-    }
-    return null;
-  }, [walletQ.error, posQ.error, subQ.error, historyQ.error]);
 
   const loading = walletQ.isPending || posQ.isPending || subQ.isPending;
   const futures = walletQ.data?.futures;
@@ -173,7 +165,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="container mx-auto px-4 pt-24 pb-16">
+      <div className="container mx-auto px-4 main-nav-pad pb-16">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 animate-fade-up">
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -204,25 +196,6 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
-
-        {mudrexKeyErr && (
-          <div className="rounded-xl border border-loss/40 bg-loss/10 p-4 mb-6 text-sm animate-fade-up">
-            <p className="font-medium text-loss">Mudrex API key problem</p>
-            <p className="text-muted-foreground mt-1">{mudrexKeyErr.message}</p>
-            {getApiErrorHint(mudrexKeyErr) && (
-              <p className="text-muted-foreground mt-2 text-xs leading-relaxed">{getApiErrorHint(mudrexKeyErr)}</p>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-3 border-loss/40"
-              onClick={() => navigate("/auth", { state: { from: "/dashboard" } })}
-            >
-              Sign in with new Mudrex key
-            </Button>
-          </div>
-        )}
 
         {underfundedSubs.length > 0 && walletQ.data && (
           <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3 text-sm animate-fade-up">

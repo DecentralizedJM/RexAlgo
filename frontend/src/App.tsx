@@ -5,6 +5,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import MudrexKeyInvalidWatcher from "@/components/MudrexKeyInvalidWatcher";
+import { MudrexKeyInvalidProvider } from "@/contexts/MudrexKeyInvalidContext";
 import LandingPage from "./pages/LandingPage";
 import AboutPage from "./pages/AboutPage";
 import AuthPage from "./pages/AuthPage";
@@ -35,6 +37,8 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <MudrexKeyInvalidProvider>
+              <MudrexKeyInvalidWatcher />
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/about" element={<AboutPage />} />
@@ -49,6 +53,7 @@ const App = () => (
               <Route path="/trader/:id" element={<TraderProfilePage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </MudrexKeyInvalidProvider>
           </BrowserRouter>
         </TooltipProvider>
       </QueryClientProvider>

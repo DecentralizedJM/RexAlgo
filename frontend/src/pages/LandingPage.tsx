@@ -40,7 +40,7 @@ export default function LandingPage() {
       <Navbar />
 
       {/* Hero */}
-      <section className="pt-32 pb-20 px-4">
+      <section className="hero-with-nav-pad pb-20 px-4">
         <div className="container mx-auto max-w-4xl text-center">
           <div className="animate-fade-up">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-6">

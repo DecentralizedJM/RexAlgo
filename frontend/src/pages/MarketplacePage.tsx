@@ -42,7 +42,7 @@ export default function MarketplacePage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="container mx-auto px-4 pt-24 pb-16">
+      <div className="container mx-auto px-4 main-nav-pad pb-16">
         <div className="mb-8 animate-fade-up">
           <h1 className="text-2xl font-bold mb-1">Strategy marketplace</h1>
           <p className="text-sm text-muted-foreground">

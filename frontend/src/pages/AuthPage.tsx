@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { login, ApiError, fetchSessionInfo } from "@/lib/api";
+import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
 
 type AuthState = "idle" | "loading" | "error";
 
@@ -42,6 +43,7 @@ export default function AuthPage() {
       });
       await queryClient.refetchQueries({ queryKey: ["session", "me"] });
       void queryClient.invalidateQueries({ queryKey: ["wallet"] });
+      void queryClient.invalidateQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY });
       navigate(from, { replace: true });
     } catch (err) {
       setState("error");

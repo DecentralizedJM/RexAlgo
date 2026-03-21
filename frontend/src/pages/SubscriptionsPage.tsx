@@ -28,6 +28,7 @@ import {
   cancelSubscription,
   updateSubscriptionMargin,
   ApiError,
+  isMudrexCredentialError,
   type ApiSubscription,
 } from "@/lib/api";
 import { futuresAvailableUsdt, MIN_MARGIN_PER_TRADE_USD } from "@/lib/walletFunding";
@@ -75,9 +76,9 @@ export default function SubscriptionsPage() {
 
   useEffect(() => {
     const err = walletQ.error || subsQ.error;
-    if (err instanceof ApiError && err.status === 401) {
-      navigate("/auth", { replace: true });
-    }
+    if (!(err instanceof ApiError) || err.status !== 401) return;
+    if (isMudrexCredentialError(err)) return;
+    navigate("/auth", { replace: true });
   }, [walletQ.error, subsQ.error, navigate]);
 
   const available = futuresAvailableUsdt(walletQ.data);
@@ -128,7 +129,7 @@ export default function SubscriptionsPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="container mx-auto px-4 pt-24 pb-16 max-w-4xl">
+      <div className="container mx-auto px-4 main-nav-pad pb-16 max-w-4xl">
         <Link
           to="/dashboard"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
