@@ -3,10 +3,11 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, Eye, EyeOff, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { TrendingUp, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { login, ApiError } from "@/lib/api";
+import { toast } from "sonner";
 
-type AuthState = "idle" | "loading" | "success" | "error";
+type AuthState = "idle" | "loading" | "error";
 
 export default function AuthPage() {
   const [displayName, setDisplayName] = useState("");
@@ -27,17 +28,17 @@ export default function AuthPage() {
     setMessage("");
     try {
       const result = await login(secret.trim(), displayName.trim() || undefined);
-      // Avoid race: dashboard used to read a stale cached `{ user: null }` and redirect to /auth
       queryClient.setQueryData(["session", "me"], { user: result.user });
       await queryClient.refetchQueries({ queryKey: ["session", "me"] });
-      setState("success");
+      void queryClient.invalidateQueries({ queryKey: ["wallet"] });
+      toast.success("Logged in successfully");
       navigate(from, { replace: true });
     } catch (err) {
       setState("error");
       setMessage(
         err instanceof ApiError
           ? err.message
-          : "Could not connect. Is the API server running on port 3000?"
+          : "Could not connect. Check your API secret and try again."
       );
     }
   };
@@ -53,10 +54,19 @@ export default function AuthPage() {
         </div>
 
         <div className="glass rounded-2xl p-8">
-          <h1 className="text-xl font-bold text-center mb-2">Connect Mudrex</h1>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <img
+              src="/mudrex-logo.png"
+              alt=""
+              width={36}
+              height={36}
+              className="rounded-lg shrink-0"
+            />
+            <h1 className="text-xl font-bold text-center">Mudrex</h1>
+          </div>
           <p className="text-sm text-muted-foreground text-center mb-8">
-            Use your <strong className="text-foreground">Mudrex API secret</strong> (shown once in the
-            Mudrex dashboard). Optional: set a display name for the community.
+            Connect with your <strong className="text-foreground">Mudrex API secret</strong> (shown once in
+            the Mudrex dashboard). Optional: set a display name for the community.
           </p>
 
           <form onSubmit={handleConnect} className="space-y-4">
@@ -70,7 +80,7 @@ export default function AuthPage() {
                 }}
                 placeholder="e.g. AlphaTrader"
                 className="bg-secondary/50 border-border"
-                disabled={state === "loading" || state === "success"}
+                disabled={state === "loading"}
               />
             </div>
 
@@ -86,7 +96,7 @@ export default function AuthPage() {
                   }}
                   placeholder="Paste your API secret"
                   className="bg-secondary/50 border-border pr-10"
-                  disabled={state === "loading" || state === "success"}
+                  disabled={state === "loading"}
                   autoComplete="off"
                 />
                 <button
@@ -109,30 +119,16 @@ export default function AuthPage() {
               </div>
             )}
 
-            {state === "success" && (
-              <div
-                className="flex items-center gap-2 text-profit text-sm bg-profit/10 rounded-lg p-3 animate-fade-up"
-                style={{ animationDuration: "0.3s" }}
-              >
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                Connected. Redirecting…
-              </div>
-            )}
-
             <Button
               type="submit"
               variant="hero"
               size="lg"
               className="w-full"
-              disabled={!secret.trim() || state === "loading" || state === "success"}
+              disabled={!secret.trim() || state === "loading"}
             >
               {state === "loading" ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" /> Validating with Mudrex…
-                </>
-              ) : state === "success" ? (
-                <>
-                  <CheckCircle className="w-4 h-4" /> Connected
                 </>
               ) : (
                 "Connect & sign in"
@@ -141,17 +137,10 @@ export default function AuthPage() {
           </form>
 
           <p className="text-xs text-muted-foreground text-center mt-6 leading-relaxed">
-            Run the backend locally: <code className="text-foreground/80">cd backend && npm run dev</code>
-            <br />
-            Docs:{" "}
-            <a
-              href="https://docs.trade.mudrex.com/docs/overview"
-              className="text-primary hover:underline"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Mudrex API
-            </a>
+            Your API keys are stored with <strong className="text-foreground">encryption at rest</strong> and
+            used only to call Mudrex on your behalf. <strong className="text-foreground">RexAlgo never takes
+            custody of funds</strong> — your assets stay in your{" "}
+            <strong className="text-foreground">Mudrex wallet</strong>.
           </p>
         </div>
       </div>

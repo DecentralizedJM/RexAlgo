@@ -56,8 +56,10 @@ export default function SubscriptionsPage() {
   const queryClient = useQueryClient();
 
   const walletQ = useQuery({
-    queryKey: ["wallet"],
-    queryFn: fetchWallet,
+    queryKey: ["wallet", "futures"],
+    queryFn: () => fetchWallet({ futuresOnly: true }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     retry: false,
   });
   const subsQ = useQuery({
@@ -146,7 +148,7 @@ export default function SubscriptionsPage() {
         {walletQ.data && (
           <div className="glass rounded-xl p-4 mb-6 flex flex-wrap items-center gap-3 text-sm">
             <Wallet className="w-4 h-4 text-primary shrink-0" />
-            <span className="text-muted-foreground">Futures available (est.):</span>
+            <span className="text-muted-foreground">Futures wallet (available):</span>
             <span className="font-mono font-semibold">${available.toFixed(2)} USDT</span>
             <span className="text-xs text-muted-foreground">
               (balance − locked margin). Add funds on Mudrex if low.

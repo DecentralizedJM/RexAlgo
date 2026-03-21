@@ -259,7 +259,7 @@ export async function subscribe(strategyId: string, marginPerTrade: string) {
 // ─── Mudrex (via backend) ───────────────────────────────────────────
 
 export type WalletResponse = {
-  spot: {
+  spot?: {
     total: string;
     withdrawable: string;
     invested: string;
@@ -272,8 +272,10 @@ export type WalletResponse = {
   };
 };
 
-export async function fetchWallet() {
-  return apiFetch<WalletResponse>("/api/mudrex/wallet");
+/** Pass `{ futuresOnly: true }` to skip spot — one Mudrex call, less rate-limit pressure. */
+export async function fetchWallet(options?: { futuresOnly?: boolean }) {
+  const q = options?.futuresOnly ? "?futuresOnly=1" : "";
+  return apiFetch<WalletResponse>(`/api/mudrex/wallet${q}`);
 }
 
 export type ApiPosition = {

@@ -9,6 +9,7 @@ import {
   LogOut,
   Radio,
   BookmarkCheck,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -78,7 +79,7 @@ export default function Navbar() {
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                 }`}
               >
-                <BarChart3 className="w-4 h-4" />
+                <Sparkles className="w-4 h-4" />
                 Strategy studio
               </Link>
               <Link
@@ -166,7 +167,7 @@ export default function Navbar() {
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <BarChart3 className="w-4 h-4" />
+                  <Sparkles className="w-4 h-4" />
                   Strategy studio
                 </Link>
                 <Link

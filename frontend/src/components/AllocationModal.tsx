@@ -152,7 +152,7 @@ export default function AllocationModal({
 
         {isSubscribe && futuresAvailableUsdt != null && Number.isFinite(futuresAvailableUsdt) && (
           <div className="bg-secondary/50 border border-border rounded-xl p-3 mb-4 text-xs">
-            <span className="text-muted-foreground">Futures available (est.): </span>
+            <span className="text-muted-foreground">Futures wallet (available): </span>
             <span className="font-mono font-semibold text-foreground">
               ${futuresAvailableUsdt.toFixed(2)} USDT
             </span>

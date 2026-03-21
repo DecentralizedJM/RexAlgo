@@ -54,8 +54,10 @@ export default function StrategyDetailPage() {
   });
 
   const { data: walletData } = useQuery({
-    queryKey: ["wallet"],
-    queryFn: fetchWallet,
+    queryKey: ["wallet", "futures"],
+    queryFn: () => fetchWallet({ futuresOnly: true }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     retry: false,
   });
 

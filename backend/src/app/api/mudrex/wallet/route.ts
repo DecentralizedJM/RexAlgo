@@ -5,12 +5,21 @@ import { jsonFromMudrexError } from "@/lib/mudrexHttp";
 
 const STAGGER_MS = 150;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const futuresOnly =
+    req.nextUrl.searchParams.get("futuresOnly") === "1" ||
+    req.nextUrl.searchParams.get("scope") === "futures";
+
   try {
-    // Sequential calls reduce burst traffic vs Promise.all (helps Mudrex 429 limits).
+    if (futuresOnly) {
+      const futures = await getFuturesBalance(session.apiSecret);
+      return NextResponse.json({ futures });
+    }
+
+    // Full wallet: sequential calls reduce burst traffic vs Promise.all (helps Mudrex 429 limits).
     const spot = await getSpotBalance(session.apiSecret);
     await new Promise((r) => setTimeout(r, STAGGER_MS));
     const futures = await getFuturesBalance(session.apiSecret);

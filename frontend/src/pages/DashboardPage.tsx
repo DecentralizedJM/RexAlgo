@@ -81,8 +81,10 @@ export default function DashboardPage() {
   const navigate = useNavigate();
 
   const walletQ = useQuery({
-    queryKey: ["wallet"],
-    queryFn: fetchWallet,
+    queryKey: ["wallet", "futures"],
+    queryFn: () => fetchWallet({ futuresOnly: true }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     retry: false,
   });
   const posQ = useQuery({
@@ -109,7 +111,6 @@ export default function DashboardPage() {
   }, [walletQ.error, posQ.error, subQ.error, historyQ.error, navigate]);
 
   const loading = walletQ.isPending || posQ.isPending || subQ.isPending;
-  const spot = walletQ.data?.spot;
   const futures = walletQ.data?.futures;
   const positions = posQ.data?.positions ?? [];
   const subs = subQ.data?.subscriptions?.filter((s) => s.isActive) ?? [];
@@ -124,9 +125,7 @@ export default function DashboardPage() {
     [historyQ.data?.positions]
   );
 
-  const spotAvail = parseFloat(spot?.withdrawable ?? "0");
   const futBal = parseFloat(futures?.balance ?? "0");
-  const portfolioApprox = spotAvail + futBal;
   const unrealized = positions.reduce(
     (s, p) => s + parseFloat(p.unrealized_pnl ?? "0"),
     0
@@ -135,8 +134,8 @@ export default function DashboardPage() {
 
   const statCards = [
     {
-      label: "Est. portfolio",
-      value: `$${portfolioApprox.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+      label: "Futures wallet",
+      value: `$${futBal.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
       icon: Wallet,
     },
     {
@@ -197,27 +196,14 @@ export default function DashboardPage() {
         )}
 
         <div className="glass rounded-xl p-6 mb-6 animate-fade-up-delay-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div>
-              <span className="text-sm text-muted-foreground">Unrealized P&amp;L (open)</span>
-              <div className="flex items-center gap-2 mt-1">
-                <span
-                  className={`text-2xl font-mono font-bold ${unrealized >= 0 ? "text-profit" : "text-loss"}`}
-                >
-                  {unrealized >= 0 ? "+" : ""}${unrealized.toFixed(2)}
-                </span>
-              </div>
-            </div>
-            <div>
-              <span className="text-sm text-muted-foreground">Futures wallet</span>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-2xl font-mono font-bold text-foreground">
-                  ${futBal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </span>
-                <span className="text-xs text-muted-foreground font-mono">
-                  Spot avail: ${spotAvail.toFixed(2)}
-                </span>
-              </div>
+          <div>
+            <span className="text-sm text-muted-foreground">Unrealized P&amp;L (open)</span>
+            <div className="flex items-center gap-2 mt-1">
+              <span
+                className={`text-2xl font-mono font-bold ${unrealized >= 0 ? "text-profit" : "text-loss"}`}
+              >
+                {unrealized >= 0 ? "+" : ""}${unrealized.toFixed(2)}
+              </span>
             </div>
           </div>
         </div>
