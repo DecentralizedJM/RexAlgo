@@ -21,6 +21,7 @@ import { useSession } from "@/hooks/useAuth";
 import { logout } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
+import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { refreshAppData } from "@/lib/refreshAppData";
 import { toast } from "sonner";
@@ -98,10 +99,7 @@ export default function Navbar() {
       <div className="container mx-auto flex items-center justify-between h-16 px-4 shrink-0">
         <Link to="/" className="flex items-center gap-2 group">
           <RexAlgoLogo size={32} className="rounded-lg" />
-          <span className="text-lg font-bold tracking-tight">
-            <span className="text-primary">Rex</span>
-            <span className="text-neutral-950 dark:text-white">Algo</span>
-          </span>
+          <RexAlgoWordmark className="text-lg" />
         </Link>
 
         <div className="hidden md:flex items-center gap-1">

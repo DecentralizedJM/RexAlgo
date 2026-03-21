@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Shield, Zap, BarChart3, ArrowRight, Users, Bot, LifeBuoy } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
+import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import Navbar from "@/components/Navbar";
 
 const stats = [
@@ -123,7 +124,10 @@ export default function LandingPage() {
       <section className="py-24 px-4">
         <div className="container mx-auto max-w-2xl text-center">
           <div className="glass rounded-2xl p-12 animate-pulse-glow">
-            <RexAlgoLogo size={56} className="mx-auto mb-4 rounded-xl" />
+            <div className="flex flex-col items-center gap-2 mb-4">
+              <RexAlgoLogo size={56} className="rounded-xl" />
+              <RexAlgoWordmark className="text-xl" />
+            </div>
             <h2 className="text-2xl font-bold mb-3">Ready to connect?</h2>
             <p className="text-muted-foreground mb-8">
               Sign in with your Mudrex API secret and open the dashboard.
@@ -143,7 +147,7 @@ export default function LandingPage() {
         <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <RexAlgoLogo size={28} className="rounded-md" />
-            <span className="text-sm font-semibold">RexAlgo</span>
+            <RexAlgoWordmark className="text-sm font-semibold" />
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6">
             <a
@@ -154,7 +158,9 @@ export default function LandingPage() {
               help@mudrex.com
             </a>
             <p className="text-xs text-muted-foreground text-center sm:text-right">
-              © 2026 RexAlgo. All rights reserved. Not financial advice.
+              © 2026{" "}
+              <RexAlgoWordmark className="inline text-xs font-semibold align-baseline" />. All rights reserved.
+              Not financial advice.
             </p>
           </div>
         </div>

@@ -2,6 +2,7 @@ import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom"
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
+import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import AllocationModal from "@/components/AllocationModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -223,7 +224,9 @@ export default function StrategyDetailPage() {
         <div className="glass rounded-xl p-6 mb-8 animate-fade-up-delay-2">
           <h2 className="font-semibold mb-4">Performance</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Stats here are aggregates stored in RexAlgo, not a verified exchange equity curve. Your own
+            Stats here are aggregates stored in{" "}
+            <RexAlgoWordmark className="inline text-sm font-semibold" />, not a verified exchange equity
+            curve. Your own
             closed-trade chart is on the{" "}
             <Link to="/dashboard" className="text-primary hover:underline">
               dashboard

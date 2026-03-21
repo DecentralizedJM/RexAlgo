@@ -1,12 +1,23 @@
+import type { ReactNode } from "react";
 import Navbar from "@/components/Navbar";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
+import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { Shield, Target, Code, Globe } from "lucide-react";
 
-const values = [
+const values: { icon: typeof Shield; title: string; desc: ReactNode }[] = [
   { icon: Shield, title: "Keys", desc: "API secrets encrypted at rest; used only to talk to Mudrex." },
   { icon: Target, title: "Listings", desc: "Creators publish strategies; subscribers choose margin and risk." },
   { icon: Code, title: "Webhooks", desc: "Studio flows use signed webhooks so bots can post signals safely." },
-  { icon: Globe, title: "Mudrex", desc: "Execution and balances live on Mudrex; RexAlgo is the control layer." },
+  {
+    icon: Globe,
+    title: "Mudrex",
+    desc: (
+      <>
+        Execution and balances live on Mudrex;{" "}
+        <RexAlgoWordmark className="inline text-sm font-semibold text-foreground" /> is the control layer.
+      </>
+    ),
+  },
 ];
 
 export default function AboutPage() {
@@ -17,13 +28,14 @@ export default function AboutPage() {
         <div className="animate-fade-up">
           <div className="flex items-center gap-3 mb-6">
             <RexAlgoLogo size={48} className="rounded-xl shrink-0" />
-            <h1 className="text-4xl font-bold" style={{ lineHeight: 1.1 }}>
-              About RexAlgo
+            <h1 className="text-4xl font-bold flex flex-wrap items-baseline gap-x-2 gap-y-1" style={{ lineHeight: 1.1 }}>
+              <span>About</span> <RexAlgoWordmark className="text-4xl" />
             </h1>
           </div>
           <p className="text-lg text-muted-foreground mb-12 leading-relaxed">
-            RexAlgo is a front end for Mudrex futures: algos, copy trading, and subscriptions in one place. We
-            don’t custody funds; trades stay on your exchange account.
+            <RexAlgoWordmark className="inline text-lg font-semibold text-foreground mr-1" /> is a front end for
+            Mudrex futures: algos, copy trading, and subscriptions in one place. We don’t custody funds; trades
+            stay on your exchange account.
           </p>
         </div>
 

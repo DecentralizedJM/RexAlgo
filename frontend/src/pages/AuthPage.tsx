@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Loader2, AlertCircle, ExternalLink } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
+import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { login, ApiError } from "@/lib/api";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
 import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
@@ -49,13 +50,14 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
-      <div className="w-full max-w-md animate-fade-up">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <RexAlgoLogo size={40} className="rounded-xl" />
-          <span className="text-xl font-bold">RexAlgo</span>
-        </div>
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-10">
+      {/* Brand sits above the card (not inside the animated panel) so size/colors stay obvious */}
+      <header className="mb-10 flex w-full max-w-md flex-col items-center gap-4 text-center">
+        <RexAlgoLogo size={64} className="rounded-2xl shadow-md ring-1 ring-primary/25" />
+        <RexAlgoWordmark className="text-4xl sm:text-5xl md:text-6xl leading-none" />
+      </header>
 
+      <div className="w-full max-w-md animate-fade-up">
         <div className="glass rounded-2xl p-8">
           <div className="flex items-center justify-center gap-2 mb-2">
             <img
