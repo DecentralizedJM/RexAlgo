@@ -77,6 +77,25 @@ export async function getMe() {
   return { user: data.user ?? null };
 }
 
+/** Server-configured session length + Mudrex key rotation hint (sign-in page). */
+export async function fetchSessionInfo(): Promise<{
+  sessionMaxAgeDays: number;
+  mudrexKeyMaxDays: number;
+}> {
+  const res = await fetch("/api/auth/session-info");
+  const data = (await res.json().catch(() => ({}))) as {
+    sessionMaxAgeDays?: number;
+    mudrexKeyMaxDays?: number;
+  };
+  if (!res.ok) {
+    return { sessionMaxAgeDays: 30, mudrexKeyMaxDays: 90 };
+  }
+  return {
+    sessionMaxAgeDays: typeof data.sessionMaxAgeDays === "number" ? data.sessionMaxAgeDays : 30,
+    mudrexKeyMaxDays: typeof data.mudrexKeyMaxDays === "number" ? data.mudrexKeyMaxDays : 90,
+  };
+}
+
 // ─── Strategies ─────────────────────────────────────────────────────
 
 export type ApiStrategy = {

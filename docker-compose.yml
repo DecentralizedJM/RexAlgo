@@ -13,6 +13,7 @@ services:
       REXALGO_DB_PATH: /data/rexalgo.db
       NODE_ENV: production
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      REXALGO_SESSION_MAX_AGE_DAYS: ${REXALGO_SESSION_MAX_AGE_DAYS:-}
     volumes:
       - rexalgo_data:/data
     expose:

@@ -75,6 +75,7 @@ On the **first** `npm run dev`, the root **`predev`** script creates **`backend/
 | `JWT_SECRET` | **Yes** | Long random string (e.g. `openssl rand -hex 32`) |
 | `ENCRYPTION_KEY` | **Yes** | Strong passphrase; used to encrypt Mudrex secrets & webhook signing secrets at rest |
 | `PUBLIC_APP_URL` | Optional | No trailing slash. Full webhook URLs in **Master** / **Strategy** studio (use ngrok URL → port **3000** for external bots) |
+| `REXALGO_SESSION_MAX_AGE_DAYS` | Optional | Browser session length (JWT + cookie), **1–90** (default **30**). Cap matches Mudrex’s typical API key lifetime. |
 | `REXALGO_DB_PATH` | Optional | Custom SQLite file path (default: under `backend/`) |
 
 ```bash
@@ -99,6 +100,10 @@ npm run dev
 **Vite** listens on **:8080** (your only tab). It **proxies `/api`** to Next on **127.0.0.1:3000**. `dev:web` waits until **`GET /api/health`** returns **200** (so another random app on port **3000** won’t fool the dev script). HMR stays on **8080**. The session cookie is scoped to **`Path=/api`** so it is not sent to non-API paths on the same host.
 
 Sign in at **`/auth`** with your **Mudrex API secret**.
+
+**Session length:** The HttpOnly session cookie and JWT are issued together and expire after the same period (**default 30 days**, configurable with **`REXALGO_SESSION_MAX_AGE_DAYS`**, max **90**). There is no sliding refresh—after that, the user signs in again with their API secret.
+
+**Mudrex API key expiry (~90 days):** RexAlgo does not extend Mudrex’s key lifetime. While your session JWT is valid, the app keeps using the secret that was validated at login. If Mudrex invalidates or rotates the key early, **Mudrex API calls** (wallet, orders, copy mirroring, etc.) will start failing with auth errors until the user **creates a new key in Mudrex** and **signs in again** at `/auth`.
 
 ### 4. Verify the API (optional)
 

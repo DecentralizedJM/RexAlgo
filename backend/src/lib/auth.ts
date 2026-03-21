@@ -17,6 +17,26 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "rexalgo-enc-key-32chars-ch
 const ALGORITHM = "aes-256-gcm";
 const COOKIE_NAME = "rexalgo_session";
 
+/** Mudrex rotates API keys on a ~90-day cadence; sessions should not outlive a valid key. */
+export const MUDREX_API_KEY_MAX_DAYS = 90;
+
+/**
+ * Browser session length (JWT `exp` + cookie `maxAge`). Configurable so trading UIs can stay signed in
+ * without daily re-login; cap at {@link MUDREX_API_KEY_MAX_DAYS} so we don’t promise a cookie longer
+ * than a single Mudrex key lifetime.
+ */
+export function getSessionMaxAgeDays(): number {
+  const raw = process.env.REXALGO_SESSION_MAX_AGE_DAYS;
+  if (raw === undefined || raw === "") return 30;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n)) return 30;
+  return Math.min(MUDREX_API_KEY_MAX_DAYS, Math.max(1, n));
+}
+
+export function getSessionMaxAgeSeconds(): number {
+  return getSessionMaxAgeDays() * 24 * 60 * 60;
+}
+
 /** Only sent on `/api/*` so other apps on the same host (e.g. localhost:3001) don’t get this cookie. */
 export const SESSION_COOKIE_PATH =
   process.env.REXALGO_SESSION_COOKIE_PATH || "/api";
@@ -48,13 +68,14 @@ export async function createSession(
   displayName: string,
   apiSecretEncrypted: string
 ): Promise<string> {
+  const days = getSessionMaxAgeDays();
   const token = await new SignJWT({
     userId,
     displayName,
     apiSecretEncrypted,
   })
     .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("7d")
+    .setExpirationTime(`${days}d`)
     .setIssuedAt()
     .sign(JWT_SECRET);
 

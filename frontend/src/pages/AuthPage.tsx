@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
-import { login, ApiError } from "@/lib/api";
+import { login, ApiError, fetchSessionInfo } from "@/lib/api";
 
 type AuthState = "idle" | "loading" | "error";
 
@@ -19,6 +19,14 @@ export default function AuthPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const from = (location.state as { from?: string } | null)?.from || "/dashboard";
+
+  const sessionInfoQ = useQuery({
+    queryKey: ["auth", "session-info"],
+    queryFn: fetchSessionInfo,
+    staleTime: 5 * 60_000,
+  });
+  const sessionDays = sessionInfoQ.data?.sessionMaxAgeDays ?? 30;
+  const mudrexKeyDays = sessionInfoQ.data?.mudrexKeyMaxDays ?? 90;
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,9 +140,18 @@ export default function AuthPage() {
             </Button>
           </form>
 
-          <p className="text-xs text-muted-foreground text-center mt-6 leading-relaxed">
-            Secrets are encrypted at rest and only used to call Mudrex. We never hold your funds; balances
-            stay on Mudrex.
+          <p className="text-xs text-muted-foreground text-center mt-6 leading-relaxed space-y-2">
+            <span className="block">
+              After you sign in, this browser stays connected for up to{" "}
+              <span className="text-foreground font-medium">{sessionDays} days</span> (then you’ll sign in
+              again with your API secret). Mudrex typically expires API keys after about{" "}
+              <span className="text-foreground font-medium">{mudrexKeyDays} days</span>—create a new key in
+              Mudrex and connect here if trades or balances start failing.
+            </span>
+            <span className="block pt-2 border-t border-border/60">
+              Secrets are encrypted at rest and only used to call Mudrex. We never hold your funds; balances
+              stay on Mudrex.
+            </span>
           </p>
         </div>
       </div>

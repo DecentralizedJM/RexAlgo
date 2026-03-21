@@ -7,6 +7,7 @@ import {
   COOKIE_NAME,
   SESSION_COOKIE_PATH,
   clearLegacySessionCookie,
+  getSessionMaxAgeSeconds,
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60,
+      maxAge: getSessionMaxAgeSeconds(),
       path: SESSION_COOKIE_PATH,
     });
 
