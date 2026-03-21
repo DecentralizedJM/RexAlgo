@@ -5,6 +5,7 @@
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
   <a href="#repository-layout">Layout</a> ·
+  <a href="#hosting-railway-and-vercel">Hosting</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#development">Development</a> ·
   <a href="#docker-full-stack">Docker</a> ·
@@ -39,6 +40,8 @@ RexAlgo/
 │   ├── src/app/api/   # REST routes
 ├── repo/              # project.json (roadmap/stack), architecture.mmd (diagram source), ABOUT.txt
 ├── docker-compose.yml
+├── docs/
+│   └── DEPLOY.md      # Railway, Vercel, env checklist
 ├── package.json       # npm workspaces
 ├── CONTRIBUTING.md
 ├── SECURITY.md
@@ -169,6 +172,20 @@ Same as [Quick start §2](#2-environment-file-backend). Reference: **`backend/.e
 | **`npm run dev` hangs before Vite starts** | RexAlgo API didn’t become healthy in time. Ensure **`npm run dev:api`** works (no **EADDRINUSE** on 3000) and **`/api/health`** returns JSON as above. |
 | **DB errors** | Ensure `REXALGO_DB_PATH` (if set) is writable |
 | **Build failures** | Node 20+; run `npm install` from **repo root** (workspaces) |
+
+---
+
+## Hosting: Railway and Vercel
+
+**Yes — both work**, as long as the **browser** still calls **`/api` on the same hostname** as the UI (nginx reverse proxy or Vercel rewrites). That keeps the HttpOnly session cookie working (`SameSite=Lax`, `Path=/api`).
+
+| Approach | UI | API |
+|----------|-----|-----|
+| **Railway (2 services)** | `frontend/Dockerfile` — set `API_UPSTREAM` to your API’s public URL | `backend/Dockerfile` — attach a **volume** on `/data` for SQLite |
+| **Vercel + Railway** | Vite static on Vercel; rewrite `/api/*` → Railway (see `frontend/vercel.example.json`) | Same Next API on Railway |
+| **Docker / VPS** | `docker compose up` (nginx already proxies `/api`) | Same compose file |
+
+Full steps, env vars, and webhook notes: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
 ---
 

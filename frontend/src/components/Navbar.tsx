@@ -8,6 +8,7 @@ import {
   X,
   LogOut,
   Radio,
+  BookmarkCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 const navLinks = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/subscriptions", label: "Subscriptions", icon: BookmarkCheck },
   { to: "/marketplace", label: "Strategies", icon: BarChart3 },
   { to: "/copy-trading", label: "Copy trading", icon: Users },
 ];

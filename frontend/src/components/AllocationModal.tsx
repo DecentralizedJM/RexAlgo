@@ -7,6 +7,8 @@ interface AllocationModalProps {
   strategyName: string;
   /** "subscribe" = margin per trade for RexAlgo API */
   mode?: "allocate" | "subscribe";
+  /** Mudrex futures available (balance − locked); shows warnings if margin exceeds this */
+  futuresAvailableUsdt?: number | null;
   onClose: () => void;
   onConfirm: (capital: number, risk: string) => void;
 }
@@ -38,6 +40,7 @@ const riskLevels = [
 export default function AllocationModal({
   strategyName,
   mode = "allocate",
+  futuresAvailableUsdt = null,
   onClose,
   onConfirm,
 }: AllocationModalProps) {
@@ -147,6 +150,29 @@ export default function AllocationModal({
           </div>
         )}
 
+        {isSubscribe && futuresAvailableUsdt != null && Number.isFinite(futuresAvailableUsdt) && (
+          <div className="bg-secondary/50 border border-border rounded-xl p-3 mb-4 text-xs">
+            <span className="text-muted-foreground">Futures available (est.): </span>
+            <span className="font-mono font-semibold text-foreground">
+              ${futuresAvailableUsdt.toFixed(2)} USDT
+            </span>
+          </div>
+        )}
+
+        {isSubscribe &&
+          futuresAvailableUsdt != null &&
+          Number.isFinite(futuresAvailableUsdt) &&
+          capital[0] > futuresAvailableUsdt + 1e-6 && (
+            <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 mb-6 text-xs text-warning flex gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Margin per trade (${capital[0]}) is above your estimated futures balance ($
+                {futuresAvailableUsdt.toFixed(2)}). Add USDT to your <strong>Mudrex futures wallet</strong>{" "}
+                or lower the slider — otherwise mirrored orders may fail.
+              </span>
+            </div>
+          )}
+
         {isSubscribe && (
           <div className="bg-warning/10 border border-warning/20 rounded-xl p-4 mb-6 text-xs text-warning">
             Crypto futures involve significant risk. Only allocate what you can afford to lose.
@@ -159,6 +185,12 @@ export default function AllocationModal({
           </Button>
           <Button
             variant="hero"
+            disabled={
+              isSubscribe &&
+              futuresAvailableUsdt != null &&
+              Number.isFinite(futuresAvailableUsdt) &&
+              capital[0] > futuresAvailableUsdt + 1e-6
+            }
             onClick={() => onConfirm(capital[0], risk.label)}
             className="flex-1"
           >

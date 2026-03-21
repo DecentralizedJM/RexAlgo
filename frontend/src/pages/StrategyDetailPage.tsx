@@ -5,7 +5,14 @@ import Navbar from "@/components/Navbar";
 import AllocationModal from "@/components/AllocationModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { fetchStrategy, subscribe, ApiError } from "@/lib/api";
+import {
+  fetchStrategy,
+  fetchSubscriptions,
+  fetchWallet,
+  subscribe,
+  ApiError,
+} from "@/lib/api";
+import { futuresAvailableUsdt } from "@/lib/walletFunding";
 import {
   TrendingUp,
   Target,
@@ -14,6 +21,8 @@ import {
   Activity,
   ArrowLeft,
   Play,
+  BookmarkCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,7 +47,28 @@ export default function StrategyDetailPage() {
     enabled: Boolean(id),
   });
 
+  const { data: subsData } = useQuery({
+    queryKey: ["subscriptions"],
+    queryFn: fetchSubscriptions,
+    retry: false,
+  });
+
+  const { data: walletData } = useQuery({
+    queryKey: ["wallet"],
+    queryFn: fetchWallet,
+    retry: false,
+  });
+
   const strategy = data?.strategy;
+  const activeSub = strategy
+    ? subsData?.subscriptions?.find(
+        (s) => s.strategyId === strategy.id && s.isActive
+      )
+    : undefined;
+  const futAvail = futuresAvailableUsdt(walletData);
+  const marginNum = activeSub ? parseFloat(activeSub.marginPerTrade) : NaN;
+  const subUnderfunded =
+    activeSub && Number.isFinite(marginNum) && marginNum > 0 && futAvail < marginNum;
 
   const backTo =
     fromCopy || strategy?.type === "copy_trading" ? "/copy-trading" : "/marketplace";
@@ -145,10 +175,30 @@ export default function StrategyDetailPage() {
             </p>
             <p className="text-sm text-muted-foreground mt-2">{strategy.description}</p>
           </div>
-          <Button variant="hero" size="sm" onClick={() => setShowAllocation(true)}>
-            <Play className="w-4 h-4" />
-            {strategy.type === "copy_trading" ? "Copy strategy" : "Subscribe"}
-          </Button>
+          {activeSub ? (
+            <div className="flex flex-col items-stretch sm:items-end gap-2">
+              {subUnderfunded && (
+                <div className="flex items-start gap-2 text-xs text-warning max-w-sm text-right">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    Futures balance (~${futAvail.toFixed(2)}) is below your margin per trade ($
+                    {marginNum.toFixed(2)}). Add USDT on Mudrex or lower margin in Subscriptions.
+                  </span>
+                </div>
+              )}
+              <Button variant="hero" size="sm" asChild>
+                <Link to="/subscriptions">
+                  <BookmarkCheck className="w-4 h-4" />
+                  Manage subscription
+                </Link>
+              </Button>
+            </div>
+          ) : (
+            <Button variant="hero" size="sm" onClick={() => setShowAllocation(true)}>
+              <Play className="w-4 h-4" />
+              {strategy.type === "copy_trading" ? "Copy strategy" : "Subscribe"}
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
@@ -192,6 +242,7 @@ export default function StrategyDetailPage() {
         <AllocationModal
           mode="subscribe"
           strategyName={strategy.name}
+          futuresAvailableUsdt={futAvail}
           onClose={() => setShowAllocation(false)}
           onConfirm={(capital) => {
             void handleSubscribe(capital);

@@ -1,10 +1,19 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import Navbar from "@/components/Navbar";
 import PerformanceChart from "@/components/PerformanceChart";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, BarChart3, Users, ArrowUpRight, ArrowDownRight, Wallet } from "lucide-react";
+import {
+  BarChart3,
+  Users,
+  ArrowUpRight,
+  ArrowDownRight,
+  Wallet,
+  History,
+  LineChart,
+  AlertTriangle,
+} from "lucide-react";
 import {
   fetchWallet,
   fetchPositions,
@@ -15,6 +24,7 @@ import {
 } from "@/lib/api";
 import { formatPair } from "@/lib/format";
 import { useRequireAuth } from "@/hooks/useAuth";
+import { futuresAvailableUsdt } from "@/lib/walletFunding";
 
 /** Cumulative realized P&L from Mudrex position history (one API page). */
 function buildRealizedPnlCurve(positions: ApiPosition[]): { date: string; value: number }[] {
@@ -36,6 +46,34 @@ function buildRealizedPnlCurve(positions: ApiPosition[]): { date: string; value:
       `#${n + 1}`;
     return { date: dateLabel, value: cum };
   });
+}
+
+function sortClosedHistoryDescending(positions: ApiPosition[]): ApiPosition[] {
+  return [...positions].sort((a, b) => {
+    const ta = a.closed_at || a.updated_at || a.created_at || "";
+    const tb = b.closed_at || b.updated_at || b.created_at || "";
+    return tb.localeCompare(ta);
+  });
+}
+
+function formatClosedWhen(p: ApiPosition): string {
+  const raw = p.closed_at || p.updated_at || p.created_at;
+  if (!raw) return "—";
+  try {
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+  } catch {
+    /* fall through */
+  }
+  return raw.length >= 10 ? raw.slice(0, 16).replace("T", " ") : raw;
 }
 
 export default function DashboardPage() {
@@ -75,6 +113,16 @@ export default function DashboardPage() {
   const futures = walletQ.data?.futures;
   const positions = posQ.data?.positions ?? [];
   const subs = subQ.data?.subscriptions?.filter((s) => s.isActive) ?? [];
+  const futAvailable = futuresAvailableUsdt(walletQ.data);
+  const underfundedSubs = subs.filter((s) => {
+    const m = parseFloat(s.marginPerTrade ?? "0");
+    return Number.isFinite(m) && m > 0 && futAvailable < m;
+  });
+
+  const closedHistorySorted = useMemo(
+    () => sortClosedHistoryDescending(historyQ.data?.positions ?? []),
+    [historyQ.data?.positions]
+  );
 
   const spotAvail = parseFloat(spot?.withdrawable ?? "0");
   const futBal = parseFloat(futures?.balance ?? "0");
@@ -126,6 +174,28 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {underfundedSubs.length > 0 && walletQ.data && (
+          <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3 text-sm animate-fade-up">
+            <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium text-warning">Futures balance may be too low</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                {underfundedSubs.length} active{" "}
+                {underfundedSubs.length === 1 ? "subscription" : "subscriptions"} need at least your
+                margin per trade (~${futAvailable.toFixed(2)} available). Add USDT to Mudrex futures or lower
+                margin in{" "}
+                <Link to="/subscriptions" className="text-primary font-medium hover:underline">
+                  Subscriptions
+                </Link>
+                .
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm" className="shrink-0 border-warning/40">
+              <Link to="/subscriptions">Manage</Link>
+            </Button>
+          </div>
+        )}
+
         <div className="glass rounded-xl p-6 mb-6 animate-fade-up-delay-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
@@ -153,12 +223,8 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          {statCards.map((s, i) => (
-            <div
-              key={s.label}
-              className="glass rounded-xl p-5 animate-fade-up"
-              style={{ animationDelay: `${(i + 2) * 100}ms` }}
-            >
+          {statCards.map((s, i) => {
+            const card = (
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                   <s.icon className="w-5 h-5 text-primary" />
@@ -168,15 +234,45 @@ export default function DashboardPage() {
                   <p className="text-xl font-mono font-bold">
                     {loading ? "—" : s.value}
                   </p>
+                  {s.label === "Active subscriptions" && (
+                    <p className="text-[10px] text-primary mt-0.5">Click to manage</p>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+            const shellClass =
+              "glass rounded-xl p-5 animate-fade-up transition-colors" +
+              (s.label === "Active subscriptions"
+                ? " cursor-pointer hover:bg-secondary/40 hover:ring-1 hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                : "");
+            if (s.label === "Active subscriptions") {
+              return (
+                <Link
+                  key={s.label}
+                  to="/subscriptions"
+                  className={shellClass}
+                  style={{ animationDelay: `${(i + 2) * 100}ms` }}
+                >
+                  {card}
+                </Link>
+              );
+            }
+            return (
+              <div
+                key={s.label}
+                className={shellClass}
+                style={{ animationDelay: `${(i + 2) * 100}ms` }}
+              >
+                {card}
+              </div>
+            );
+          })}
         </div>
 
+        {/* Performance chart */}
         <div className="glass rounded-xl p-6 mb-8 animate-fade-up-delay-3">
-          <h2 className="font-semibold mb-4 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-primary" />
+          <h2 className="font-semibold mb-1 flex items-center gap-2">
+            <LineChart className="w-4 h-4 text-primary" />
             Realized P&amp;L (closed positions)
           </h2>
           <p className="text-xs text-muted-foreground mb-4">
@@ -195,89 +291,187 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="glass rounded-xl p-6 animate-fade-up-delay-4">
-          <h2 className="font-semibold mb-4">Open positions</h2>
-          {loading ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
-          ) : positions.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              No open positions. Fund futures and trade on Mudrex, or subscribe to a strategy.
+        {/* Below chart: open positions + position history */}
+        <div className="glass rounded-xl p-6 animate-fade-up-delay-4 space-y-10">
+          <div>
+            <h2 className="font-semibold mb-1 flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary" />
+              Open positions
+            </h2>
+            <p className="text-xs text-muted-foreground mb-4">
+              Live futures positions on your Mudrex account (same source as the unrealized P&amp;L above).
             </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground text-xs border-b border-border">
-                    <th className="text-left py-3 font-medium">Pair</th>
-                    <th className="text-left py-3 font-medium">Side</th>
-                    <th className="text-right py-3 font-medium">Qty</th>
-                    <th className="text-right py-3 font-medium">Entry</th>
-                    <th className="text-right py-3 font-medium">Mark</th>
-                    <th className="text-right py-3 font-medium">P&amp;L</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {positions.map((p) => {
-                    const pnl = parseFloat(p.unrealized_pnl ?? "0");
-                    const entry = parseFloat(p.entry_price ?? "0");
-                    const mark = parseFloat(p.mark_price ?? "0");
-                    const pct =
-                      entry > 0 && p.side === "LONG"
-                        ? ((mark - entry) / entry) * 100
-                        : entry > 0
-                          ? ((entry - mark) / entry) * 100
-                          : 0;
-                    return (
-                      <tr
-                        key={p.position_id}
-                        className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
-                      >
-                        <td className="py-3 font-medium">{formatPair(p.symbol)}</td>
-                        <td className="py-3">
-                          <span
-                            className={`text-xs font-medium px-2 py-1 rounded ${
-                              p.side === "LONG"
-                                ? "bg-profit/10 text-profit"
-                                : "bg-loss/10 text-loss"
-                            }`}
-                          >
-                            {p.side}
-                          </span>
-                        </td>
-                        <td className="py-3 text-right font-mono">{p.quantity}</td>
-                        <td className="py-3 text-right font-mono text-muted-foreground">
-                          ${entry.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-3 text-right font-mono">
-                          ${mark.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {pnl >= 0 ? (
-                              <ArrowUpRight className="w-3.5 h-3.5 text-profit" />
-                            ) : (
-                              <ArrowDownRight className="w-3.5 h-3.5 text-loss" />
-                            )}
+            {loading ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+            ) : positions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed border-border/60 bg-secondary/20">
+                No open positions. Fund futures and trade on Mudrex, or subscribe to a strategy.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border/60">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground text-xs border-b border-border bg-secondary/30">
+                      <th className="text-left py-3 px-3 font-medium">Pair</th>
+                      <th className="text-left py-3 px-3 font-medium">Side</th>
+                      <th className="text-right py-3 px-3 font-medium">Qty</th>
+                      <th className="text-right py-3 px-3 font-medium">Lev.</th>
+                      <th className="text-right py-3 px-3 font-medium">Entry</th>
+                      <th className="text-right py-3 px-3 font-medium">Mark</th>
+                      <th className="text-right py-3 px-3 font-medium">Unrealized</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {positions.map((p) => {
+                      const pnl = parseFloat(p.unrealized_pnl ?? "0");
+                      const entry = parseFloat(p.entry_price ?? "0");
+                      const mark = parseFloat(p.mark_price ?? "0");
+                      const pct =
+                        entry > 0 && p.side === "LONG"
+                          ? ((mark - entry) / entry) * 100
+                          : entry > 0
+                            ? ((entry - mark) / entry) * 100
+                            : 0;
+                      return (
+                        <tr
+                          key={p.position_id}
+                          className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
+                        >
+                          <td className="py-3 px-3 font-medium">{formatPair(p.symbol)}</td>
+                          <td className="py-3 px-3">
                             <span
-                              className={`font-mono font-medium ${pnl >= 0 ? "text-profit" : "text-loss"}`}
+                              className={`text-xs font-medium px-2 py-1 rounded ${
+                                p.side === "LONG"
+                                  ? "bg-profit/10 text-profit"
+                                  : "bg-loss/10 text-loss"
+                              }`}
                             >
-                              {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                              {p.side}
                             </span>
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono">{p.quantity}</td>
+                          <td className="py-3 px-3 text-right font-mono text-muted-foreground">
+                            {p.leverage ?? "—"}×
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-muted-foreground">
+                            ${entry.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono">
+                            ${mark.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1 flex-wrap">
+                              {pnl >= 0 ? (
+                                <ArrowUpRight className="w-3.5 h-3.5 text-profit shrink-0" />
+                              ) : (
+                                <ArrowDownRight className="w-3.5 h-3.5 text-loss shrink-0" />
+                              )}
+                              <span
+                                className={`font-mono font-medium ${pnl >= 0 ? "text-profit" : "text-loss"}`}
+                              >
+                                {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                              </span>
+                              <span
+                                className={`text-xs ${pnl >= 0 ? "text-profit" : "text-loss"}`}
+                              >
+                                ({pct >= 0 ? "+" : ""}
+                                {pct.toFixed(2)}%)
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-border/60 pt-8">
+            <h2 className="font-semibold mb-1 flex items-center gap-2">
+              <History className="w-4 h-4 text-primary" />
+              Position history
+            </h2>
+            <p className="text-xs text-muted-foreground mb-4">
+              Recently closed positions from Mudrex (latest API page, newest first). Realized P&amp;L uses
+              the exchange field when present (including{" "}
+              <code className="text-[10px]">realised_pnl</code> / camelCase aliases). If the API omits it, we
+              estimate from entry vs close/mark prices and size (fees not included).
+            </p>
+            {historyQ.isPending ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">Loading position history…</p>
+            ) : closedHistorySorted.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed border-border/60 bg-secondary/20">
+                No closed positions in this history window yet.
+              </p>
+            ) : (
+              <div className="overflow-x-auto max-h-[min(28rem,50vh)] overflow-y-auto rounded-lg border border-border/60">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-[1] bg-secondary/95 backdrop-blur-sm">
+                    <tr className="text-muted-foreground text-xs border-b border-border">
+                      <th className="text-left py-3 px-3 font-medium">Pair</th>
+                      <th className="text-left py-3 px-3 font-medium">Side</th>
+                      <th className="text-right py-3 px-3 font-medium">Qty</th>
+                      <th className="text-right py-3 px-3 font-medium">Lev.</th>
+                      <th className="text-right py-3 px-3 font-medium">Entry</th>
+                      <th className="text-right py-3 px-3 font-medium">Last mark</th>
+                      <th className="text-right py-3 px-3 font-medium">Realized</th>
+                      <th className="text-right py-3 px-3 font-medium">Closed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {closedHistorySorted.map((p) => {
+                      const realized = parseFloat(p.realized_pnl ?? "0");
+                      const entry = parseFloat(p.entry_price ?? "0");
+                      const mark = parseFloat(p.mark_price ?? "0");
+                      return (
+                        <tr
+                          key={`${p.position_id}-${p.closed_at ?? p.updated_at ?? ""}`}
+                          className="border-b border-border/50 hover:bg-secondary/30 transition-colors"
+                        >
+                          <td className="py-3 px-3 font-medium">{formatPair(p.symbol)}</td>
+                          <td className="py-3 px-3">
                             <span
-                              className={`text-xs ${pnl >= 0 ? "text-profit" : "text-loss"}`}
+                              className={`text-xs font-medium px-2 py-1 rounded ${
+                                p.side === "LONG"
+                                  ? "bg-profit/10 text-profit"
+                                  : "bg-loss/10 text-loss"
+                              }`}
                             >
-                              ({pct >= 0 ? "+" : ""}
-                              {pct.toFixed(2)}%)
+                              {p.side}
                             </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono">{p.quantity}</td>
+                          <td className="py-3 px-3 text-right font-mono text-muted-foreground">
+                            {p.leverage ?? "—"}×
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-muted-foreground">
+                            ${entry.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-muted-foreground">
+                            ${mark.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <span
+                              className={`font-mono font-medium ${
+                                realized >= 0 ? "text-profit" : "text-loss"
+                              }`}
+                            >
+                              {realized >= 0 ? "+" : ""}${realized.toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right text-xs text-muted-foreground whitespace-nowrap">
+                            {formatClosedWhen(p)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

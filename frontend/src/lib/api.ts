@@ -303,6 +303,16 @@ export async function fetchPositionHistory() {
   );
 }
 
+export type SubscriptionStrategySummary = {
+  id: string;
+  name: string;
+  type: "copy_trading" | "algo";
+  symbol: string;
+  leverage: string;
+  isActive: boolean;
+  creatorName: string;
+};
+
 export type ApiSubscription = {
   id: string;
   userId: string;
@@ -310,10 +320,29 @@ export type ApiSubscription = {
   marginPerTrade: string;
   isActive: boolean;
   createdAt: string;
+  strategy: SubscriptionStrategySummary;
 };
 
 export async function fetchSubscriptions() {
-  return apiFetch<{ subscriptions: ApiSubscription[] }>(
-    "/api/subscriptions"
+  return apiFetch<{ subscriptions: ApiSubscription[] }>("/api/subscriptions");
+}
+
+export async function cancelSubscription(subscriptionId: string) {
+  return apiFetch<{ success: boolean }>("/api/subscriptions", {
+    method: "DELETE",
+    body: JSON.stringify({ subscriptionId }),
+  });
+}
+
+export async function updateSubscriptionMargin(
+  subscriptionId: string,
+  marginPerTrade: string
+) {
+  return apiFetch<{ success: boolean; marginPerTrade: string }>(
+    `/api/subscriptions/${subscriptionId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ marginPerTrade }),
+    }
   );
 }

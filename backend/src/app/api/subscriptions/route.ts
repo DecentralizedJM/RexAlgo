@@ -3,19 +3,52 @@ import { v4 as uuidv4 } from "uuid";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { subscriptions, strategies } from "@/lib/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const subs = await db
-      .select()
+    const rows = await db
+      .select({
+        id: subscriptions.id,
+        userId: subscriptions.userId,
+        strategyId: subscriptions.strategyId,
+        marginPerTrade: subscriptions.marginPerTrade,
+        isActive: subscriptions.isActive,
+        createdAt: subscriptions.createdAt,
+        strategyName: strategies.name,
+        strategyType: strategies.type,
+        strategySymbol: strategies.symbol,
+        strategyLeverage: strategies.leverage,
+        strategyIsActive: strategies.isActive,
+        strategyCreatorName: strategies.creatorName,
+      })
       .from(subscriptions)
-      .where(eq(subscriptions.userId, session.user.id));
+      .innerJoin(strategies, eq(subscriptions.strategyId, strategies.id))
+      .where(eq(subscriptions.userId, session.user.id))
+      .orderBy(desc(subscriptions.createdAt));
 
-    return NextResponse.json({ subscriptions: subs });
+    const subscriptionsOut = rows.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      strategyId: r.strategyId,
+      marginPerTrade: r.marginPerTrade,
+      isActive: r.isActive,
+      createdAt: r.createdAt,
+      strategy: {
+        id: r.strategyId,
+        name: r.strategyName,
+        type: r.strategyType,
+        symbol: r.strategySymbol,
+        leverage: r.strategyLeverage,
+        isActive: r.strategyIsActive,
+        creatorName: r.strategyCreatorName,
+      },
+    }));
+
+    return NextResponse.json({ subscriptions: subscriptionsOut });
   } catch (error) {
     console.error("Subscriptions fetch error:", error);
     return NextResponse.json({ error: "Failed to fetch subscriptions" }, { status: 500 });
@@ -72,9 +105,13 @@ export async function POST(req: NextRequest) {
       isActive: true,
     });
 
+    const [st] = await db
+      .select({ c: strategies.subscriberCount })
+      .from(strategies)
+      .where(eq(strategies.id, strategyId));
     await db
       .update(strategies)
-      .set({ subscriberCount: sql`${strategies.subscriberCount} + 1` })
+      .set({ subscriberCount: (st?.c ?? 0) + 1 })
       .where(eq(strategies.id, strategyId));
 
     return NextResponse.json({ success: true, subscriptionId: id }, { status: 201 });
@@ -105,15 +142,24 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
     }
 
+    const wasActive = sub.isActive;
+
     await db
       .update(subscriptions)
       .set({ isActive: false })
       .where(eq(subscriptions.id, subscriptionId));
 
-    await db
-      .update(strategies)
-      .set({ subscriberCount: sql`MAX(${strategies.subscriberCount} - 1, 0)` })
-      .where(eq(strategies.id, sub.strategyId));
+    if (wasActive) {
+      const [st] = await db
+        .select({ c: strategies.subscriberCount })
+        .from(strategies)
+        .where(eq(strategies.id, sub.strategyId));
+      const next = Math.max(0, (st?.c ?? 1) - 1);
+      await db
+        .update(strategies)
+        .set({ subscriberCount: next })
+        .where(eq(strategies.id, sub.strategyId));
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

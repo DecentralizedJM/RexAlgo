@@ -91,6 +91,222 @@ function pickBool(payload: Record<string, unknown>, ...keys: string[]): boolean 
   return false;
 }
 
+/** First non-empty string among keys, or `undefined` if none (unlike `pickStr`, which returns `"0"`). */
+function pickOptionalStr(
+  payload: Record<string, unknown>,
+  ...keys: string[]
+): string | undefined {
+  for (const k of keys) {
+    const v = payload[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      return String(v);
+    }
+  }
+  return undefined;
+}
+
+function parseFiniteNumber(s: string | undefined): number | undefined {
+  if (s === undefined) return undefined;
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * When Mudrex omits explicit realized PnL on history rows, approximate USDT PnL for linear-style qty
+ * (base-asset size × price delta). Does not include fees.
+ */
+function approximateClosedPnlUsdt(payload: Record<string, unknown>): string | undefined {
+  const entry = parseFiniteNumber(
+    pickOptionalStr(payload, "entry_price", "entryPrice", "avg_entry_price", "average_entry_price")
+  );
+  const exitPx = parseFiniteNumber(
+    pickOptionalStr(
+      payload,
+      "closed_price",
+      "exit_price",
+      "close_price",
+      "average_close_price",
+      "avg_close_price",
+      "mark_price",
+      "markPrice",
+      "last_price",
+      "lastPrice"
+    )
+  );
+  const qty = parseFiniteNumber(
+    pickOptionalStr(payload, "quantity", "qty", "filled_quantity", "filled_qty")
+  );
+  const sideRaw = (
+    pickOptionalStr(payload, "side", "order_type", "orderType") || "LONG"
+  ).toUpperCase();
+  const isShort = sideRaw === "SHORT";
+  if (entry === undefined || exitPx === undefined || qty === undefined) return undefined;
+  if (entry <= 0 || exitPx <= 0 || qty <= 0) return undefined;
+  const pnl = isShort ? (entry - exitPx) * qty : (exitPx - entry) * qty;
+  return String(pnl);
+}
+
+type MapMudrexPositionOpts = { assumeClosed?: boolean };
+
+/**
+ * Normalize Mudrex position / history payloads (snake_case vs camelCase, `id` vs `position_id`,
+ * `order_type` vs `side`, British `realised_*`, removed PnL fields per v1.0.4 changelog).
+ */
+function mapMudrexPosition(
+  raw: unknown,
+  opts?: MapMudrexPositionOpts
+): MudrexPosition {
+  const r = asRecord(raw);
+  if (!r) {
+    return {
+      position_id: "",
+      asset_id: "",
+      symbol: "",
+      side: "LONG",
+      quantity: "0",
+      entry_price: "0",
+      mark_price: "0",
+      leverage: "0",
+      margin: "0",
+      unrealized_pnl: "0",
+      realized_pnl: "0",
+      status: "",
+    };
+  }
+
+  const positionId =
+    pickOptionalStr(r, "position_id", "positionId", "id") ?? "";
+  const assetId =
+    pickOptionalStr(r, "asset_id", "assetId", "asset_uuid", "assetUuid") ?? "";
+
+  const sideRaw = (
+    pickOptionalStr(r, "side", "order_type", "orderType") || "LONG"
+  ).toUpperCase();
+  const side: "LONG" | "SHORT" = sideRaw === "SHORT" ? "SHORT" : "LONG";
+
+  const symbol = pickStr(r, "symbol", "Symbol");
+  const quantity = pickStr(r, "quantity", "qty", "filled_quantity", "filled_qty");
+  const entry_price = pickStr(
+    r,
+    "entry_price",
+    "entryPrice",
+    "avg_entry_price",
+    "average_entry_price"
+  );
+
+  const markExplicit = pickOptionalStr(
+    r,
+    "mark_price",
+    "markPrice",
+    "closed_price",
+    "exit_price",
+    "close_price",
+    "average_close_price",
+    "avg_close_price",
+    "last_price",
+    "lastPrice",
+    "index_price"
+  );
+  const mark_price =
+    markExplicit ?? (entry_price !== "0" && entry_price.trim() !== "" ? entry_price : "0");
+
+  const leverage = pickStr(r, "leverage", "leverage_multiplier");
+  const margin = pickStr(r, "margin", "initial_margin", "position_margin");
+
+  const unrealized = pickStr(
+    r,
+    "unrealized_pnl",
+    "unrealizedPnl",
+    "unrealised_pnl",
+    "unrealisedPnl"
+  );
+
+  const status = (pickOptionalStr(r, "status", "state") ?? "").toUpperCase();
+  const hasClosedAt =
+    pickOptionalStr(r, "closed_at", "closedAt", "closed_time") !== undefined;
+  const isClosedPosition =
+    opts?.assumeClosed === true ||
+    hasClosedAt ||
+    status.includes("CLOSE") ||
+    status === "CLOSED" ||
+    status === "FILLED" ||
+    status === "COMPLETED";
+
+  let realized = pickOptionalStr(
+    r,
+    "realized_pnl",
+    "realizedPnl",
+    "realised_pnl",
+    "realisedPnl",
+    "realized_profit",
+    "closed_pnl",
+    "closedPnl",
+    "net_pnl",
+    "netPnl"
+  );
+  if (realized === undefined && isClosedPosition) {
+    const gross = pickOptionalStr(
+      r,
+      "gross_pnl",
+      "grossPnl",
+      "total_pnl",
+      "totalPnl",
+      "pnl",
+      "profit"
+    );
+    if (gross !== undefined) realized = gross;
+  }
+  if (realized === undefined && isClosedPosition) {
+    const approx = approximateClosedPnlUsdt(r);
+    if (approx !== undefined) realized = approx;
+  }
+  const realized_pnl = realized ?? "0";
+
+  const liquidation_price = pickOptionalStr(r, "liquidation_price", "liquidationPrice");
+  const stoploss_price = pickOptionalStr(r, "stoploss_price", "stoplossPrice");
+  const takeprofit_price = pickOptionalStr(r, "takeprofit_price", "takeprofitPrice");
+  const closed_at = pickOptionalStr(r, "closed_at", "closedAt", "closed_time");
+  const updated_at = pickOptionalStr(r, "updated_at", "updatedAt");
+  const created_at = pickOptionalStr(r, "created_at", "createdAt");
+
+  const stoploss = r.stoploss as MudrexPosition["stoploss"];
+  const takeprofit = r.takeprofit as MudrexPosition["takeprofit"];
+
+  const out: MudrexPosition = {
+    position_id: positionId,
+    asset_id: assetId,
+    symbol,
+    side,
+    quantity,
+    entry_price,
+    mark_price,
+    leverage,
+    margin,
+    unrealized_pnl: unrealized,
+    realized_pnl,
+    status: pickOptionalStr(r, "status", "state") ?? "",
+  };
+  if (liquidation_price) out.liquidation_price = liquidation_price;
+  if (stoploss_price) out.stoploss_price = stoploss_price;
+  if (takeprofit_price) out.takeprofit_price = takeprofit_price;
+  if (closed_at) out.closed_at = closed_at;
+  if (updated_at) out.updated_at = updated_at;
+  if (created_at) out.created_at = created_at;
+  if (stoploss && typeof stoploss === "object") out.stoploss = stoploss;
+  if (takeprofit && typeof takeprofit === "object") out.takeprofit = takeprofit;
+
+  return out;
+}
+
+function mapMudrexPositionList(
+  data: unknown[] | { items?: unknown[] } | null | undefined,
+  opts?: MapMudrexPositionOpts
+): MudrexPosition[] {
+  if (!data) return [];
+  const arr = Array.isArray(data) ? data : data.items ?? [];
+  return arr.map((row) => mapMudrexPosition(row, opts));
+}
+
 function mapSpotPayload(payload: Record<string, unknown> | null): MudrexWalletBalance {
   if (!payload) {
     return {
@@ -384,13 +600,11 @@ export async function listOpenPositions(
   apiSecret: string
 ): Promise<MudrexPosition[]> {
   const res = (await mudrexFetch("/futures/positions", apiSecret)) as {
-    data?: MudrexPosition[] | { items?: MudrexPosition[] };
+    data?: MudrexPosition[] | { items?: MudrexPosition[] } | null;
   };
   const data = res.data;
   if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if ("items" in data) return data.items ?? [];
-  return [];
+  return mapMudrexPositionList(data as unknown[] | { items?: unknown[] });
 }
 
 export async function closePosition(
@@ -437,12 +651,12 @@ export async function getPositionHistory(
   const res = (await mudrexFetch(
     `/futures/positions/history?page=${page}&per_page=${perPage}`,
     apiSecret
-  )) as { data?: MudrexPosition[] | { items?: MudrexPosition[] } };
+  )) as { data?: MudrexPosition[] | { items?: MudrexPosition[] } | null };
   const data = res.data;
   if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if ("items" in data) return data.items ?? [];
-  return [];
+  return mapMudrexPositionList(data as unknown[] | { items?: unknown[] }, {
+    assumeClosed: true,
+  });
 }
 
 export async function validateApiSecret(
