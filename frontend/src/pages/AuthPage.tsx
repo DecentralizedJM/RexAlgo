@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Loader2, AlertCircle, ExternalLink } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
-import { login, ApiError, fetchSessionInfo } from "@/lib/api";
+import { login, ApiError } from "@/lib/api";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
+import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
 
 type AuthState = "idle" | "loading" | "error";
 
@@ -20,14 +21,6 @@ export default function AuthPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const from = (location.state as { from?: string } | null)?.from || "/dashboard";
-
-  const sessionInfoQ = useQuery({
-    queryKey: ["auth", "session-info"],
-    queryFn: fetchSessionInfo,
-    staleTime: 5 * 60_000,
-  });
-  const sessionDays = sessionInfoQ.data?.sessionMaxAgeDays ?? 90;
-  const mudrexKeyDays = sessionInfoQ.data?.mudrexKeyMaxDays ?? 90;
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,28 +149,9 @@ export default function AuthPage() {
             </Button>
           </form>
 
-          <p className="text-xs text-muted-foreground text-center mt-6 leading-relaxed space-y-2">
-            <span className="block">
-              After you sign in, this browser keeps the same session for up to{" "}
-              <span className="text-foreground font-medium">{sessionDays} days</span> (JWT + cookie expire
-              together; there is no auto-refresh). Mudrex usually rotates API keys after about{" "}
-              <span className="text-foreground font-medium">{mudrexKeyDays} days</span>—if wallet or orders
-              start failing with an auth error, create a new key on{" "}
-              <a
-                href={MUDREX_PRO_TRADING_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-foreground font-medium underline-offset-2 hover:underline inline-flex items-center gap-0.5"
-              >
-                Mudrex Pro Trading
-                <ExternalLink className="w-3 h-3 shrink-0" aria-hidden />
-              </a>{" "}
-              and sign in here again.
-            </span>
-            <span className="block pt-2 border-t border-border/60">
-              Secrets are encrypted at rest and only used to call Mudrex. We never hold your funds; balances
-              stay on Mudrex.
-            </span>
+          <p className="text-xs text-muted-foreground text-center mt-6 leading-relaxed">
+            Secrets are encrypted at rest and only used to call Mudrex. We never hold your funds; balances
+            stay on Mudrex.
           </p>
         </div>
       </div>
