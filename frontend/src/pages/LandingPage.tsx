@@ -1,68 +1,8 @@
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Shield, Zap, BarChart3, ArrowRight, Users, Bot, LifeBuoy } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import Navbar from "@/components/Navbar";
-
-const HERO_ROTATE_MS = 2000;
-
-function HeroHeadline() {
-  const [phase, setPhase] = useState(0);
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const apply = () => setReduceMotion(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    const id = window.setInterval(() => setPhase((p) => (p + 1) % 2), HERO_ROTATE_MS);
-    return () => window.clearInterval(id);
-  }, [reduceMotion]);
-
-  const titleClass =
-    "text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.08] tracking-tight";
-
-  if (reduceMotion) {
-    return (
-      <h1 className={`${titleClass} mb-6`} style={{ textWrap: "balance" }}>
-        <span className="text-primary">Rex</span>
-        <span className="text-foreground dark:text-white">Algo</span>
-        <span className="text-muted-foreground font-normal"> — </span>
-        <span className="text-foreground">
-          Algorithmic crypto trading, <span className="text-primary">simplified</span>
-        </span>
-      </h1>
-    );
-  }
-
-  return (
-    <h1
-      className={`relative mx-auto mb-6 min-h-[5.5rem] sm:min-h-[6.5rem] md:min-h-[8rem] max-w-4xl ${titleClass}`}
-      aria-live="polite"
-    >
-      <span
-        className={`absolute inset-0 flex items-center justify-center text-center px-2 transition-opacity duration-700 ease-out ${phase === 0 ? "opacity-100 z-[1]" : "opacity-0 z-0 pointer-events-none"}`}
-        aria-hidden={phase !== 0}
-      >
-        <span className="text-primary">Rex</span>
-        <span className="text-foreground dark:text-white">Algo</span>
-      </span>
-      <span
-        className={`absolute inset-0 flex items-center justify-center text-center px-2 transition-opacity duration-700 ease-out [text-wrap:balance] ${phase === 1 ? "opacity-100 z-[1]" : "opacity-0 z-0 pointer-events-none"}`}
-        aria-hidden={phase !== 1}
-      >
-        Algorithmic crypto trading,{" "}
-        <span className="text-primary">simplified</span>
-      </span>
-    </h1>
-  );
-}
 
 const stats = [
   { label: "Trading Volume", value: "$2.4B+" },
@@ -109,9 +49,12 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="animate-fade-up-delay-1">
-            <HeroHeadline />
-          </div>
+          <h1
+            className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground mb-6 animate-fade-up-delay-1 leading-[1.08] tracking-tight"
+            style={{ textWrap: "balance" }}
+          >
+            Algorithmic crypto trading, <span className="text-primary">simplified</span>
+          </h1>
 
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10 animate-fade-up-delay-2" style={{ textWrap: "pretty" }}>
             Run algos and copy-trading on Mudrex futures from a single UI. No code.
