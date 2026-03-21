@@ -6,6 +6,7 @@ import {
   getOrderHistory,
   cancelOrder,
 } from "@/lib/mudrex";
+import { jsonFromMudrexError } from "@/lib/mudrexHttp";
 import type { CreateOrderParams } from "@/types";
 
 export async function GET(req: NextRequest) {
@@ -22,6 +23,8 @@ export async function GET(req: NextRequest) {
     const orders = await listOpenOrders(session.apiSecret);
     return NextResponse.json({ orders });
   } catch (error) {
+    const mudrex = jsonFromMudrexError(error);
+    if (mudrex) return mudrex;
     console.error("Orders fetch error:", error);
     return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
   }
@@ -54,6 +57,8 @@ export async function POST(req: NextRequest) {
     const order = await createOrder(session.apiSecret, params);
     return NextResponse.json({ order });
   } catch (error) {
+    const mudrex = jsonFromMudrexError(error);
+    if (mudrex) return mudrex;
     console.error("Order action error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Order action failed" },

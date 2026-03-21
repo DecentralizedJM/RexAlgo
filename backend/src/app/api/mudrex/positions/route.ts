@@ -6,6 +6,7 @@ import {
   setPositionRisk,
   getPositionHistory,
 } from "@/lib/mudrex";
+import { jsonFromMudrexError } from "@/lib/mudrexHttp";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -50,6 +51,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error) {
+    const mudrex = jsonFromMudrexError(error);
+    if (mudrex) return mudrex;
     console.error("Position action error:", error);
     return NextResponse.json({ error: "Action failed" }, { status: 500 });
   }

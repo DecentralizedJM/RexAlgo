@@ -16,7 +16,14 @@ import type {
 
 const BASE_URL = "https://trade.mudrex.com/fapi/v1";
 
-class MudrexAPIError extends Error {
+/** Max attempts when Mudrex returns 429 / 503 (rate limit / overload). */
+const MUDREX_RETRYABLE_ATTEMPTS = 5;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export class MudrexAPIError extends Error {
   constructor(
     message: string,
     public statusCode: number,
@@ -33,27 +40,54 @@ async function mudrexFetch(
   options: RequestInit = {}
 ): Promise<unknown> {
   const url = `${BASE_URL}${endpoint}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "X-Authentication": apiSecret,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...options.headers,
-    },
-  });
 
-  const data = await res.json().catch(() => ({ success: false, message: res.statusText }));
+  for (let attempt = 0; attempt < MUDREX_RETRYABLE_ATTEMPTS; attempt++) {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        "X-Authentication": apiSecret,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...options.headers,
+      },
+    });
 
-  if (!res.ok) {
-    throw new MudrexAPIError(
-      data?.message || `API error ${res.status}`,
-      res.status,
-      data
-    );
+    const retryable = res.status === 429 || res.status === 503;
+    if (retryable && attempt < MUDREX_RETRYABLE_ATTEMPTS - 1) {
+      const ra = res.headers.get("retry-after");
+      let delayMs = 500 * 2 ** attempt;
+      if (ra) {
+        const sec = Number.parseInt(ra, 10);
+        if (!Number.isNaN(sec) && sec > 0) {
+          delayMs = Math.max(delayMs, sec * 1000);
+        }
+      }
+      delayMs = Math.min(delayMs, 60_000);
+      await res.arrayBuffer().catch(() => undefined);
+      await sleep(delayMs);
+      continue;
+    }
+
+    const data = await res.json().catch(() => ({
+      success: false,
+      message: res.statusText,
+    }));
+
+    if (!res.ok) {
+      const msg =
+        typeof (data as { message?: string })?.message === "string"
+          ? (data as { message: string }).message
+          : `API error ${res.status}`;
+      throw new MudrexAPIError(msg, res.status, data);
+    }
+
+    return data;
   }
 
-  return data;
+  throw new MudrexAPIError("Too Many Requests", 429, {
+    success: false,
+    message: "Too Many Requests",
+  });
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -379,7 +413,11 @@ export async function getSpotBalance(
   try {
     const res = await mudrexFetch("/wallet/funds", apiSecret, { method: "GET" });
     return mapSpotPayload(unwrapPayload(res));
-  } catch {
+  } catch (e) {
+    // Do not fall back on rate limits — that doubles traffic and worsens 429s
+    if (e instanceof MudrexAPIError && (e.statusCode === 429 || e.statusCode === 503)) {
+      throw e;
+    }
     const res = await mudrexFetch("/wallet/funds", apiSecret, {
       method: "POST",
       body: "{}",
@@ -398,7 +436,10 @@ export async function getFuturesBalance(
       body: "{}",
     });
     return mapFuturesPayload(unwrapPayload(res));
-  } catch {
+  } catch (e) {
+    if (e instanceof MudrexAPIError && (e.statusCode === 429 || e.statusCode === 503)) {
+      throw e;
+    }
     const res = await mudrexFetch("/futures/funds", apiSecret, { method: "GET" });
     return mapFuturesPayload(unwrapPayload(res));
   }
@@ -452,6 +493,7 @@ export async function listAllAssets(
     allAssets.push(...batch);
     if (batch.length < limit) break;
     offset += limit;
+    await sleep(80);
   }
 
   return allAssets;
