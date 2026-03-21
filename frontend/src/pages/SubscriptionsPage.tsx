@@ -100,7 +100,6 @@ export default function SubscriptionsPage() {
     try {
       await cancelSubscription(cancelTarget.id);
       await queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
-      toast.success("Subscription cancelled. Mirroring will stop for this strategy.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to cancel");
     } finally {
@@ -118,7 +117,6 @@ export default function SubscriptionsPage() {
     try {
       await updateSubscriptionMargin(editTarget.id, String(v));
       await queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
-      toast.success("Margin per trade updated");
       setEditTarget(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Update failed");

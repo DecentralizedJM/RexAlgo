@@ -99,7 +99,6 @@ export default function CopyTradingStudioPage() {
   const createMut = useMutation({
     mutationFn: createCopyStudioStrategy,
     onSuccess: (data) => {
-      toast.success("Strategy created");
       setCreateOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["copy-studio", "strategies"] });
       setSelectedId(data.strategy.id);
@@ -121,9 +120,6 @@ export default function CopyTradingStudioPage() {
       void queryClient.invalidateQueries({ queryKey: ["copy-studio", "strategies"] });
       if (data.secretPlain) {
         setSecretFlash(data.secretPlain);
-        toast.message(data.message ?? "Copy this secret now; it won't show again.");
-      } else {
-        toast.success(data.enabled ? "Webhook enabled" : "Webhook disabled");
       }
     },
     onError: (e) => {
@@ -174,7 +170,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
   async function copyText(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success("Copied");
     } catch {
       toast.error("Copy failed");
     }
@@ -216,13 +211,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
             </DialogContent>
           </Dialog>
         </div>
-
-        {!publicBase && (
-          <div className="mb-6 p-4 rounded-xl border border-warning/30 bg-warning/10 text-sm text-foreground">
-            Set <code className="px-1 bg-background/50 rounded">PUBLIC_APP_URL</code> on the API to your public
-            base URL. Until then, webhooks use this browser origin (your bot must reach the same host).
-          </div>
-        )}
 
         {secretFlash && (
           <div className="mb-6 p-4 rounded-xl border border-profit/30 bg-profit/10 text-sm">

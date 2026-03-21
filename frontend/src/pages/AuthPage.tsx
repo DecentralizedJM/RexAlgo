@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { login, ApiError } from "@/lib/api";
-import { toast } from "sonner";
 
 type AuthState = "idle" | "loading" | "error";
 
@@ -32,7 +31,6 @@ export default function AuthPage() {
       queryClient.setQueryData(["session", "me"], { user: result.user });
       await queryClient.refetchQueries({ queryKey: ["session", "me"] });
       void queryClient.invalidateQueries({ queryKey: ["wallet"] });
-      toast.success("Logged in successfully");
       navigate(from, { replace: true });
     } catch (err) {
       setState("error");

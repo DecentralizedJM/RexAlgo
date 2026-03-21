@@ -115,7 +115,6 @@ export default function StrategyDetailPage() {
     try {
       await subscribe(strategy.id, String(amount));
       await queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
-      toast.success(`Subscribed with $${amount} margin per trade`);
       setShowAllocation(false);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {

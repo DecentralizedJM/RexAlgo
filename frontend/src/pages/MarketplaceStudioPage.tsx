@@ -102,7 +102,6 @@ export default function MarketplaceStudioPage() {
   const createMut = useMutation({
     mutationFn: createMarketplaceStudioStrategy,
     onSuccess: (data) => {
-      toast.success("Algo strategy created");
       setCreateOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["marketplace-studio", "strategies"] });
       void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
@@ -125,9 +124,6 @@ export default function MarketplaceStudioPage() {
       void queryClient.invalidateQueries({ queryKey: ["marketplace-studio", "strategies"] });
       if (data.secretPlain) {
         setSecretFlash(data.secretPlain);
-        toast.message(data.message ?? "Copy this secret now; it won't show again.");
-      } else {
-        toast.success(data.enabled ? "Webhook enabled" : "Webhook disabled");
       }
     },
     onError: (e) => {
@@ -141,7 +137,6 @@ export default function MarketplaceStudioPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["marketplace-studio", "strategies"] });
       void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
-      toast.success("Listing updated");
     },
     onError: (e) => {
       toast.error(e instanceof ApiError ? e.message : "Update failed");
@@ -190,7 +185,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
   async function copyText(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success("Copied");
     } catch {
       toast.error("Copy failed");
     }
@@ -231,13 +225,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
             </DialogContent>
           </Dialog>
         </div>
-
-        {!publicBase && (
-          <div className="mb-6 p-4 rounded-xl border border-warning/30 bg-warning/10 text-sm text-foreground">
-            Set <code className="px-1 bg-background/50 rounded">PUBLIC_APP_URL</code> on the API so webhook URLs
-            are correct (use your public API base URL).
-          </div>
-        )}
 
         {secretFlash && (
           <div className="mb-6 p-4 rounded-xl border border-profit/30 bg-profit/10 text-sm">

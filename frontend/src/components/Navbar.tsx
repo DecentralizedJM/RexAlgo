@@ -57,7 +57,6 @@ export default function Navbar() {
     setRefreshing(true);
     try {
       await refreshAppData(queryClient);
-      toast.success("Updated");
     } catch {
       toast.error("Could not refresh");
     } finally {
