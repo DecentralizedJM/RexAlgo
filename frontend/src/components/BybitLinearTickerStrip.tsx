@@ -146,7 +146,7 @@ export default function BybitLinearTickerStrip() {
     pendingWsRef.current = {};
     if (Object.keys(batch).length === 0) return;
     setLivePatch((prev) => {
-      let next = { ...prev };
+      const next = { ...prev };
       for (const [sym, upd] of Object.entries(batch)) {
         next[sym] = { ...next[sym], ...upd };
       }
