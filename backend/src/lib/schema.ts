@@ -31,6 +31,8 @@ export const strategies = sqliteTable("strategies", {
     .notNull()
     .default("medium"),
   timeframe: text("timeframe").default("1h"),
+  /** JSON: { engine, params } — drives strategy-bound simulation (see lib/backtest/spec.ts). */
+  backtestSpecJson: text("backtest_spec_json"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   totalPnl: real("total_pnl").notNull().default(0),
   winRate: real("win_rate").notNull().default(0),

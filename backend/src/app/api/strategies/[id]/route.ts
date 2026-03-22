@@ -3,6 +3,10 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { strategies } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import {
+  parseBacktestSpecFromBody,
+  serializeBacktestSpec,
+} from "@/lib/backtest/spec";
 
 export async function GET(
   _req: NextRequest,
@@ -90,6 +94,27 @@ export async function PATCH(
     }
     if (typeof body.isActive === "boolean") {
       patch.isActive = body.isActive;
+    }
+
+    if (body.backtestSpec !== undefined) {
+      if (existing.type !== "algo") {
+        return NextResponse.json(
+          { error: "backtestSpec only applies to algo strategies" },
+          { status: 400 }
+        );
+      }
+      if (body.backtestSpec === null) {
+        patch.backtestSpecJson = null;
+      } else {
+        const spec = parseBacktestSpecFromBody(body.backtestSpec);
+        if (!spec) {
+          return NextResponse.json(
+            { error: "Invalid backtestSpec (engine and params)" },
+            { status: 400 }
+          );
+        }
+        patch.backtestSpecJson = serializeBacktestSpec(spec);
+      }
     }
 
     if (Object.keys(patch).length === 0) {

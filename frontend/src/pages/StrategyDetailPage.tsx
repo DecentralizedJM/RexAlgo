@@ -13,6 +13,7 @@ import {
   subscribe,
   ApiError,
 } from "@/lib/api";
+import StrategyBacktestPanel from "@/components/StrategyBacktestPanel";
 import { futuresAvailableUsdt } from "@/lib/walletFunding";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import {
@@ -220,6 +221,12 @@ export default function StrategyDetailPage() {
             </div>
           ))}
         </div>
+
+        {strategy.type === "algo" && (
+          <div id="backtest" className="mb-8 animate-fade-up-delay-2 scroll-mt-24">
+            <StrategyBacktestPanel strategyId={strategy.id} strategyName={strategy.name} />
+          </div>
+        )}
 
         <div className="glass rounded-xl p-6 mb-8 animate-fade-up-delay-2">
           <h2 className="font-semibold mb-4">Performance</h2>

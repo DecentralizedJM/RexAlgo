@@ -2,6 +2,7 @@ import { db } from "./db";
 import { strategies, users } from "./schema";
 import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
+import { serializeBacktestSpec, defaultBacktestSpec } from "./backtest/spec";
 
 const sampleStrategies = [
   {
@@ -121,6 +122,8 @@ export async function seedDatabase() {
     });
   }
 
+  const defaultSpec = serializeBacktestSpec(defaultBacktestSpec());
+
   for (const s of sampleStrategies) {
     await db.insert(strategies).values({
       id: uuidv4(),
@@ -136,6 +139,7 @@ export async function seedDatabase() {
       takeprofitPct: s.takeprofitPct,
       riskLevel: s.riskLevel,
       timeframe: s.timeframe,
+      backtestSpecJson: s.type === "algo" ? defaultSpec : null,
       isActive: true,
       totalPnl: s.totalPnl,
       winRate: s.winRate,

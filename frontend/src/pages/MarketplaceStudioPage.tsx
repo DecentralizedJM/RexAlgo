@@ -37,8 +37,10 @@ import {
   setMarketplaceStrategyWebhook,
   fetchMarketplaceStrategySignals,
   patchStrategy,
+  parseStrategyBacktestSpec,
   ApiError,
 } from "@/lib/api";
+import StrategyBacktestPanel from "@/components/StrategyBacktestPanel";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { toast } from "sonner";
 import {
@@ -146,6 +148,32 @@ export default function MarketplaceStudioPage() {
     },
   });
 
+  const specMut = useMutation({
+    mutationFn: ({
+      id,
+      fastPeriod,
+      slowPeriod,
+    }: {
+      id: string;
+      fastPeriod: number;
+      slowPeriod: number;
+    }) =>
+      patchStrategy(id, {
+        backtestSpec: {
+          engine: "sma_cross",
+          params: { fastPeriod, slowPeriod },
+        },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["marketplace-studio", "strategies"] });
+      void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
+      toast.success("Simulation settings saved");
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Save failed");
+    },
+  });
+
   const webhookDisplayUrl = selected
     ? buildWebhookUrl(publicBase, selected.webhookPath, originFallback)
     : "";
@@ -230,7 +258,18 @@ with urllib.request.urlopen(req, timeout=30) as res:
               </DialogHeader>
               <AlgoCreateForm
                 loading={createMut.isPending}
-                onSubmit={(v) => createMut.mutate(v)}
+                onSubmit={(v) =>
+                  createMut.mutate({
+                    ...v,
+                    backtestSpec: {
+                      engine: "sma_cross",
+                      params: {
+                        fastPeriod: v.fastPeriod,
+                        slowPeriod: v.slowPeriod,
+                      },
+                    },
+                  })
+                }
               />
             </DialogContent>
           </Dialog>
@@ -375,6 +414,20 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   </CardContent>
                 </Card>
 
+                <StudioBacktestSpecCard
+                  strategyId={selected.id}
+                  backtestSpecJson={selected.backtestSpecJson}
+                  saving={specMut.isPending}
+                  onSave={(fastPeriod, slowPeriod) =>
+                    specMut.mutate({ id: selected.id, fastPeriod, slowPeriod })
+                  }
+                />
+
+                <StrategyBacktestPanel
+                  strategyId={selected.id}
+                  strategyName={selected.name}
+                />
+
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">Signal format (JSON)</CardTitle>
@@ -471,6 +524,85 @@ with urllib.request.urlopen(req, timeout=30) as res:
   );
 }
 
+function StudioBacktestSpecCard({
+  strategyId,
+  backtestSpecJson,
+  saving,
+  onSave,
+}: {
+  strategyId: string;
+  backtestSpecJson: string | null | undefined;
+  saving: boolean;
+  onSave: (fastPeriod: number, slowPeriod: number) => void;
+}) {
+  const [fast, setFast] = useState("10");
+  const [slow, setSlow] = useState("30");
+
+  useEffect(() => {
+    const p = parseStrategyBacktestSpec(backtestSpecJson);
+    setFast(String(p?.params.fastPeriod ?? 10));
+    setSlow(String(p?.params.slowPeriod ?? 30));
+  }, [strategyId, backtestSpecJson]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Simulation logic (this listing)</CardTitle>
+        <CardDescription>
+          Shoppers run a simulation that uses these parameters together with symbol, timeframe, side, and
+          stops from the listing. Webhook signals are separate.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Engine: <span className="text-foreground font-medium">Moving average crossover</span> (fast vs slow
+          SMA on the listing timeframe).
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="spec-fast">Fast period (bars)</Label>
+            <Input
+              id="spec-fast"
+              type="number"
+              min={2}
+              className="mt-1 font-mono"
+              value={fast}
+              onChange={(e) => setFast(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="spec-slow">Slow period (bars)</Label>
+            <Input
+              id="spec-slow"
+              type="number"
+              min={3}
+              className="mt-1 font-mono"
+              value={slow}
+              onChange={(e) => setSlow(e.target.value)}
+            />
+          </div>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          disabled={saving}
+          onClick={() => {
+            const fp = parseInt(fast, 10);
+            const sp = parseInt(slow, 10);
+            if (!Number.isInteger(fp) || !Number.isInteger(sp) || fp < 2 || sp < 2 || fp >= sp) {
+              toast.error("Fast and slow must be integers ≥ 2, with fast < slow.");
+              return;
+            }
+            onSave(fp, sp);
+          }}
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save simulation settings"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function AlgoCreateForm({
   onSubmit,
   loading,
@@ -484,6 +616,8 @@ function AlgoCreateForm({
     leverage: string;
     riskLevel: "low" | "medium" | "high";
     timeframe: string;
+    fastPeriod: number;
+    slowPeriod: number;
   }) => void;
 }) {
   const [name, setName] = useState("");
@@ -493,6 +627,8 @@ function AlgoCreateForm({
   const [leverage, setLeverage] = useState("5");
   const [riskLevel, setRiskLevel] = useState<"low" | "medium" | "high">("medium");
   const [timeframe, setTimeframe] = useState("1h");
+  const [fastPeriod, setFastPeriod] = useState("10");
+  const [slowPeriod, setSlowPeriod] = useState("30");
 
   return (
     <form
@@ -500,6 +636,12 @@ function AlgoCreateForm({
       onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim() || !description.trim() || !symbol.trim()) return;
+        const fp = parseInt(fastPeriod, 10);
+        const sp = parseInt(slowPeriod, 10);
+        if (!Number.isInteger(fp) || !Number.isInteger(sp) || fp < 2 || sp < 2 || fp >= sp) {
+          toast.error("Fast and slow periods: integers ≥ 2, fast < slow.");
+          return;
+        }
         onSubmit({
           name: name.trim(),
           description: description.trim(),
@@ -508,6 +650,8 @@ function AlgoCreateForm({
           leverage,
           riskLevel,
           timeframe,
+          fastPeriod: fp,
+          slowPeriod: sp,
         });
       }}
     >
@@ -584,6 +728,40 @@ function AlgoCreateForm({
           onChange={(e) => setTimeframe(e.target.value)}
           className="mt-1"
         />
+      </div>
+      <div className="rounded-lg border border-border/60 p-3 space-y-3 bg-secondary/20">
+        <p className="text-xs font-medium text-foreground">Simulation logic (same as listing)</p>
+        <p className="text-xs text-muted-foreground">
+          Moving average crossover — used when anyone runs a simulation for this strategy.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label htmlFor="ms-fast" className="text-xs">
+              Fast period
+            </Label>
+            <Input
+              id="ms-fast"
+              type="number"
+              min={2}
+              className="mt-1 font-mono text-sm"
+              value={fastPeriod}
+              onChange={(e) => setFastPeriod(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="ms-slow" className="text-xs">
+              Slow period
+            </Label>
+            <Input
+              id="ms-slow"
+              type="number"
+              min={3}
+              className="mt-1 font-mono text-sm"
+              value={slowPeriod}
+              onChange={(e) => setSlowPeriod(e.target.value)}
+            />
+          </div>
+        </div>
       </div>
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}

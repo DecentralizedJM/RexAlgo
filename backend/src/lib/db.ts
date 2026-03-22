@@ -41,6 +41,7 @@ export function initializeDatabase() {
       takeprofit_pct REAL,
       risk_level TEXT NOT NULL DEFAULT 'medium' CHECK(risk_level IN ('low', 'medium', 'high')),
       timeframe TEXT DEFAULT '1h',
+      backtest_spec_json TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       total_pnl REAL NOT NULL DEFAULT 0,
       win_rate REAL NOT NULL DEFAULT 0,
@@ -103,6 +104,20 @@ export function initializeDatabase() {
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
   `);
+
+  migrateStrategiesBacktestSpec(sqlite);
+}
+
+/** Add backtest_spec_json when upgrading existing SQLite DBs. */
+function migrateStrategiesBacktestSpec(sqlite: InstanceType<typeof Database>) {
+  const cols = sqlite
+    .prepare(`PRAGMA table_info(strategies)`)
+    .all() as { name: string }[];
+  if (!cols.some((c) => c.name === "backtest_spec_json")) {
+    sqlite.exec(
+      `ALTER TABLE strategies ADD COLUMN backtest_spec_json TEXT;`
+    );
+  }
 }
 
 initializeDatabase();

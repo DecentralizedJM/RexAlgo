@@ -4,6 +4,11 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { strategies } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
+import {
+  defaultBacktestSpec,
+  parseBacktestSpecFromBody,
+  serializeBacktestSpec,
+} from "@/lib/backtest/spec";
 
 export async function GET(req: NextRequest) {
   const type = req.nextUrl.searchParams.get("type");
@@ -58,7 +63,16 @@ export async function POST(req: NextRequest) {
       subscriberCount: 0,
     };
 
-    await db.insert(strategies).values(newStrategy);
+    const specForAlgo =
+      newStrategy.type === "algo"
+        ? parseBacktestSpecFromBody(body.backtestSpec) ?? defaultBacktestSpec()
+        : null;
+
+    await db.insert(strategies).values({
+      ...newStrategy,
+      backtestSpecJson:
+        specForAlgo != null ? serializeBacktestSpec(specForAlgo) : null,
+    });
 
     const [created] = await db
       .select()

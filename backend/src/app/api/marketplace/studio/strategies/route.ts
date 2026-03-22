@@ -4,6 +4,11 @@ import { desc, eq, and } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { strategies, copyWebhookConfig } from "@/lib/schema";
+import {
+  defaultBacktestSpec,
+  parseBacktestSpecFromBody,
+  serializeBacktestSpec,
+} from "@/lib/backtest/spec";
 
 function publicWebhookBase(): string {
   const base =
@@ -90,7 +95,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await db.insert(strategies).values(newStrategy);
+    const spec =
+      parseBacktestSpecFromBody(body.backtestSpec) ?? defaultBacktestSpec();
+
+    await db.insert(strategies).values({
+      ...newStrategy,
+      backtestSpecJson: serializeBacktestSpec(spec),
+    });
 
     const [created] = await db
       .select()

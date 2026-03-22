@@ -19,6 +19,7 @@ function mapStrategy(s: ApiStrategy) {
     minCapital,
     subscribers: s.subscriberCount,
     winRate: s.winRate,
+    type: s.type,
   };
 }
 

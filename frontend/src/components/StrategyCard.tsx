@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, Users, Target, BarChart3 } from "lucide-react";
+import { TrendingUp, Users, Target, BarChart3, FlaskConical } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface StrategyCardProps {
@@ -12,6 +12,7 @@ interface StrategyCardProps {
   minCapital: number;
   subscribers: number;
   winRate: number;
+  type?: "copy_trading" | "algo";
   delay?: number;
 }
 
@@ -22,7 +23,16 @@ const riskColors = {
 };
 
 export default function StrategyCard({
-  id, name, description, returns, risk, minCapital, subscribers, winRate, delay = 0,
+  id,
+  name,
+  description,
+  returns,
+  risk,
+  minCapital,
+  subscribers,
+  winRate,
+  type = "algo",
+  delay = 0,
 }: StrategyCardProps) {
   return (
     <div
@@ -65,16 +75,26 @@ export default function StrategyCard({
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs text-muted-foreground">
           Min. ${minCapital.toLocaleString()}
         </span>
-        <Link to={`/strategy/${id}`}>
-          <Button size="sm" className="group-hover:shadow-md group-hover:shadow-primary/20 transition-shadow">
-            <BarChart3 className="w-4 h-4" />
-            Subscribe
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2 justify-end">
+          {type === "algo" && (
+            <Link to={`/strategy/${id}#backtest`}>
+              <Button size="sm" variant="outline" className="shadow-sm">
+                <FlaskConical className="w-4 h-4 mr-2" />
+                Backtest
+              </Button>
+            </Link>
+          )}
+          <Link to={`/strategy/${id}`}>
+            <Button size="sm" className="group-hover:shadow-md group-hover:shadow-primary/20 transition-shadow">
+              <BarChart3 className="w-4 h-4" />
+              Subscribe
+            </Button>
+          </Link>
+        </div>
       </div>
     </div>
   );

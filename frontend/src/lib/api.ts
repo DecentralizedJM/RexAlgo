@@ -132,6 +132,12 @@ export async function fetchSessionInfo(): Promise<{
 
 // ─── Strategies ─────────────────────────────────────────────────────
 
+/** Stored on algo strategies; drives simulation for that listing only. */
+export type StrategyBacktestSpec = {
+  engine: "sma_cross";
+  params: { fastPeriod: number; slowPeriod: number };
+};
+
 export type ApiStrategy = {
   id: string;
   creatorId: string;
@@ -146,6 +152,8 @@ export type ApiStrategy = {
   takeprofitPct: number | null;
   riskLevel: "low" | "medium" | "high";
   timeframe: string | null;
+  /** Raw JSON from API; parse with {@link parseStrategyBacktestSpec}. */
+  backtestSpecJson?: string | null;
   isActive: boolean;
   totalPnl: number;
   winRate: number;
@@ -153,6 +161,75 @@ export type ApiStrategy = {
   subscriberCount: number;
   createdAt: string;
 };
+
+export function parseStrategyBacktestSpec(
+  raw: string | null | undefined
+): StrategyBacktestSpec | null {
+  if (raw == null || raw === "") return null;
+  try {
+    const o = JSON.parse(raw) as unknown;
+    if (!o || typeof o !== "object") return null;
+    const engine = (o as { engine?: string }).engine;
+    const params = (o as { params?: unknown }).params;
+    if (engine !== "sma_cross" || !params || typeof params !== "object") return null;
+    const fastPeriod = Number((params as { fastPeriod?: unknown }).fastPeriod);
+    const slowPeriod = Number((params as { slowPeriod?: unknown }).slowPeriod);
+    if (
+      !Number.isInteger(fastPeriod) ||
+      !Number.isInteger(slowPeriod) ||
+      fastPeriod < 2 ||
+      slowPeriod < 2 ||
+      fastPeriod >= slowPeriod
+    ) {
+      return null;
+    }
+    return { engine: "sma_cross", params: { fastPeriod, slowPeriod } };
+  } catch {
+    return null;
+  }
+}
+
+export type StrategyBacktestTrade = {
+  side: "LONG" | "SHORT";
+  entryTime: number;
+  exitTime: number;
+  entryPrice: number;
+  exitPrice: number;
+  reason: "signal" | "stop" | "take_profit";
+  pnlUsdt: number;
+};
+
+export type StrategyBacktestResultPayload = {
+  summary: {
+    initialCapital: number;
+    finalEquity: number;
+    totalReturnPct: number;
+    maxDrawdownPct: number;
+    winRatePct: number;
+    tradeCount: number;
+    feesApproxUsdt: number;
+  };
+  equity: { t: number; equity: number }[];
+  trades: StrategyBacktestTrade[];
+};
+
+export async function runStrategyBacktest(
+  strategyId: string,
+  body: {
+    lookbackMonths?: number;
+    initialCapital?: number;
+    riskPctPerTrade?: number;
+    feeRoundTrip?: number;
+  }
+) {
+  return apiFetch<{
+    result: StrategyBacktestResultPayload;
+    meta: { barsUsed: number; rangeStart: number; rangeEnd: number };
+  }>(`/api/strategies/${strategyId}/backtest`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
 
 export async function fetchStrategies(params?: { type?: string }) {
   const q = new URLSearchParams();
@@ -180,6 +257,7 @@ export async function patchStrategy(
     riskLevel: "low" | "medium" | "high";
     timeframe: string | null;
     isActive: boolean;
+    backtestSpec: StrategyBacktestSpec | null;
   }>
 ) {
   return apiFetch<{ strategy: ApiStrategy }>(`/api/strategies/${id}`, {
@@ -270,6 +348,7 @@ export async function createMarketplaceStudioStrategy(body: {
   timeframe?: string;
   stoplossPct?: number | null;
   takeprofitPct?: number | null;
+  backtestSpec?: StrategyBacktestSpec;
 }) {
   return apiFetch<{ strategy: StudioStrategyRow }>(
     "/api/marketplace/studio/strategies",
