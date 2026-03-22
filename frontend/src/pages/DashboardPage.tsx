@@ -25,6 +25,7 @@ import {
 } from "@/lib/api";
 import { formatPair } from "@/lib/format";
 import { useRequireAuth } from "@/hooks/useAuth";
+import { AuthGateSplash } from "@/components/AuthGateSplash";
 import { futuresAvailableUsdt } from "@/lib/walletFunding";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 
@@ -88,28 +89,33 @@ function formatSessionExpiry(iso: string | null | undefined): string | null {
 export default function DashboardPage() {
   const authQ = useRequireAuth();
   const navigate = useNavigate();
+  const sessionAuthed = authQ.authed;
 
   const walletQ = useQuery({
     queryKey: ["wallet", "futures"],
     queryFn: () => fetchWallet({ futuresOnly: true }),
+    enabled: sessionAuthed,
     ...liveDataQueryOptions,
     retry: false,
   });
   const posQ = useQuery({
     queryKey: ["positions"],
     queryFn: fetchPositions,
+    enabled: sessionAuthed,
     ...liveDataQueryOptions,
     retry: false,
   });
   const subQ = useQuery({
     queryKey: ["subscriptions"],
     queryFn: fetchSubscriptions,
+    enabled: sessionAuthed,
     ...liveDataQueryOptions,
     retry: false,
   });
   const historyQ = useQuery({
     queryKey: ["positions", "history"],
     queryFn: fetchPositionHistory,
+    enabled: sessionAuthed,
     ...liveDataQueryOptions,
     retry: false,
   });
@@ -143,6 +149,13 @@ export default function DashboardPage() {
     0
   );
   const chartData = buildRealizedPnlCurve(historyQ.data?.positions ?? []);
+
+  if (!authQ.authResolved) {
+    return <AuthGateSplash />;
+  }
+  if (!authQ.data?.user) {
+    return null;
+  }
 
   const statCards = [
     {

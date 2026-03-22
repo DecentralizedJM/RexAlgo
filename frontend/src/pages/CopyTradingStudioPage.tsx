@@ -28,6 +28,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useRequireAuth } from "@/hooks/useAuth";
+import { AuthGateSplash } from "@/components/AuthGateSplash";
 import {
   fetchCopyStudioStrategies,
   createCopyStudioStrategy,
@@ -57,8 +58,9 @@ function buildWebhookUrl(
 }
 
 export default function CopyTradingStudioPage() {
-  useRequireAuth();
+  const authQ = useRequireAuth();
   const queryClient = useQueryClient();
+  const sessionAuthed = authQ.authed;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [secretFlash, setSecretFlash] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -69,6 +71,7 @@ export default function CopyTradingStudioPage() {
   const studioQ = useQuery({
     queryKey: ["copy-studio", "strategies"],
     queryFn: fetchCopyStudioStrategies,
+    enabled: sessionAuthed,
     ...liveDataQueryOptions,
   });
 
@@ -92,7 +95,7 @@ export default function CopyTradingStudioPage() {
   const signalsQ = useQuery({
     queryKey: ["copy-studio", "signals", selectedId],
     queryFn: () => fetchCopyStrategySignals(selectedId!),
-    enabled: Boolean(selectedId),
+    enabled: sessionAuthed && Boolean(selectedId),
     ...liveDataQueryOptions,
   });
 
@@ -173,6 +176,13 @@ with urllib.request.urlopen(req, timeout=30) as res:
     } catch {
       toast.error("Copy failed");
     }
+  }
+
+  if (!authQ.authResolved) {
+    return <AuthGateSplash />;
+  }
+  if (!authQ.data?.user) {
+    return null;
   }
 
   return (

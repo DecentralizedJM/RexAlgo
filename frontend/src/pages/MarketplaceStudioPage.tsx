@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useRequireAuth } from "@/hooks/useAuth";
+import { AuthGateSplash } from "@/components/AuthGateSplash";
 import {
   fetchMarketplaceStudioStrategies,
   createMarketplaceStudioStrategy,
@@ -60,8 +61,9 @@ function buildWebhookUrl(
 }
 
 export default function MarketplaceStudioPage() {
-  useRequireAuth();
+  const authQ = useRequireAuth();
   const queryClient = useQueryClient();
+  const sessionAuthed = authQ.authed;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [secretFlash, setSecretFlash] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -72,6 +74,7 @@ export default function MarketplaceStudioPage() {
   const studioQ = useQuery({
     queryKey: ["marketplace-studio", "strategies"],
     queryFn: fetchMarketplaceStudioStrategies,
+    enabled: sessionAuthed,
     ...liveDataQueryOptions,
   });
 
@@ -95,7 +98,7 @@ export default function MarketplaceStudioPage() {
   const signalsQ = useQuery({
     queryKey: ["marketplace-studio", "signals", selectedId],
     queryFn: () => fetchMarketplaceStrategySignals(selectedId!),
-    enabled: Boolean(selectedId),
+    enabled: sessionAuthed && Boolean(selectedId),
     ...liveDataQueryOptions,
   });
 
@@ -188,6 +191,13 @@ with urllib.request.urlopen(req, timeout=30) as res:
     } catch {
       toast.error("Copy failed");
     }
+  }
+
+  if (!authQ.authResolved) {
+    return <AuthGateSplash />;
+  }
+  if (!authQ.data?.user) {
+    return null;
   }
 
   return (

@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, Loader2, AlertCircle, ExternalLink } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, ExternalLink, ArrowLeft } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { login, ApiError } from "@/lib/api";
@@ -50,7 +50,14 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-10">
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-background px-4 py-10">
+      <Link
+        to="/"
+        className="absolute left-4 top-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary sm:left-6 sm:top-6"
+      >
+        <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+        Back to home
+      </Link>
       {/* Brand sits above the card (not inside the animated panel) so size/colors stay obvious */}
       <header className="mb-10 flex w-full max-w-md flex-col items-center gap-4 text-center">
         <RexAlgoLogo size={64} className="rounded-2xl shadow-md ring-1 ring-primary/25" />
@@ -152,8 +159,8 @@ export default function AuthPage() {
           </form>
 
           <p className="text-xs text-muted-foreground text-center mt-6 leading-relaxed">
-            Secrets are encrypted at rest and only used to call Mudrex. We never hold your funds; balances
-            stay on Mudrex.
+            API secrets are encrypted with bank-level security. RexAlgo never holds custody of your funds;
+            balances stay on Mudrex.
           </p>
         </div>
       </div>

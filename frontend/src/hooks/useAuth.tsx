@@ -18,13 +18,15 @@ export function useRequireAuth() {
   const navigate = useNavigate();
   const q = useSession();
 
+  const authResolved = q.isFetched;
+  const authed = Boolean(q.data?.user);
+
   useEffect(() => {
-    // Wait until the session request settles (avoids kicking back to /auth while refetching)
-    if (q.isPending || q.isFetching) return;
-    if (!q.data?.user) {
+    if (!authResolved) return;
+    if (!authed) {
       navigate("/auth", { replace: true, state: { from: window.location.pathname } });
     }
-  }, [q.isPending, q.isFetching, q.data?.user, navigate]);
+  }, [authResolved, authed, navigate]);
 
-  return q;
+  return { ...q, authResolved, authed };
 }

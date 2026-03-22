@@ -35,6 +35,7 @@ import { futuresAvailableUsdt, MIN_MARGIN_PER_TRADE_USD } from "@/lib/walletFund
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { formatPair } from "@/lib/format";
 import { useRequireAuth } from "@/hooks/useAuth";
+import { AuthGateSplash } from "@/components/AuthGateSplash";
 import {
   ArrowLeft,
   Pencil,
@@ -53,19 +54,22 @@ function subscriptionNeedsFunding(sub: ApiSubscription, available: number): bool
 }
 
 export default function SubscriptionsPage() {
-  useRequireAuth();
+  const authQ = useRequireAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const sessionAuthed = authQ.authed;
 
   const walletQ = useQuery({
     queryKey: ["wallet", "futures"],
     queryFn: () => fetchWallet({ futuresOnly: true }),
+    enabled: sessionAuthed,
     ...liveDataQueryOptions,
     retry: false,
   });
   const subsQ = useQuery({
     queryKey: ["subscriptions"],
     queryFn: fetchSubscriptions,
+    enabled: sessionAuthed,
     ...liveDataQueryOptions,
     retry: false,
   });
@@ -125,6 +129,13 @@ export default function SubscriptionsPage() {
   }
 
   const loading = subsQ.isPending;
+
+  if (!authQ.authResolved) {
+    return <AuthGateSplash />;
+  }
+  if (!authQ.data?.user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">
