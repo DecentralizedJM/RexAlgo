@@ -69,6 +69,14 @@ Replace `YOUR-RAILWAY-API...` with your real API hostname.
 
 **Caveat:** Vercel rewrites add cold-start / edge latency on `/api`; heavy trading traffic may prefer Option A (single region, nginx + API).
 
+### Landing page ticker: `GET /api/market/linear-usdt-tickers` returns 404
+
+That route lives on the **Next.js API** (`backend`). If logs show repeated 404s:
+
+1. **Redeploy the API** from current `main` so the `app/api/market/linear-usdt-tickers` route is present.
+2. **Same-origin `/api`**: Confirm nginx `location /api` or Vercel `rewrites` forwards to your API host (see `frontend/vercel.json` — update the Railway URL if the service moved).
+3. **UI-only hosting** (no proxy): the browser will 404 on `/api/*`; the ticker falls back to WebSocket-only prices and **stops polling** after the first failed snapshot so logs are not spammed.
+
 ---
 
 ## Option C — Docker Compose (VPS / single VM)

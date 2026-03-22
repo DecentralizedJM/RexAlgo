@@ -79,6 +79,15 @@ function mergeWsRow(
   return { ...prev, [sym]: next };
 }
 
+class SnapshotHttpError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "SnapshotHttpError";
+    this.status = status;
+  }
+}
+
 export default function BybitLinearTickerStrip() {
   const { data } = useQuery({
     queryKey: ["market", "linear-usdt-tickers"],
@@ -88,7 +97,10 @@ export default function BybitLinearTickerStrip() {
       });
       const text = await res.text();
       if (!res.ok) {
-        throw new Error(`snapshot_${res.status}`);
+        throw new SnapshotHttpError(
+          res.status,
+          `snapshot_${res.status}`
+        );
       }
       let parsed: unknown;
       try {
@@ -106,9 +118,16 @@ export default function BybitLinearTickerStrip() {
       }
       return parsed as TickerApiResponse;
     },
-    refetchInterval: 20_000,
+    /** Only poll when snapshot works — avoids 404 spam if /api isn’t proxied to Next or route is missing. */
+    refetchInterval: (q) =>
+      q.state.status === "success" ? 20_000 : false,
     staleTime: 8_000,
-    retry: 2,
+    retry: (failureCount, err) => {
+      if (err instanceof SnapshotHttpError && err.status === 404) return false;
+      if (err instanceof SnapshotHttpError && err.status >= 400 && err.status < 500)
+        return false;
+      return failureCount < 1;
+    },
     retryDelay: (i) => Math.min(1500 * 2 ** i, 10_000),
     /** Ticker renders from client fallback + WS until REST returns; avoids flash on refetch/focus. */
     refetchOnWindowFocus: false,
