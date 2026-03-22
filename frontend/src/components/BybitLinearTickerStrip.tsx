@@ -336,20 +336,20 @@ export default function BybitLinearTickerStrip() {
     const noQuote = item.lastPrice === "—";
     const up = item.changeFrac >= 0;
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-xs sm:text-sm shadow-sm">
+      <span className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-background/80 px-2 py-1 text-xs sm:text-sm shadow-sm">
         <span className="shrink-0 font-semibold text-foreground">{item.base}</span>
-        {/* Tight pair: small fixed widths keep marquee stable without a wide gap before price */}
-        <span className="inline-flex shrink-0 items-center gap-1">
-          <span className="inline-block w-[4.75rem] text-right font-mono text-muted-foreground tabular-nums sm:w-[5rem]">
+        {/* Tight pair: fixed widths limit marquee jitter; keep price column only as wide as typical formatted majors */}
+        <span className="inline-flex shrink-0 items-center gap-0.5">
+          <span className="inline-block w-[3.95rem] text-right font-mono text-muted-foreground tabular-nums sm:w-[4.25rem]">
             {fmtPrice(item.lastPrice)}
           </span>
           <span
             className={
               noQuote
-                ? "inline-block w-[2.85rem] text-right font-mono tabular-nums text-muted-foreground"
+                ? "inline-block w-[2.75rem] text-right font-mono tabular-nums text-muted-foreground"
                 : up
-                  ? "inline-block w-[2.85rem] text-right text-profit font-mono tabular-nums"
-                  : "inline-block w-[2.85rem] text-right text-loss font-mono tabular-nums"
+                  ? "inline-block w-[2.75rem] text-right text-profit font-mono tabular-nums"
+                  : "inline-block w-[2.75rem] text-right text-loss font-mono tabular-nums"
             }
           >
             {noQuote ? "—" : fmtChange(item.changeFrac)}
