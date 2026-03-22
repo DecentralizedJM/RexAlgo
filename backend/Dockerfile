@@ -27,12 +27,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data
 
-# Standalone layout: .next/standalone/{backend,node_modules}
+# Standalone: when the image only contains this package (no repo root), Next emits
+# server.js at the standalone root — not under a backend/ subfolder.
 WORKDIR /app
 COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./backend/.next/static
-COPY --from=builder /app/public ./backend/public
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
-WORKDIR /app/backend
 EXPOSE 3000
 CMD ["node", "server.js"]

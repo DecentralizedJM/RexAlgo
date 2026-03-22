@@ -29,11 +29,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data
 
+# Same flat standalone layout as backend/Dockerfile (see comment there).
 WORKDIR /app
 COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./backend/.next/static
-COPY --from=builder /app/public ./backend/public
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
-WORKDIR /app/backend
 EXPOSE 3000
 CMD ["node", "server.js"]
