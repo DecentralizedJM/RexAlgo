@@ -1,6 +1,5 @@
-# Railway: deploy this service with Root Directory = backend (monorepo on main).
-# Pins Docker build so Nixpacks does not run the wrong app from repo root.
-# @see docs/VERCEL-RAILWAY.md
+# Optional: only used if the Railway service **Root Directory** is set to `backend`
+# (then the repo-root railway.toml is ignored). Otherwise use root `railway.toml` + `Dockerfile.api`.
 
 [build]
 builder = "DOCKERFILE"
