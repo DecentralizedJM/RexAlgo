@@ -12,8 +12,8 @@ Below: recommended patterns that keep **same-origin `/api`**.
 ## Option A — Railway (recommended): two services + one public URL
 
 1. **API service**
-   - Source: this repo.
-   - **Dockerfile path**: `backend/Dockerfile` (or set root to `backend` and default Dockerfile).
+   - Source: this repo, branch **`main`** (no separate Railway-only branch).
+   - **Root Directory** in Railway: **`backend`** so the build uses `backend/Dockerfile` and [`backend/railway.toml`](../backend/railway.toml) (Dockerfile builder + `/api/health` check).
    - **Persistent volume**: mount a volume at **`/data`** so `REXALGO_DB_PATH=/data/rexalgo.db` survives redeploys (matches `backend/Dockerfile`).
    - **Variables** (minimum):
      - `JWT_SECRET` — long random string.

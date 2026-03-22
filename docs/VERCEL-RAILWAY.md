@@ -7,10 +7,13 @@
 
 ## Fix Railway (API)
 
-1. Use the **`backend-railway`** branch **or** set **Root Directory** to **`backend`** and build with the **Dockerfile**.
-2. Do **not** deploy the monorepo root with the default Nixpacks “npm run dev” flow — that can start the wrong app.
-3. Attach a **volume** on **`/data`** for SQLite.
-4. Set variables: **`JWT_SECRET`**, **`ENCRYPTION_KEY`**, **`PUBLIC_APP_URL`** (see below).
+1. **Branch:** **`main`** (single source of truth for the whole repo). Do **not** use a separate deploy branch.
+2. **Root Directory:** **`backend`** in the Railway service settings so the build uses [`backend/Dockerfile`](../backend/Dockerfile) and [`backend/railway.toml`](../backend/railway.toml) (Dockerfile builder + health check).
+3. Do **not** deploy the monorepo root with the default Nixpacks “npm run dev” flow — that can start the wrong app.
+4. Attach a **volume** on **`/data`** for SQLite (`REXALGO_DB_PATH=/data/rexalgo.db` is the default in the image).
+5. Set variables: **`JWT_SECRET`**, **`ENCRYPTION_KEY`**, **`PUBLIC_APP_URL`** (see below).
+
+If your Railway project was tied to the old **`backend-railway`** branch, switch the service to **`main`** and set **Root Directory** to **`backend`**, then redeploy.
 
 ## Fix Vercel (frontend)
 
