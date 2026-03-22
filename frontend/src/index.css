@@ -138,6 +138,9 @@
 
   .landing-ticker-track {
     animation: landing-ticker-scroll 55s linear infinite;
+    /* Own compositor layer — fewer layout thrashes when inner text width updates */
+    will-change: transform;
+    backface-visibility: hidden;
   }
 
   .group:hover .landing-ticker-track {

@@ -63,22 +63,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-function mergeWsRow(
-  prev: Record<string, { lastPrice?: string; changeFrac?: number }>,
-  row: Record<string, unknown>
-): Record<string, { lastPrice?: string; changeFrac?: number }> {
-  const sym = typeof row.symbol === "string" ? row.symbol : null;
-  if (!sym) return prev;
-  const cur = prev[sym] ?? {};
-  const next = { ...cur };
-  if (typeof row.lastPrice === "string") next.lastPrice = row.lastPrice;
-  if (typeof row.price24hPcnt === "string") {
-    const f = Number(row.price24hPcnt);
-    if (Number.isFinite(f)) next.changeFrac = f;
-  }
-  return { ...prev, [sym]: next };
-}
-
 class SnapshotHttpError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -150,25 +134,61 @@ export default function BybitLinearTickerStrip() {
     return [...s].sort().join(",");
   }, [displayData]);
 
-  const applyWsData = useCallback((raw: unknown) => {
-    if (raw == null || typeof raw !== "object") return;
-    const o = raw as Record<string, unknown>;
-    const dataField = o.data;
+  /** Batch WS ticks to one React update per frame — stops width “breathing” that jerks the -50% marquee. */
+  const pendingWsRef = useRef<
+    Record<string, { lastPrice?: string; changeFrac?: number }>
+  >({});
+  const wsRafRef = useRef<number | null>(null);
+
+  const flushWsBatch = useCallback(() => {
+    wsRafRef.current = null;
+    const batch = pendingWsRef.current;
+    pendingWsRef.current = {};
+    if (Object.keys(batch).length === 0) return;
     setLivePatch((prev) => {
-      if (Array.isArray(dataField)) {
-        let next = prev;
-        for (const row of dataField) {
-          if (row && typeof row === "object")
-            next = mergeWsRow(next, row as Record<string, unknown>);
-        }
-        return next;
+      let next = { ...prev };
+      for (const [sym, upd] of Object.entries(batch)) {
+        next[sym] = { ...next[sym], ...upd };
       }
-      if (dataField && typeof dataField === "object") {
-        return mergeWsRow(prev, dataField as Record<string, unknown>);
-      }
-      return prev;
+      return next;
     });
   }, []);
+
+  const applyWsData = useCallback(
+    (raw: unknown) => {
+      if (raw == null || typeof raw !== "object") return;
+      const o = raw as Record<string, unknown>;
+      const dataField = o.data;
+      const rows: Record<string, unknown>[] = [];
+      if (Array.isArray(dataField)) {
+        for (const row of dataField) {
+          if (row && typeof row === "object")
+            rows.push(row as Record<string, unknown>);
+        }
+      } else if (dataField && typeof dataField === "object") {
+        rows.push(dataField as Record<string, unknown>);
+      }
+      if (rows.length === 0) return;
+
+      const pending = pendingWsRef.current;
+      for (const row of rows) {
+        const sym = typeof row.symbol === "string" ? row.symbol : null;
+        if (!sym) continue;
+        const cur = pending[sym] ?? {};
+        const next = { ...cur };
+        if (typeof row.lastPrice === "string") next.lastPrice = row.lastPrice;
+        if (typeof row.price24hPcnt === "string") {
+          const f = Number(row.price24hPcnt);
+          if (Number.isFinite(f)) next.changeFrac = f;
+        }
+        pending[sym] = next;
+      }
+      if (wsRafRef.current == null) {
+        wsRafRef.current = requestAnimationFrame(flushWsBatch);
+      }
+    },
+    [flushWsBatch]
+  );
 
   const wsRef = useRef<WebSocket | null>(null);
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -261,6 +281,11 @@ export default function BybitLinearTickerStrip() {
     return () => {
       closed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (wsRafRef.current != null) {
+        cancelAnimationFrame(wsRafRef.current);
+        wsRafRef.current = null;
+      }
+      pendingWsRef.current = {};
       if (pingRef.current) {
         clearInterval(pingRef.current);
         pingRef.current = null;
@@ -270,8 +295,20 @@ export default function BybitLinearTickerStrip() {
     };
   }, [symbolsKey, applyWsData]);
 
+  /** Only drop patches for symbols we no longer show — don’t wipe majors when gainers load (that caused a visible jerk). */
   useEffect(() => {
-    setLivePatch({});
+    const keep = new Set(symbolsKey.split(",").filter(Boolean));
+    setLivePatch((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        if (!keep.has(k)) {
+          delete next[k];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, [symbolsKey]);
 
   const rows = useMemo(() => {
@@ -300,17 +337,20 @@ export default function BybitLinearTickerStrip() {
     const up = item.changeFrac >= 0;
     return (
       <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs sm:text-sm shadow-sm">
-        <span className="font-semibold text-foreground">{item.base}</span>
-        <span className="font-mono text-muted-foreground tabular-nums">
+        <span className="min-w-[2.25rem] font-semibold text-foreground">
+          {item.base}
+        </span>
+        {/* Fixed-ish width so digit updates don’t resize the marquee track */}
+        <span className="inline-block min-w-[6.5rem] text-right font-mono text-muted-foreground tabular-nums">
           {fmtPrice(item.lastPrice)}
         </span>
         <span
           className={
             noQuote
-              ? "font-mono tabular-nums text-muted-foreground"
+              ? "inline-block min-w-[3.5rem] text-right font-mono tabular-nums text-muted-foreground"
               : up
-                ? "text-profit font-mono tabular-nums"
-                : "text-loss font-mono tabular-nums"
+                ? "inline-block min-w-[3.5rem] text-right text-profit font-mono tabular-nums"
+                : "inline-block min-w-[3.5rem] text-right text-loss font-mono tabular-nums"
           }
         >
           {noQuote ? "—" : fmtChange(item.changeFrac)}
