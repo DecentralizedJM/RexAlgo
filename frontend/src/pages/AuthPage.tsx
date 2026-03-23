@@ -85,21 +85,29 @@ export default function AuthPage() {
           )}
 
           {state === "loading" ? (
-            <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground text-sm">
+            <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
               Signing in...
             </div>
           ) : (
-            <div className="flex justify-center">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={handleGoogleError}
-                theme="filled_black"
-                size="large"
-                width="340"
-                text="signin_with"
-                shape="pill"
-              />
+            <div className="flex flex-col items-stretch gap-3">
+              {/* Rectangular + outline = clear button (pill + 340px looked like a stretched slider). */}
+              <div className="mx-auto w-full max-w-[min(100%,20rem)] rounded-xl border border-border/80 bg-card/50 p-3 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
+                <div className="flex justify-center overflow-hidden rounded-lg">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    theme="outline"
+                    size="large"
+                    text="continue_with"
+                    shape="rectangular"
+                    width="284"
+                  />
+                </div>
+              </div>
+              <p className="text-center text-[11px] text-muted-foreground/90">
+                Secured with Google — we never see your password
+              </p>
             </div>
           )}
 
