@@ -192,9 +192,17 @@ export default function Navbar() {
             </>
           ) : user ? (
             <>
-              <span className="text-xs text-muted-foreground max-w-[120px] truncate hidden lg:inline">
-                {user.displayName}
+              <span className="text-xs text-muted-foreground max-w-[140px] truncate hidden lg:inline" title={user.email || user.displayName}>
+                {user.email || user.displayName}
               </span>
+              {!user.hasMudrexKey && (
+                <Link to="/dashboard">
+                  <span className="hidden lg:inline-flex items-center gap-1 rounded-full bg-warning/15 border border-warning/30 text-warning text-[10px] font-medium px-2 py-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+                    No Mudrex key
+                  </span>
+                </Link>
+              )}
               <Button variant="outline" size="sm" onClick={handleSignOut}>
                 <LogOut className="w-4 h-4" />
                 Sign out
@@ -203,7 +211,7 @@ export default function Navbar() {
           ) : (
             <Link to="/auth">
               <Button variant="hero" size="sm">
-                Connect API
+                Sign in
               </Button>
             </Link>
           )}
@@ -359,7 +367,7 @@ export default function Navbar() {
             ) : (
               <Link to="/auth" onClick={() => setMobileOpen(false)}>
                 <Button variant="hero" size="sm" className="w-full">
-                  Connect API
+                  Sign in
                 </Button>
               </Link>
             )}

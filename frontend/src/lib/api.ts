@@ -72,6 +72,41 @@ export async function apiFetch<T = unknown>(
 
 // ─── Auth ───────────────────────────────────────────────────────────
 
+export type SessionUser = {
+  id: string;
+  displayName: string;
+  email: string | null;
+  hasMudrexKey: boolean;
+};
+
+export async function loginWithGoogle(credential: string) {
+  return apiFetch<{ success: boolean; user: SessionUser }>(
+    "/api/auth/google",
+    {
+      method: "POST",
+      body: JSON.stringify({ credential }),
+    }
+  );
+}
+
+export async function linkMudrexKey(apiSecret: string) {
+  return apiFetch<{ success: boolean; user: SessionUser }>(
+    "/api/auth/link-mudrex",
+    {
+      method: "POST",
+      body: JSON.stringify({ apiSecret: apiSecret.trim() }),
+    }
+  );
+}
+
+export async function unlinkMudrexKey() {
+  return apiFetch<{ success: boolean; user: SessionUser }>(
+    "/api/auth/link-mudrex",
+    { method: "DELETE" }
+  );
+}
+
+/** @deprecated Use loginWithGoogle instead. Kept for legacy API-key-only login. */
 export async function login(apiSecret: string, displayName?: string) {
   return apiFetch<{ success: boolean; user: { id: string; displayName: string } }>(
     "/api/auth/login",
@@ -90,15 +125,14 @@ export async function logout() {
 }
 
 export type SessionMe = {
-  user: { id: string; displayName: string } | null;
-  /** When the HttpOnly JWT/session cookie expires (browser must sign in again). */
+  user: SessionUser | null;
   sessionExpiresAt: string | null;
 };
 
 export async function getMe(): Promise<SessionMe> {
   const res = await fetch("/api/auth/me", { credentials: "include" });
   const data = (await res.json().catch(() => ({}))) as {
-    user?: { id: string; displayName: string } | null;
+    user?: SessionUser | null;
     sessionExpiresAt?: string | null;
   };
   if (!res.ok) {

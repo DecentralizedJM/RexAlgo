@@ -7,7 +7,10 @@ export async function GET() {
     return NextResponse.json({ user: null }, { status: 401 });
   }
   return NextResponse.json({
-    user: session.user,
+    user: {
+      ...session.user,
+      hasMudrexKey: session.apiSecret != null,
+    },
     sessionExpiresAt:
       session.sessionExpiresAt?.toISOString() ?? null,
   });

@@ -6,8 +6,10 @@ import { sqliteTable, text, integer, real, uniqueIndex } from "drizzle-orm/sqlit
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
+  email: text("email").unique(),
+  authProvider: text("auth_provider").notNull().default("legacy"),
   displayName: text("display_name").notNull(),
-  apiSecretEncrypted: text("api_secret_encrypted").notNull(),
+  apiSecretEncrypted: text("api_secret_encrypted"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

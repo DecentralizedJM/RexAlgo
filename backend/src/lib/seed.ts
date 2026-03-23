@@ -118,6 +118,7 @@ export async function seedDatabase() {
     await db.insert(users).values({
       id: "system",
       displayName: "RexAlgo Team",
+      authProvider: "legacy",
       apiSecretEncrypted: "system-no-api",
     });
   }

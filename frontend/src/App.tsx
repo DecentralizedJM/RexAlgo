@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -29,8 +30,11 @@ const queryClient = new QueryClient({
   },
 });
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+
 const App = () => (
   <ErrorBoundary>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider delayDuration={200}>
@@ -58,6 +62,7 @@ const App = () => (
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
+    </GoogleOAuthProvider>
   </ErrorBoundary>
 );
 

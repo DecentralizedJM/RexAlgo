@@ -5,7 +5,7 @@
  */
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import type { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import crypto from "crypto";
 import type { AuthUser } from "@/types";
 
@@ -67,13 +67,15 @@ export function decryptApiSecret(encrypted: string): string {
 export async function createSession(
   userId: string,
   displayName: string,
-  apiSecretEncrypted: string
+  apiSecretEncrypted: string | null,
+  email: string | null
 ): Promise<string> {
   const days = getSessionMaxAgeDays();
   const token = await new SignJWT({
     userId,
     displayName,
-    apiSecretEncrypted,
+    apiSecretEncrypted: apiSecretEncrypted ?? undefined,
+    email: email ?? undefined,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime(`${days}d`)
@@ -88,7 +90,8 @@ export async function verifySession(
 ): Promise<{
   userId: string;
   displayName: string;
-  apiSecretEncrypted: string;
+  apiSecretEncrypted: string | null;
+  email: string | null;
   sessionExpiresAt: Date | null;
 } | null> {
   try {
@@ -100,7 +103,12 @@ export async function verifySession(
     return {
       userId: payload.userId as string,
       displayName: payload.displayName as string,
-      apiSecretEncrypted: payload.apiSecretEncrypted as string,
+      apiSecretEncrypted:
+        typeof payload.apiSecretEncrypted === "string"
+          ? payload.apiSecretEncrypted
+          : null,
+      email:
+        typeof payload.email === "string" ? payload.email : null,
       sessionExpiresAt: exp,
     };
   } catch {
@@ -110,7 +118,7 @@ export async function verifySession(
 
 export async function getSession(): Promise<{
   user: AuthUser;
-  apiSecret: string;
+  apiSecret: string | null;
   sessionExpiresAt: Date | null;
 } | null> {
   const cookieStore = await cookies();
@@ -120,21 +128,57 @@ export async function getSession(): Promise<{
   const session = await verifySession(token);
   if (!session) return null;
 
-  try {
-    const apiSecret = decryptApiSecret(session.apiSecretEncrypted);
-    return {
-      user: { id: session.userId, displayName: session.displayName },
-      apiSecret,
-      sessionExpiresAt: session.sessionExpiresAt,
-    };
-  } catch {
-    return null;
+  let apiSecret: string | null = null;
+  if (session.apiSecretEncrypted) {
+    try {
+      apiSecret = decryptApiSecret(session.apiSecretEncrypted);
+    } catch {
+      /* key may be corrupt — session is still valid, just without Mudrex access */
+    }
   }
+
+  return {
+    user: {
+      id: session.userId,
+      displayName: session.displayName,
+      email: session.email,
+    },
+    apiSecret,
+    sessionExpiresAt: session.sessionExpiresAt,
+  };
 }
 
 export async function getSessionUser(): Promise<AuthUser | null> {
   const session = await getSession();
   return session?.user ?? null;
+}
+
+/** Like getSession() but returns 403 JSON if no Mudrex API key is linked. */
+export async function requireMudrexSession(): Promise<
+  | { user: AuthUser; apiSecret: string; sessionExpiresAt: Date | null }
+  | { error: true; response: ReturnType<typeof NextResponse.json> }
+> {
+  const session = await getSession();
+  if (!session) {
+    return {
+      error: true,
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+  if (!session.apiSecret) {
+    return {
+      error: true,
+      response: NextResponse.json(
+        { error: "Link your Mudrex API key first", code: "MUDREX_KEY_REQUIRED" },
+        { status: 403 }
+      ),
+    };
+  }
+  return {
+    user: session.user,
+    apiSecret: session.apiSecret,
+    sessionExpiresAt: session.sessionExpiresAt,
+  };
 }
 
 /**

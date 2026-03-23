@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireMudrexSession } from "@/lib/auth";
 import { getSpotBalance, getFuturesBalance, transferFunds } from "@/lib/mudrex";
 import { jsonFromMudrexError } from "@/lib/mudrexHttp";
 
 const STAGGER_MS = 150;
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireMudrexSession();
+  if ("error" in result) return result.response;
+  const session = result;
 
   const futuresOnly =
     req.nextUrl.searchParams.get("futuresOnly") === "1" ||
@@ -34,8 +35,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireMudrexSession();
+  if ("error" in result) return result.response;
+  const session = result;
 
   try {
     const { from, to, amount } = await req.json();

@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import Navbar from "@/components/Navbar";
 import PerformanceChart from "@/components/PerformanceChart";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   BarChart3,
   Users,
@@ -11,12 +13,18 @@ import {
   History,
   LineChart,
   AlertTriangle,
+  Eye,
+  EyeOff,
+  Loader2,
+  KeyRound,
+  ExternalLink,
 } from "lucide-react";
 import {
   fetchWallet,
   fetchPositions,
   fetchPositionHistory,
   fetchSubscriptions,
+  linkMudrexKey,
   ApiError,
   isMudrexCredentialError,
   type ApiPosition,
@@ -26,6 +34,7 @@ import { useRequireAuth } from "@/hooks/useAuth";
 import { AuthGateSplash } from "@/components/AuthGateSplash";
 import { futuresAvailableUsdt } from "@/lib/walletFunding";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
+import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
 
 /** Cumulative realized P&L from Mudrex position history (one API page). */
 function buildRealizedPnlCurve(positions: ApiPosition[]): { date: string; value: number }[] {
@@ -84,36 +93,137 @@ function formatSessionExpiry(iso: string | null | undefined): string | null {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function ConnectMudrexCard() {
+  const [secret, setSecret] = useState("");
+  const [showSecret, setShowSecret] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+
+  const handleLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!secret.trim()) return;
+    setLinking(true);
+    setError("");
+    try {
+      const result = await linkMudrexKey(secret.trim());
+      queryClient.setQueryData(["session", "me"], {
+        user: result.user,
+        sessionExpiresAt: null,
+      });
+      await queryClient.refetchQueries({ queryKey: ["session", "me"] });
+      void queryClient.invalidateQueries({ queryKey: ["wallet"] });
+      void queryClient.invalidateQueries({ queryKey: ["positions"] });
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Failed to link API key. Check the secret and try again."
+      );
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  return (
+    <div className="glass rounded-xl p-6 mb-8 animate-fade-up border-2 border-primary/30">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+          <KeyRound className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="font-semibold">Connect your Mudrex account</h2>
+          <p className="text-xs text-muted-foreground">
+            Link your Mudrex API key to see balances, positions, and trade.
+          </p>
+        </div>
+      </div>
+
+      <form onSubmit={handleLink} className="space-y-3 mt-4">
+        <div className="relative">
+          <Input
+            type={showSecret ? "text" : "password"}
+            value={secret}
+            onChange={(e) => { setSecret(e.target.value); setError(""); }}
+            placeholder="Paste your Mudrex API secret"
+            className="bg-secondary/50 border-border pr-10"
+            disabled={linking}
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            onClick={() => setShowSecret(!showSecret)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+        {error && (
+          <p className="text-sm text-loss">{error}</p>
+        )}
+        <div className="flex items-center gap-3">
+          <Button
+            type="submit"
+            variant="hero"
+            size="sm"
+            disabled={!secret.trim() || linking}
+          >
+            {linking ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Linking…</>
+            ) : (
+              "Connect Mudrex"
+            )}
+          </Button>
+          <a
+            href={MUDREX_PRO_TRADING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            Get API key <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+      </form>
+
+      <p className="text-xs text-muted-foreground mt-4 leading-relaxed">
+        Your key is encrypted at rest. You can rotate or unlink it anytime.
+      </p>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const authQ = useRequireAuth();
   const navigate = useNavigate();
   const sessionAuthed = authQ.authed;
+  const hasMudrexKey = authQ.data?.user?.hasMudrexKey ?? false;
 
   const walletQ = useQuery({
     queryKey: ["wallet", "futures"],
     queryFn: () => fetchWallet({ futuresOnly: true }),
-    enabled: sessionAuthed,
+    enabled: sessionAuthed && hasMudrexKey,
     ...liveDataQueryOptions,
     retry: false,
   });
   const posQ = useQuery({
     queryKey: ["positions"],
     queryFn: fetchPositions,
-    enabled: sessionAuthed,
+    enabled: sessionAuthed && hasMudrexKey,
     ...liveDataQueryOptions,
     retry: false,
   });
   const subQ = useQuery({
     queryKey: ["subscriptions"],
     queryFn: fetchSubscriptions,
-    enabled: sessionAuthed,
+    enabled: sessionAuthed && hasMudrexKey,
     ...liveDataQueryOptions,
     retry: false,
   });
   const historyQ = useQuery({
     queryKey: ["positions", "history"],
     queryFn: fetchPositionHistory,
-    enabled: sessionAuthed,
+    enabled: sessionAuthed && hasMudrexKey,
     ...liveDataQueryOptions,
     retry: false,
   });
@@ -204,6 +314,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {!hasMudrexKey && <ConnectMudrexCard />}
+
         {underfundedSubs.length > 0 && walletQ.data && (
           <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3 text-sm animate-fade-up">
             <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
@@ -225,7 +337,12 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Unrealized PnL card removed — Mudrex API does not provide live PnL */}
+        {!hasMudrexKey ? (
+          <div className="glass rounded-xl p-8 text-center text-muted-foreground animate-fade-up">
+            <p className="text-sm">Connect your Mudrex API key above to see wallet, positions, and trade data.</p>
+          </div>
+        ) : (
+        <>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {statCards.map((s, i) => {
@@ -446,6 +563,8 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

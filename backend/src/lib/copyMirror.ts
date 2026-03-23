@@ -228,6 +228,18 @@ export async function executeMirror(
   for (const sub of subs) {
     if (sub.userId === strategy.creatorId) continue;
 
+    if (!sub.apiSecretEncrypted) {
+      await db.insert(copyMirrorAttempts).values({
+        id: uuidv4(),
+        signalId: signalEventId,
+        userId: sub.userId,
+        status: "error",
+        detail: "Subscriber has no Mudrex API key linked",
+      });
+      errors++;
+      continue;
+    }
+
     let apiSecret: string;
     try {
       apiSecret = decryptApiSecret(sub.apiSecretEncrypted);

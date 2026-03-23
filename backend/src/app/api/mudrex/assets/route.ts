@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireMudrexSession } from "@/lib/auth";
 import { listAllAssets, getAsset } from "@/lib/mudrex";
 import { jsonFromMudrexError } from "@/lib/mudrexHttp";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireMudrexSession();
+  if ("error" in result) return result.response;
+  const session = result;
 
   const symbol = req.nextUrl.searchParams.get("symbol");
 

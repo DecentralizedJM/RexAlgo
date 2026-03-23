@@ -127,4 +127,5 @@ export interface Subscription {
 export interface AuthUser {
   id: string;
   displayName: string;
+  email: string | null;
 }

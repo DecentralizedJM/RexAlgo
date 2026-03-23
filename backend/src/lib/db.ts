@@ -22,8 +22,10 @@ export function initializeDatabase() {
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
+      email TEXT UNIQUE,
+      auth_provider TEXT NOT NULL DEFAULT 'legacy',
       display_name TEXT NOT NULL,
-      api_secret_encrypted TEXT NOT NULL,
+      api_secret_encrypted TEXT,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -106,6 +108,7 @@ export function initializeDatabase() {
   `);
 
   migrateStrategiesBacktestSpec(sqlite);
+  migrateUsersGoogleAuth(sqlite);
 }
 
 /** Add backtest_spec_json when upgrading existing SQLite DBs. */
@@ -117,6 +120,40 @@ function migrateStrategiesBacktestSpec(sqlite: InstanceType<typeof Database>) {
     sqlite.exec(
       `ALTER TABLE strategies ADD COLUMN backtest_spec_json TEXT;`
     );
+  }
+}
+
+/** Add email + auth_provider columns and make api_secret_encrypted nullable. */
+function migrateUsersGoogleAuth(sqlite: InstanceType<typeof Database>) {
+  const cols = sqlite
+    .prepare(`PRAGMA table_info(users)`)
+    .all() as { name: string; notnull: number }[];
+
+  if (cols.some((c) => c.name === "email")) return;
+
+  const apiCol = cols.find((c) => c.name === "api_secret_encrypted");
+  const needRecreate = apiCol && apiCol.notnull === 1;
+
+  if (needRecreate) {
+    sqlite.exec(`PRAGMA foreign_keys = OFF;`);
+    sqlite.exec(`
+      CREATE TABLE users_v2 (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE,
+        auth_provider TEXT NOT NULL DEFAULT 'legacy',
+        display_name TEXT NOT NULL,
+        api_secret_encrypted TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+      INSERT INTO users_v2 (id, email, auth_provider, display_name, api_secret_encrypted, created_at)
+        SELECT id, NULL, 'legacy', display_name, api_secret_encrypted, created_at FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_v2 RENAME TO users;
+    `);
+    sqlite.exec(`PRAGMA foreign_keys = ON;`);
+  } else {
+    sqlite.exec(`ALTER TABLE users ADD COLUMN email TEXT UNIQUE;`);
+    sqlite.exec(`ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'legacy';`);
   }
 }
 

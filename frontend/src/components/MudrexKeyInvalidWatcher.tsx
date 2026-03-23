@@ -17,12 +17,13 @@ export default function MudrexKeyInvalidWatcher() {
   const queryClient = useQueryClient();
 
   const loggedIn = Boolean(sessionQ.data?.user);
+  const hasMudrexKey = sessionQ.data?.user?.hasMudrexKey ?? false;
   const onAuthPage = location.pathname === "/auth";
 
   const probe = useQuery({
     queryKey: MUDREX_KEY_PROBE_QUERY_KEY,
     queryFn: () => fetchWallet({ futuresOnly: true }),
-    enabled: loggedIn && !onAuthPage,
+    enabled: loggedIn && hasMudrexKey && !onAuthPage,
     staleTime: 60_000,
     refetchInterval: 10 * 60_000,
     refetchOnWindowFocus: true,

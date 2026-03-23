@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { requireMudrexSession } from "@/lib/auth";
 import {
   listOpenPositions,
   closePosition,
@@ -9,8 +9,9 @@ import {
 import { jsonFromMudrexError } from "@/lib/mudrexHttp";
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireMudrexSession();
+  if ("error" in result) return result.response;
+  const session = result;
 
   const history = req.nextUrl.searchParams.get("history") === "true";
 
@@ -28,8 +29,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const result = await requireMudrexSession();
+  if ("error" in result) return result.response;
+  const session = result;
 
   try {
     const { action, positionId, stoplosPrice, takeprofitPrice } = await req.json();
