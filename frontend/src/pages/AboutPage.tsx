@@ -33,9 +33,9 @@ export default function AboutPage() {
             </h1>
           </div>
           <p className="text-lg text-muted-foreground mb-12 leading-relaxed">
-            <RexAlgoWordmark className="inline text-lg font-semibold text-foreground mr-1" /> is a front end for
-            Mudrex futures: algos, copy trading, and subscriptions in one place. We don’t custody funds; trades
-            stay on your exchange account.
+            <RexAlgoWordmark className="inline text-lg font-semibold text-foreground mr-1" /> brings algo
+            strategies, copy trading, and subscriptions together in one workspace on Mudrex. We never custody
+            your funds—execution and balances stay on Mudrex.
           </p>
         </div>
 

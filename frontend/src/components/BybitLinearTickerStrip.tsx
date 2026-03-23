@@ -332,24 +332,29 @@ export default function BybitLinearTickerStrip() {
     return null;
   }
 
-  const Pill = ({ item }: { item: LinearTickerItem }) => {
+  /** Flat row (no pill chrome) — avoids border/rounded clipping when symbols or prices are long. */
+  const TickerItem = ({ item }: { item: LinearTickerItem }) => {
     const noQuote = item.lastPrice === "—";
     const up = item.changeFrac >= 0;
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/80 py-1 pl-2 pr-2.5 text-xs shadow-sm sm:gap-1.5 sm:pr-3 sm:text-sm">
-        <span className="shrink-0 font-semibold text-foreground">{item.base}</span>
-        {/* Tight pair: fixed widths limit marquee jitter; keep price column only as wide as typical formatted majors */}
-        <span className="inline-flex shrink-0 items-center gap-1 pr-px">
-          <span className="inline-block w-[3.95rem] text-right font-mono text-muted-foreground tabular-nums sm:w-[4.25rem]">
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs sm:gap-2 sm:text-sm">
+        <span
+          className="max-w-[5.5rem] shrink-0 truncate font-semibold text-foreground sm:max-w-[6rem]"
+          title={item.base}
+        >
+          {item.base}
+        </span>
+        <span className="inline-flex min-w-0 shrink-0 items-center gap-1.5">
+          <span className="min-w-[3.5rem] text-right font-mono text-muted-foreground tabular-nums sm:min-w-[4.25rem]">
             {fmtPrice(item.lastPrice)}
           </span>
           <span
             className={
               noQuote
-                ? "inline-block w-[2.75rem] text-right font-mono tabular-nums text-muted-foreground"
+                ? "min-w-[2.65rem] text-right font-mono tabular-nums text-muted-foreground sm:min-w-[2.85rem]"
                 : up
-                  ? "inline-block w-[2.75rem] text-right text-profit font-mono tabular-nums"
-                  : "inline-block w-[2.75rem] text-right text-loss font-mono tabular-nums"
+                  ? "min-w-[2.65rem] text-right font-mono tabular-nums text-profit sm:min-w-[2.85rem]"
+                  : "min-w-[2.65rem] text-right font-mono tabular-nums text-loss sm:min-w-[2.85rem]"
             }
           >
             {noQuote ? "—" : fmtChange(item.changeFrac)}
@@ -362,16 +367,16 @@ export default function BybitLinearTickerStrip() {
   const Segment = ({ id }: { id: string }) => (
     <>
       {rows.majors.map((item) => (
-        <Pill key={`${id}-m-${item.symbol}`} item={item} />
+        <TickerItem key={`${id}-m-${item.symbol}`} item={item} />
       ))}
       {rows.gainers.length > 0 ? (
         <>
-          <span className="inline-flex items-center gap-1 pl-4 pr-2 text-[10px] font-bold uppercase tracking-widest text-primary sm:text-xs">
-            <TrendingUp className="h-3.5 w-3.5" aria-hidden />
+          <span className="inline-flex items-center gap-1 pl-2 pr-1 text-[10px] font-bold uppercase tracking-widest text-primary sm:pl-4 sm:text-xs">
+            <TrendingUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
             24h gainers
           </span>
           {rows.gainers.map((item) => (
-            <Pill key={`${id}-g-${item.symbol}`} item={item} />
+            <TickerItem key={`${id}-g-${item.symbol}`} item={item} />
           ))}
         </>
       ) : null}
@@ -386,11 +391,11 @@ export default function BybitLinearTickerStrip() {
       <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-background to-transparent sm:w-20" />
       <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-background to-transparent sm:w-20" />
       <div className="overflow-hidden">
-        <div className="landing-ticker-track flex w-max items-stretch">
-          <div className="flex shrink-0 items-center gap-3 pr-10 sm:gap-4 sm:pr-14">
+        <div className="landing-ticker-track flex w-max items-center">
+          <div className="flex shrink-0 items-center gap-x-4 gap-y-2 pr-10 sm:gap-x-5 sm:pr-14">
             <Segment id="a" />
           </div>
-          <div className="flex shrink-0 items-center gap-3 pr-10 sm:gap-4 sm:pr-14">
+          <div className="flex shrink-0 items-center gap-x-4 gap-y-2 pr-10 sm:gap-x-5 sm:pr-14">
             <Segment id="b" />
           </div>
         </div>
