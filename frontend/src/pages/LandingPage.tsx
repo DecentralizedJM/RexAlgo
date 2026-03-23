@@ -9,11 +9,13 @@ import {
   Bot,
   LifeBuoy,
   Github,
+  LayoutDashboard,
 } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import Navbar from "@/components/Navbar";
 import BybitLinearTickerStrip from "@/components/BybitLinearTickerStrip";
+import { useSession } from "@/hooks/useAuth";
 
 const stats = [
   { label: "Trading Volume", value: "$2.4B+" },
@@ -46,6 +48,9 @@ const features = [
 ];
 
 export default function LandingPage() {
+  const { data: session } = useSession();
+  const loggedIn = Boolean(session?.user);
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -80,12 +85,21 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-up-delay-3">
-            <Link to="/auth">
-              <Button variant="hero" size="lg">
-                Start Trading
-                <ArrowRight className="w-5 h-5" />
-              </Button>
-            </Link>
+            {loggedIn ? (
+              <Link to="/dashboard">
+                <Button variant="hero" size="lg">
+                  <LayoutDashboard className="w-5 h-5" />
+                  Go to Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/auth">
+                <Button variant="hero" size="lg">
+                  Start Trading
+                  <ArrowRight className="w-5 h-5" />
+                </Button>
+              </Link>
+            )}
             <Link to="/marketplace">
               <Button variant="outline" size="lg">
                 <BarChart3 className="w-5 h-5" />
@@ -152,16 +166,33 @@ export default function LandingPage() {
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-md text-center">
           <div className="glass rounded-xl p-6 sm:p-8 animate-pulse-glow">
-            <h2 className="text-xl sm:text-2xl font-bold mb-2">Ready to connect?</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Sign in with your Mudrex API secret and open the dashboard.
-            </p>
-            <Link to="/auth">
-              <Button variant="hero" size="default" className="w-full sm:w-auto">
-                Connect Mudrex
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
+            {loggedIn ? (
+              <>
+                <h2 className="text-xl sm:text-2xl font-bold mb-2">Welcome back</h2>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Jump into your dashboard to manage positions and strategies.
+                </p>
+                <Link to="/dashboard">
+                  <Button variant="hero" size="default" className="w-full sm:w-auto">
+                    <LayoutDashboard className="w-4 h-4" />
+                    Dashboard
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl sm:text-2xl font-bold mb-2">Ready to connect?</h2>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Sign in with your Mudrex API secret and open the dashboard.
+                </p>
+                <Link to="/auth">
+                  <Button variant="hero" size="default" className="w-full sm:w-auto">
+                    Connect Mudrex
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { v4 as uuidv4 } from "uuid";
 import { validateApiSecret } from "@/lib/mudrex";
 import {
   encryptApiSecret,
@@ -45,14 +44,18 @@ export async function POST(req: NextRequest) {
 
     if (existingUsers.length > 0) {
       userId = existingUsers[0].id;
-      userName = existingUsers[0].displayName;
+      const incoming = displayName?.trim();
+      userName = incoming || existingUsers[0].displayName;
       await db
         .update(users)
-        .set({ apiSecretEncrypted: encrypted })
+        .set({
+          apiSecretEncrypted: encrypted,
+          ...(incoming ? { displayName: incoming } : {}),
+        })
         .where(eq(users.id, userId));
     } else {
       userId = secretHash;
-      userName = displayName?.trim() || `Trader_${uuidv4().slice(0, 6)}`;
+      userName = displayName?.trim() || "Trader";
       await db.insert(users).values({
         id: userId,
         displayName: userName,

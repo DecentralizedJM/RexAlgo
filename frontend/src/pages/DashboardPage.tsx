@@ -7,8 +7,6 @@ import { Button } from "@/components/ui/button";
 import {
   BarChart3,
   Users,
-  ArrowUpRight,
-  ArrowDownRight,
   Wallet,
   History,
   LineChart,
@@ -144,10 +142,6 @@ export default function DashboardPage() {
   );
 
   const futBal = parseFloat(futures?.balance ?? "0");
-  const unrealized = positions.reduce(
-    (s, p) => s + parseFloat(p.unrealized_pnl ?? "0"),
-    0
-  );
   const chartData = buildRealizedPnlCurve(historyQ.data?.positions ?? []);
 
   if (!authQ.authResolved) {
@@ -231,18 +225,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="glass rounded-xl p-6 mb-6 animate-fade-up-delay-1">
-          <div>
-            <span className="text-sm text-muted-foreground">Unrealized P&amp;L (open)</span>
-            <div className="flex items-center gap-2 mt-1">
-              <span
-                className={`text-2xl font-mono font-bold ${unrealized >= 0 ? "text-profit" : "text-loss"}`}
-              >
-                {unrealized >= 0 ? "+" : ""}${unrealized.toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
+        {/* Unrealized PnL card removed — Mudrex API does not provide live PnL */}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {statCards.map((s, i) => {
@@ -336,20 +319,12 @@ export default function DashboardPage() {
                       <th className="text-right py-3 px-3 font-medium">Lev.</th>
                       <th className="text-right py-3 px-3 font-medium">Entry</th>
                       <th className="text-right py-3 px-3 font-medium">Mark</th>
-                      <th className="text-right py-3 px-3 font-medium">Unrealized</th>
                     </tr>
                   </thead>
                   <tbody>
                     {positions.map((p) => {
-                      const pnl = parseFloat(p.unrealized_pnl ?? "0");
                       const entry = parseFloat(p.entry_price ?? "0");
                       const mark = parseFloat(p.mark_price ?? "0");
-                      const pct =
-                        entry > 0 && p.side === "LONG"
-                          ? ((mark - entry) / entry) * 100
-                          : entry > 0
-                            ? ((entry - mark) / entry) * 100
-                            : 0;
                       return (
                         <tr
                           key={p.position_id}
@@ -376,26 +351,6 @@ export default function DashboardPage() {
                           </td>
                           <td className="py-3 px-3 text-right font-mono">
                             ${mark.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-3 px-3 text-right">
-                            <div className="flex items-center justify-end gap-1 flex-wrap">
-                              {pnl >= 0 ? (
-                                <ArrowUpRight className="w-3.5 h-3.5 text-profit shrink-0" />
-                              ) : (
-                                <ArrowDownRight className="w-3.5 h-3.5 text-loss shrink-0" />
-                              )}
-                              <span
-                                className={`font-mono font-medium ${pnl >= 0 ? "text-profit" : "text-loss"}`}
-                              >
-                                {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
-                              </span>
-                              <span
-                                className={`text-xs ${pnl >= 0 ? "text-profit" : "text-loss"}`}
-                              >
-                                ({pct >= 0 ? "+" : ""}
-                                {pct.toFixed(2)}%)
-                              </span>
-                            </div>
                           </td>
                         </tr>
                       );
@@ -441,6 +396,8 @@ export default function DashboardPage() {
                       const realized = parseFloat(p.realized_pnl ?? "0");
                       const entry = parseFloat(p.entry_price ?? "0");
                       const mark = parseFloat(p.mark_price ?? "0");
+                      const absR = Math.abs(realized);
+                      const pnlDecimals = absR === 0 ? 2 : absR < 0.01 ? 6 : absR < 1 ? 4 : 2;
                       return (
                         <tr
                           key={`${p.position_id}-${p.closed_at ?? p.updated_at ?? ""}`}
@@ -474,7 +431,7 @@ export default function DashboardPage() {
                                 realized >= 0 ? "text-profit" : "text-loss"
                               }`}
                             >
-                              {realized >= 0 ? "+" : ""}${realized.toFixed(2)}
+                              {realized >= 0 ? "+" : ""}${realized.toFixed(pnlDecimals)}
                             </span>
                           </td>
                           <td className="py-3 px-3 text-right text-xs text-muted-foreground whitespace-nowrap">

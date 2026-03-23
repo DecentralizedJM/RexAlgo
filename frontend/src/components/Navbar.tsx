@@ -177,7 +177,7 @@ export default function Navbar() {
               <TooltipContent side="bottom">Pull latest from Mudrex</TooltipContent>
             </Tooltip>
           )}
-          {isLanding ? (
+          {isLanding && !user ? (
             <>
               <Link to="/about">
                 <Button variant="ghost" size="sm">
