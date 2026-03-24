@@ -293,21 +293,25 @@
 
 .reveal-hidden {
   opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
+  transform: translateY(32px) scale(0.985);
+  filter: blur(6px);
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.75s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform, filter;
 }
 
 .reveal-visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
+  filter: blur(0);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .reveal-hidden {
     opacity: 1 !important;
     transform: none !important;
+    filter: none !important;
     transition: none !important;
   }
 }
@@ -381,5 +385,147 @@ html:not(.dark) .feature-card:hover {
 @media (prefers-reduced-motion: reduce) {
   .feature-card:hover {
     transform: none !important;
+  }
+}
+
+/* ── Hero kinetic headline (per-letter wave + hover zoom) ───── */
+
+@keyframes hero-char-wave {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  45% {
+    transform: translateY(-8px) scale(1.14);
+  }
+}
+
+.group\/kinetic:hover .hero-kinetic-char {
+  animation: hero-char-wave 0.58s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: var(--wave-delay, 0ms);
+}
+
+.hero-kinetic-char {
+  display: inline-block;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
+  will-change: transform;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .group\/kinetic .hero-kinetic-char:hover {
+    transform: scale(1.2) translateY(-2px);
+    color: hsl(var(--primary));
+  }
+
+  .group\/kinetic .hero-kinetic-char--accent:hover {
+    transform: scale(1.22) translateY(-3px);
+    filter: brightness(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group\/kinetic:hover .hero-kinetic-char {
+    animation: none !important;
+  }
+
+  .hero-kinetic-char:hover {
+    transform: none !important;
+  }
+}
+
+/* ── Hero parallax decorative blobs ────────────────────────── */
+
+.hero-parallax-root {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hero-parallax-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(48px);
+  opacity: 0.45;
+  transition: transform 0.35s ease-out;
+  will-change: transform;
+}
+
+.dark .hero-parallax-blob {
+  opacity: 0.5;
+}
+
+.hero-parallax-blob--1 {
+  width: min(55vw, 420px);
+  height: min(55vw, 420px);
+  left: -8%;
+  top: 5%;
+  background: radial-gradient(circle, hsl(var(--primary) / 0.35) 0%, transparent 68%);
+}
+
+.hero-parallax-blob--2 {
+  width: min(45vw, 340px);
+  height: min(45vw, 340px);
+  right: -5%;
+  bottom: 0%;
+  background: radial-gradient(circle, hsl(var(--accent) / 0.28) 0%, transparent 70%);
+}
+
+.hero-parallax-blob--3 {
+  width: min(35vw, 260px);
+  height: min(35vw, 260px);
+  left: 35%;
+  bottom: 15%;
+  background: radial-gradient(circle, hsl(var(--primary) / 0.18) 0%, transparent 72%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-parallax-blob {
+    transition: none !important;
+  }
+}
+
+/* ── Global liquid click splash ─────────────────────────────── */
+
+@keyframes liquid-burst {
+  0% {
+    transform: translate(-50%, -50%) scale(0.15);
+    opacity: 0.55;
+    border-radius: 42% 58% 52% 48% / 48% 42% 58% 52%;
+  }
+  55% {
+    opacity: 0.28;
+    border-radius: 58% 42% 48% 52% / 55% 48% 45% 55%;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.2);
+    opacity: 0;
+    border-radius: 50% 50% 50% 50%;
+  }
+}
+
+.landing-liquid-splash {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 140px;
+  height: 140px;
+  margin-left: 0;
+  margin-top: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    hsl(var(--primary) / 0.42) 0%,
+    hsl(var(--primary) / 0.12) 45%,
+    transparent 72%
+  );
+  animation: liquid-burst 0.88s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-liquid-splash {
+    display: none !important;
   }
 }

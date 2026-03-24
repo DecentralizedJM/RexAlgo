@@ -51,6 +51,51 @@ const features = [
   },
 ];
 
+const HERO_PRIMARY = "Algorithmic crypto trading, ";
+const HERO_ACCENT = "simplified";
+
+/* ── Kinetic hero headline (per-letter wave + hover) ─────────── */
+
+function KineticHeroHeadline({ className }: { className?: string }) {
+  const primaryChars = Array.from(HERO_PRIMARY);
+  const accentChars = Array.from(HERO_ACCENT);
+  let waveIndex = 0;
+
+  return (
+    <h1
+      className={`group/kinetic ${className ?? ""}`}
+      aria-label={`${HERO_PRIMARY.trim()} ${HERO_ACCENT}`}
+    >
+      <span aria-hidden className="inline-flex flex-wrap justify-center gap-x-[0.03em] gap-y-1 sm:gap-y-0">
+        {primaryChars.map((ch, i) => {
+          const di = waveIndex++;
+          return (
+            <span
+              key={`p-${i}`}
+              className="hero-kinetic-char text-foreground"
+              style={{ ["--wave-delay" as string]: `${di * 28}ms` }}
+            >
+              {ch === " " ? "\u00A0" : ch}
+            </span>
+          );
+        })}
+        {accentChars.map((ch, i) => {
+          const di = waveIndex++;
+          return (
+            <span
+              key={`a-${i}`}
+              className="hero-kinetic-char hero-kinetic-char--accent text-primary"
+              style={{ ["--wave-delay" as string]: `${di * 28}ms` }}
+            >
+              {ch}
+            </span>
+          );
+        })}
+      </span>
+    </h1>
+  );
+}
+
 /* ── CountUp ───────────────────────────────────────────────── */
 
 function CountUp({
@@ -114,31 +159,117 @@ function CountUp({
   );
 }
 
+/* ── Liquid ripples (fixed, full-viewport) ─────────────────── */
+
+type LiquidSplash = { id: number; x: number; y: number };
+
+function useLiquidRipples() {
+  const [splashes, setSplashes] = useState<LiquidSplash[]>([]);
+  const idRef = useRef(0);
+
+  const addSplash = useCallback((clientX: number, clientY: number) => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const id = idRef.current++;
+    setSplashes((prev) => [...prev.slice(-10), { id, x: clientX, y: clientY }]);
+    window.setTimeout(() => {
+      setSplashes((prev) => prev.filter((s) => s.id !== id));
+    }, 900);
+  }, []);
+
+  return { splashes, addSplash };
+}
+
 /* ── Page ──────────────────────────────────────────────────── */
 
 export default function LandingPage() {
   const { data: session } = useSession();
   const loggedIn = Boolean(session?.user);
 
+  const { splashes, addSplash } = useLiquidRipples();
+  const heroRef = useRef<HTMLElement>(null);
+  const [parallax, setParallax] = useState({ x: 0, y: 0 });
+
   const statsSection = useInView<HTMLElement>({ threshold: 0.2 });
   const featuresHeading = useInView<HTMLDivElement>();
   const featuresGrid = useInView<HTMLDivElement>({ threshold: 0.1 });
   const ctaSection = useInView<HTMLDivElement>();
 
+  const onHeroPointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const el = heroRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const nx = ((e.clientX - r.left) / r.width - 0.5) * 2;
+    const ny = ((e.clientY - r.top) / r.height - 0.5) * 2;
+    setParallax({ x: nx, y: ny });
+  };
+
+  const onHeroPointerLeave = () => {
+    setParallax({ x: 0, y: 0 });
+  };
+
+  const onLandingPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const t = e.target as HTMLElement | null;
+    if (!t) return;
+    if (t.closest("a, button, input, textarea, select, [role='button'], [data-no-liquid]")) return;
+    addSplash(e.clientX, e.clientY);
+  };
+
+  const px = parallax.x;
+  const py = parallax.y;
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="relative min-h-screen bg-background" onPointerDown={onLandingPointerDown}>
+      {splashes.map((s) => (
+        <div
+          key={s.id}
+          className="landing-liquid-splash fixed z-[35]"
+          style={{ left: s.x, top: s.y }}
+          aria-hidden
+        />
+      ))}
+
       <Navbar />
 
-      {/* Live Bybit linear prices */}
+      {/* Live Bybit linear prices — no divider border */}
       <section
-        className="border-b border-border/60 bg-muted/25 pt-[var(--app-nav-offset)] dark:bg-muted/15"
+        className="bg-muted/25 pt-[var(--app-nav-offset)] dark:bg-muted/15"
         aria-label="Market ticker"
       >
         <BybitLinearTickerStrip />
       </section>
 
-      {/* Hero — aurora gradient mesh background */}
-      <section className="hero-aurora pb-20 px-4 pt-12 sm:pt-16">
+      {/* Hero — aurora + parallax blobs + kinetic title */}
+      <section
+        ref={heroRef}
+        className="hero-aurora relative pb-20 px-4 pt-12 sm:pt-16"
+        onPointerMove={onHeroPointerMove}
+        onPointerLeave={onHeroPointerLeave}
+      >
+        <div className="hero-parallax-root" aria-hidden>
+          <div
+            className="hero-parallax-blob hero-parallax-blob--1"
+            style={{
+              transform: `translate3d(${px * 48}px, ${py * 36}px, 0)`,
+            }}
+          />
+          <div
+            className="hero-parallax-blob hero-parallax-blob--2"
+            style={{
+              transform: `translate3d(${px * -32}px, ${py * -28}px, 0)`,
+            }}
+          />
+          <div
+            className="hero-parallax-blob hero-parallax-blob--3"
+            style={{
+              transform: `translate3d(${px * 22}px, ${py * 20}px, 0)`,
+            }}
+          />
+        </div>
+
         <div className="relative z-[1] container mx-auto max-w-4xl text-center">
           <div className="animate-fade-up">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-6">
@@ -147,12 +278,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <h1
-            className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground mb-6 animate-fade-up-delay-1 leading-[1.08] tracking-tight"
-            style={{ textWrap: "balance" }}
-          >
-            Algorithmic crypto trading, <span className="text-primary">simplified</span>
-          </h1>
+          <KineticHeroHeadline className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6 animate-fade-up-delay-1 leading-[1.12] tracking-tight max-w-[22ch] sm:max-w-none mx-auto" />
 
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10 animate-fade-up-delay-2" style={{ textWrap: "pretty" }}>
             Run algos and copy-trading on Mudrex futures from a single UI. No code.
@@ -160,21 +286,21 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-up-delay-3">
             {loggedIn ? (
-              <Link to="/dashboard">
+              <Link to="/dashboard" data-no-liquid>
                 <Button variant="hero" size="lg">
                   <LayoutDashboard className="w-5 h-5" />
                   Go to Dashboard
                 </Button>
               </Link>
             ) : (
-              <Link to="/auth">
+              <Link to="/auth" data-no-liquid>
                 <Button variant="hero" size="lg">
                   Start Trading
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
             )}
-            <Link to="/marketplace">
+            <Link to="/marketplace" data-no-liquid>
               <Button variant="outline" size="lg">
                 <BarChart3 className="w-5 h-5" />
                 Explore Strategies
@@ -184,15 +310,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Stats — scroll-triggered reveal + animated counters */}
-      <section ref={statsSection.ref} className="py-12 border-y border-border">
+      {/* Stats — scroll reveal + counters; no section borders */}
+      <section ref={statsSection.ref} className="py-14">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, i) => (
               <div
                 key={stat.label}
                 className={`group/stat relative overflow-visible px-3 py-5 pb-2 text-center rounded-xl reveal-hidden ${statsSection.inView ? "reveal-visible" : ""}`}
-                style={{ transitionDelay: `${i * 100}ms` }}
+                style={{ transitionDelay: `${i * 110}ms` }}
               >
                 <div
                   className="landing-stat-glow-bar pointer-events-none absolute inset-0 z-0 rounded-xl bg-primary/20 opacity-0 blur-lg transition-opacity duration-500 group-hover/stat:opacity-100"
@@ -214,7 +340,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features — scroll-triggered reveal + dimensional hover */}
+      {/* Features */}
       <section className="py-24 px-4">
         <div className="container mx-auto max-w-5xl">
           <div
@@ -232,7 +358,7 @@ export default function LandingPage() {
               <div
                 key={f.title}
                 className={`glass feature-card rounded-xl p-8 reveal-hidden ${featuresGrid.inView ? "reveal-visible" : ""}`}
-                style={{ transitionDelay: `${i * 120}ms` }}
+                style={{ transitionDelay: `${i * 130}ms` }}
               >
                 <div className="feature-icon w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4 transition-all duration-300">
                   <f.icon className="w-5 h-5 text-primary" />
@@ -245,7 +371,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA — scroll-triggered reveal */}
+      {/* CTA */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-md text-center">
           <div
@@ -258,7 +384,7 @@ export default function LandingPage() {
                 <p className="text-sm text-muted-foreground mb-6">
                   Jump into your dashboard to manage positions and strategies.
                 </p>
-                <Link to="/dashboard">
+                <Link to="/dashboard" data-no-liquid>
                   <Button variant="hero" size="default" className="w-full sm:w-auto">
                     <LayoutDashboard className="w-4 h-4" />
                     Dashboard
@@ -271,7 +397,7 @@ export default function LandingPage() {
                 <p className="text-sm text-muted-foreground mb-6">
                   Sign in with your Mudrex API secret and open the dashboard.
                 </p>
-                <Link to="/auth">
+                <Link to="/auth" data-no-liquid>
                   <Button variant="hero" size="default" className="w-full sm:w-auto">
                     Connect Mudrex
                     <ArrowRight className="w-4 h-4" />
@@ -283,8 +409,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-border py-8 px-4">
+      {/* Footer — no top border */}
+      <footer className="py-10 px-4">
         <div className="container mx-auto flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col items-center gap-3 sm:items-start">
             <div className="flex items-center gap-2">
