@@ -112,6 +112,12 @@
   h1, h2, h3, h4 {
     @apply tracking-tight;
   }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
 }
 
 @layer utilities {
@@ -280,5 +286,100 @@
     animation: none !important;
     opacity: 0.5;
     box-shadow: 0 0 18px hsl(var(--primary) / 0.08);
+  }
+}
+
+/* ── Scroll-triggered reveal ─────────────────────────────────── */
+
+.reveal-hidden {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-hidden {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* ── Hero aurora / gradient mesh ─────────────────────────────── */
+
+@keyframes aurora-drift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.hero-aurora {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-aurora::before {
+  content: "";
+  position: absolute;
+  inset: -40% -20%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 25% 40%, hsl(var(--primary) / 0.09) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 60%, hsl(var(--accent) / 0.07) 0%, transparent 55%);
+  background-size: 200% 200%;
+  animation: aurora-drift 14s ease-in-out infinite;
+}
+
+.dark .hero-aurora::before {
+  background:
+    radial-gradient(ellipse at 25% 40%, hsl(var(--primary) / 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 60%, hsl(var(--accent) / 0.08) 0%, transparent 55%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-aurora::before {
+    animation: none !important;
+    background-position: 50% 50%;
+  }
+}
+
+/* ── Feature card premium hover (Dimensional Layering) ──────── */
+
+.feature-card {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  border-color: hsl(var(--primary) / 0.3);
+  box-shadow:
+    0 4px 12px hsl(var(--primary) / 0.06),
+    0 12px 32px -8px hsl(var(--primary) / 0.1);
+}
+
+html:not(.dark) .feature-card:hover {
+  box-shadow:
+    0 4px 12px hsl(220 16% 10% / 0.06),
+    0 16px 40px -12px hsl(220 16% 10% / 0.1);
+}
+
+.feature-card:hover .feature-icon {
+  box-shadow: 0 0 16px hsl(var(--primary) / 0.2);
+  background-color: hsl(var(--primary) / 0.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-card:hover {
+    transform: none !important;
   }
 }

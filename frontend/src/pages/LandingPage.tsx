@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import {
@@ -16,13 +17,16 @@ import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import Navbar from "@/components/Navbar";
 import BybitLinearTickerStrip from "@/components/BybitLinearTickerStrip";
 import { useSession } from "@/hooks/useAuth";
+import { useInView } from "@/hooks/useInView";
+
+/* ── Data ──────────────────────────────────────────────────── */
 
 const stats = [
-  { label: "Trading Volume", value: "$2.4B+" },
-  { label: "Active Traders", value: "34,200+" },
-  { label: "Avg. ROI", value: "47.2%" },
-  { label: "Strategies", value: "850+" },
-];
+  { label: "Trading Volume", value: "$2.4B+", prefix: "$", number: 2.4, suffix: "B+", decimals: 1 },
+  { label: "Active Traders", value: "34,200+", prefix: "", number: 34200, suffix: "+", decimals: 0 },
+  { label: "Avg. ROI", value: "47.2%", prefix: "", number: 47.2, suffix: "%", decimals: 1 },
+  { label: "Strategies", value: "850+", prefix: "", number: 850, suffix: "+", decimals: 0 },
+] as const;
 
 const features = [
   {
@@ -38,7 +42,7 @@ const features = [
   {
     icon: Shield,
     title: "Risk Controls",
-    description: "Stops, sizing, and risk labels per strategy so you know what you’re taking on.",
+    description: "Stops, sizing, and risk labels per strategy so you know what you're taking on.",
   },
   {
     icon: Zap,
@@ -47,15 +51,85 @@ const features = [
   },
 ];
 
+/* ── CountUp ───────────────────────────────────────────────── */
+
+function CountUp({
+  target,
+  decimals,
+  prefix,
+  suffix,
+  active,
+  duration = 1200,
+}: {
+  target: number;
+  decimals: number;
+  prefix: string;
+  suffix: string;
+  active: boolean;
+  duration?: number;
+}) {
+  const [display, setDisplay] = useState("0");
+  const rafRef = useRef(0);
+
+  const animate = useCallback(() => {
+    const start = performance.now();
+    const tick = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = eased * target;
+
+      if (decimals === 0) {
+        setDisplay(Math.round(current).toLocaleString());
+      } else {
+        setDisplay(current.toFixed(decimals));
+      }
+
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, [target, decimals, duration]);
+
+  useEffect(() => {
+    if (!active) return;
+
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) {
+      setDisplay(decimals === 0 ? target.toLocaleString() : target.toFixed(decimals));
+      return;
+    }
+
+    animate();
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [active, animate, target, decimals]);
+
+  return (
+    <>
+      {prefix}
+      {display}
+      {suffix}
+    </>
+  );
+}
+
+/* ── Page ──────────────────────────────────────────────────── */
+
 export default function LandingPage() {
   const { data: session } = useSession();
   const loggedIn = Boolean(session?.user);
+
+  const statsSection = useInView<HTMLElement>({ threshold: 0.2 });
+  const featuresHeading = useInView<HTMLDivElement>();
+  const featuresGrid = useInView<HTMLDivElement>({ threshold: 0.1 });
+  const ctaSection = useInView<HTMLDivElement>();
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* Live Bybit linear prices — sits under the nav (fills former dead space) */}
+      {/* Live Bybit linear prices */}
       <section
         className="border-b border-border/60 bg-muted/25 pt-[var(--app-nav-offset)] dark:bg-muted/15"
         aria-label="Market ticker"
@@ -63,9 +137,9 @@ export default function LandingPage() {
         <BybitLinearTickerStrip />
       </section>
 
-      {/* Hero */}
-      <section className="pb-20 px-4 pt-12 sm:pt-16">
-        <div className="container mx-auto max-w-4xl text-center">
+      {/* Hero — aurora gradient mesh background */}
+      <section className="hero-aurora pb-20 px-4 pt-12 sm:pt-16">
+        <div className="relative z-[1] container mx-auto max-w-4xl text-center">
           <div className="animate-fade-up">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-6">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
@@ -110,22 +184,28 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="py-12 border-y border-border">
+      {/* Stats — scroll-triggered reveal + animated counters */}
+      <section ref={statsSection.ref} className="py-12 border-y border-border">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, i) => (
               <div
                 key={stat.label}
-                className="group/stat relative overflow-visible px-3 py-5 pb-2 text-center animate-fade-up rounded-xl"
-                style={{ animationDelay: `${i * 80}ms` }}
+                className={`group/stat relative overflow-visible px-3 py-5 pb-2 text-center rounded-xl reveal-hidden ${statsSection.inView ? "reveal-visible" : ""}`}
+                style={{ transitionDelay: `${i * 100}ms` }}
               >
                 <div
                   className="landing-stat-glow-bar pointer-events-none absolute inset-0 z-0 rounded-xl bg-primary/20 opacity-0 blur-lg transition-opacity duration-500 group-hover/stat:opacity-100"
                   aria-hidden
                 />
                 <p className="relative z-[1] text-2xl md:text-3xl font-mono font-bold text-foreground">
-                  {stat.value}
+                  <CountUp
+                    target={stat.number}
+                    decimals={stat.decimals}
+                    prefix={stat.prefix}
+                    suffix={stat.suffix}
+                    active={statsSection.inView}
+                  />
                 </p>
                 <p className="relative z-[1] mt-1 text-sm text-muted-foreground">{stat.label}</p>
               </div>
@@ -134,24 +214,27 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features */}
+      {/* Features — scroll-triggered reveal + dimensional hover */}
       <section className="py-24 px-4">
         <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-16 animate-fade-up">
+          <div
+            ref={featuresHeading.ref}
+            className={`text-center mb-16 reveal-hidden ${featuresHeading.inView ? "reveal-visible" : ""}`}
+          >
             <h2 className="text-3xl font-bold mb-4">What you get</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
               Algos, copy trading, and subs in one flow on top of Mudrex.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div ref={featuresGrid.ref} className="grid md:grid-cols-2 gap-6">
             {features.map((f, i) => (
               <div
                 key={f.title}
-                className="glass rounded-xl p-8 hover:border-primary/20 transition-all duration-300 animate-fade-up"
-                style={{ animationDelay: `${i * 100}ms` }}
+                className={`glass feature-card rounded-xl p-8 reveal-hidden ${featuresGrid.inView ? "reveal-visible" : ""}`}
+                style={{ transitionDelay: `${i * 120}ms` }}
               >
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                <div className="feature-icon w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4 transition-all duration-300">
                   <f.icon className="w-5 h-5 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
@@ -162,10 +245,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* CTA — scroll-triggered reveal */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-md text-center">
-          <div className="glass rounded-xl p-6 sm:p-8 animate-pulse-glow">
+          <div
+            ref={ctaSection.ref}
+            className={`glass rounded-xl p-6 sm:p-8 animate-pulse-glow reveal-hidden ${ctaSection.inView ? "reveal-visible" : ""}`}
+          >
             {loggedIn ? (
               <>
                 <h2 className="text-xl sm:text-2xl font-bold mb-2">Welcome back</h2>
