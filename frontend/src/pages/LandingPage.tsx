@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import {
@@ -17,16 +16,13 @@ import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import Navbar from "@/components/Navbar";
 import BybitLinearTickerStrip from "@/components/BybitLinearTickerStrip";
 import { useSession } from "@/hooks/useAuth";
-import { useInView } from "@/hooks/useInView";
-
-/* ── Data ──────────────────────────────────────────────────── */
 
 const stats = [
-  { label: "Trading Volume", value: "$2.4B+", prefix: "$", number: 2.4, suffix: "B+", decimals: 1 },
-  { label: "Active Traders", value: "34,200+", prefix: "", number: 34200, suffix: "+", decimals: 0 },
-  { label: "Avg. ROI", value: "47.2%", prefix: "", number: 47.2, suffix: "%", decimals: 1 },
-  { label: "Strategies", value: "850+", prefix: "", number: 850, suffix: "+", decimals: 0 },
-] as const;
+  { label: "Trading Volume", value: "$2.4B+" },
+  { label: "Active Traders", value: "34,200+" },
+  { label: "Avg. ROI", value: "47.2%" },
+  { label: "Strategies", value: "850+" },
+];
 
 const features = [
   {
@@ -54,18 +50,14 @@ const features = [
 const HERO_PRIMARY = "Algorithmic crypto trading, ";
 const HERO_ACCENT = "simplified";
 
-/* ── Kinetic hero headline (per-letter wave + hover) ─────────── */
-
+/** Per-letter hover zoom + wave when hovering the full headline (kept from motion polish). */
 function KineticHeroHeadline({ className }: { className?: string }) {
   const primaryChars = Array.from(HERO_PRIMARY);
   const accentChars = Array.from(HERO_ACCENT);
   let waveIndex = 0;
 
   return (
-    <h1
-      className={`group/kinetic ${className ?? ""}`}
-      aria-label={`${HERO_PRIMARY.trim()} ${HERO_ACCENT}`}
-    >
+    <h1 className={`group/kinetic ${className ?? ""}`} aria-label={`${HERO_PRIMARY.trim()} ${HERO_ACCENT}`}>
       <span aria-hidden className="inline-flex flex-wrap justify-center gap-x-[0.03em] gap-y-1 sm:gap-y-0">
         {primaryChars.map((ch, i) => {
           const di = waveIndex++;
@@ -96,181 +88,25 @@ function KineticHeroHeadline({ className }: { className?: string }) {
   );
 }
 
-/* ── CountUp ───────────────────────────────────────────────── */
-
-function CountUp({
-  target,
-  decimals,
-  prefix,
-  suffix,
-  active,
-  duration = 1200,
-}: {
-  target: number;
-  decimals: number;
-  prefix: string;
-  suffix: string;
-  active: boolean;
-  duration?: number;
-}) {
-  const [display, setDisplay] = useState("0");
-  const rafRef = useRef(0);
-
-  const animate = useCallback(() => {
-    const start = performance.now();
-    const tick = (now: number) => {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = eased * target;
-
-      if (decimals === 0) {
-        setDisplay(Math.round(current).toLocaleString());
-      } else {
-        setDisplay(current.toFixed(decimals));
-      }
-
-      if (progress < 1) {
-        rafRef.current = requestAnimationFrame(tick);
-      }
-    };
-    rafRef.current = requestAnimationFrame(tick);
-  }, [target, decimals, duration]);
-
-  useEffect(() => {
-    if (!active) return;
-
-    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (prefersReduced) {
-      setDisplay(decimals === 0 ? target.toLocaleString() : target.toFixed(decimals));
-      return;
-    }
-
-    animate();
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [active, animate, target, decimals]);
-
-  return (
-    <>
-      {prefix}
-      {display}
-      {suffix}
-    </>
-  );
-}
-
-/* ── Liquid ripples (fixed, full-viewport) ─────────────────── */
-
-type LiquidSplash = { id: number; x: number; y: number };
-
-function useLiquidRipples() {
-  const [splashes, setSplashes] = useState<LiquidSplash[]>([]);
-  const idRef = useRef(0);
-
-  const addSplash = useCallback((clientX: number, clientY: number) => {
-    if (typeof window === "undefined") return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const id = idRef.current++;
-    setSplashes((prev) => [...prev.slice(-10), { id, x: clientX, y: clientY }]);
-    window.setTimeout(() => {
-      setSplashes((prev) => prev.filter((s) => s.id !== id));
-    }, 900);
-  }, []);
-
-  return { splashes, addSplash };
-}
-
-/* ── Page ──────────────────────────────────────────────────── */
-
 export default function LandingPage() {
   const { data: session } = useSession();
   const loggedIn = Boolean(session?.user);
 
-  const { splashes, addSplash } = useLiquidRipples();
-  const heroRef = useRef<HTMLElement>(null);
-  const [parallax, setParallax] = useState({ x: 0, y: 0 });
-
-  const statsSection = useInView<HTMLElement>({ threshold: 0.2 });
-  const featuresHeading = useInView<HTMLDivElement>();
-  const featuresGrid = useInView<HTMLDivElement>({ threshold: 0.1 });
-  const ctaSection = useInView<HTMLDivElement>();
-
-  const onHeroPointerMove = (e: React.PointerEvent<HTMLElement>) => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const el = heroRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const nx = ((e.clientX - r.left) / r.width - 0.5) * 2;
-    const ny = ((e.clientY - r.top) / r.height - 0.5) * 2;
-    setParallax({ x: nx, y: ny });
-  };
-
-  const onHeroPointerLeave = () => {
-    setParallax({ x: 0, y: 0 });
-  };
-
-  const onLandingPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    const t = e.target as HTMLElement | null;
-    if (!t) return;
-    if (t.closest("a, button, input, textarea, select, [role='button'], [data-no-liquid]")) return;
-    addSplash(e.clientX, e.clientY);
-  };
-
-  const px = parallax.x;
-  const py = parallax.y;
-
   return (
-    <div className="relative min-h-screen bg-background" onPointerDown={onLandingPointerDown}>
-      {splashes.map((s) => (
-        <div
-          key={s.id}
-          className="landing-liquid-splash fixed z-[35]"
-          style={{ left: s.x, top: s.y }}
-          aria-hidden
-        />
-      ))}
-
+    <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* Live Bybit linear prices — no divider border */}
+      {/* Live Bybit linear prices — sits under the nav (fills former dead space) */}
       <section
-        className="bg-muted/25 pt-[var(--app-nav-offset)] dark:bg-muted/15"
+        className="border-b border-border/60 bg-muted/25 pt-[var(--app-nav-offset)] dark:bg-muted/15"
         aria-label="Market ticker"
       >
         <BybitLinearTickerStrip />
       </section>
 
-      {/* Hero — aurora + parallax blobs + kinetic title */}
-      <section
-        ref={heroRef}
-        className="hero-aurora relative pb-20 px-4 pt-12 sm:pt-16"
-        onPointerMove={onHeroPointerMove}
-        onPointerLeave={onHeroPointerLeave}
-      >
-        <div className="hero-parallax-root" aria-hidden>
-          <div
-            className="hero-parallax-blob hero-parallax-blob--1"
-            style={{
-              transform: `translate3d(${px * 48}px, ${py * 36}px, 0)`,
-            }}
-          />
-          <div
-            className="hero-parallax-blob hero-parallax-blob--2"
-            style={{
-              transform: `translate3d(${px * -32}px, ${py * -28}px, 0)`,
-            }}
-          />
-          <div
-            className="hero-parallax-blob hero-parallax-blob--3"
-            style={{
-              transform: `translate3d(${px * 22}px, ${py * 20}px, 0)`,
-            }}
-          />
-        </div>
-
-        <div className="relative z-[1] container mx-auto max-w-4xl text-center">
+      {/* Hero */}
+      <section className="pb-20 px-4 pt-12 sm:pt-16">
+        <div className="container mx-auto max-w-4xl text-center">
           <div className="animate-fade-up">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-6">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
@@ -278,7 +114,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <KineticHeroHeadline className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6 animate-fade-up-delay-1 leading-[1.12] tracking-tight max-w-[22ch] sm:max-w-none mx-auto" />
+          <KineticHeroHeadline className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6 animate-fade-up-delay-1 leading-[1.08] tracking-tight" />
 
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10 animate-fade-up-delay-2" style={{ textWrap: "pretty" }}>
             Run algos and copy-trading on Mudrex futures from a single UI. No code.
@@ -286,21 +122,21 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-up-delay-3">
             {loggedIn ? (
-              <Link to="/dashboard" data-no-liquid>
+              <Link to="/dashboard">
                 <Button variant="hero" size="lg">
                   <LayoutDashboard className="w-5 h-5" />
                   Go to Dashboard
                 </Button>
               </Link>
             ) : (
-              <Link to="/auth" data-no-liquid>
+              <Link to="/auth">
                 <Button variant="hero" size="lg">
                   Start Trading
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
             )}
-            <Link to="/marketplace" data-no-liquid>
+            <Link to="/marketplace">
               <Button variant="outline" size="lg">
                 <BarChart3 className="w-5 h-5" />
                 Explore Strategies
@@ -310,28 +146,22 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Stats — scroll reveal + counters; no section borders */}
-      <section ref={statsSection.ref} className="py-14">
+      {/* Stats */}
+      <section className="py-12 border-y border-border">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, i) => (
               <div
                 key={stat.label}
-                className={`group/stat relative overflow-visible px-3 py-5 pb-2 text-center rounded-xl reveal-hidden ${statsSection.inView ? "reveal-visible" : ""}`}
-                style={{ transitionDelay: `${i * 110}ms` }}
+                className="group/stat relative overflow-visible px-3 py-5 pb-2 text-center animate-fade-up rounded-xl"
+                style={{ animationDelay: `${i * 80}ms` }}
               >
                 <div
                   className="landing-stat-glow-bar pointer-events-none absolute inset-0 z-0 rounded-xl bg-primary/20 opacity-0 blur-lg transition-opacity duration-500 group-hover/stat:opacity-100"
                   aria-hidden
                 />
                 <p className="relative z-[1] text-2xl md:text-3xl font-mono font-bold text-foreground">
-                  <CountUp
-                    target={stat.number}
-                    decimals={stat.decimals}
-                    prefix={stat.prefix}
-                    suffix={stat.suffix}
-                    active={statsSection.inView}
-                  />
+                  {stat.value}
                 </p>
                 <p className="relative z-[1] mt-1 text-sm text-muted-foreground">{stat.label}</p>
               </div>
@@ -343,24 +173,21 @@ export default function LandingPage() {
       {/* Features */}
       <section className="py-24 px-4">
         <div className="container mx-auto max-w-5xl">
-          <div
-            ref={featuresHeading.ref}
-            className={`text-center mb-16 reveal-hidden ${featuresHeading.inView ? "reveal-visible" : ""}`}
-          >
+          <div className="text-center mb-16 animate-fade-up">
             <h2 className="text-3xl font-bold mb-4">What you get</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
               Algos, copy trading, and subs in one flow on top of Mudrex.
             </p>
           </div>
 
-          <div ref={featuresGrid.ref} className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-6">
             {features.map((f, i) => (
               <div
                 key={f.title}
-                className={`glass feature-card rounded-xl p-8 reveal-hidden ${featuresGrid.inView ? "reveal-visible" : ""}`}
-                style={{ transitionDelay: `${i * 130}ms` }}
+                className="glass rounded-xl p-8 hover:border-primary/20 transition-all duration-300 animate-fade-up"
+                style={{ animationDelay: `${i * 100}ms` }}
               >
-                <div className="feature-icon w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4 transition-all duration-300">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                   <f.icon className="w-5 h-5 text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
@@ -374,17 +201,14 @@ export default function LandingPage() {
       {/* CTA */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-md text-center">
-          <div
-            ref={ctaSection.ref}
-            className={`glass rounded-xl p-6 sm:p-8 animate-pulse-glow reveal-hidden ${ctaSection.inView ? "reveal-visible" : ""}`}
-          >
+          <div className="glass rounded-xl p-6 sm:p-8 animate-pulse-glow">
             {loggedIn ? (
               <>
                 <h2 className="text-xl sm:text-2xl font-bold mb-2">Welcome back</h2>
                 <p className="text-sm text-muted-foreground mb-6">
                   Jump into your dashboard to manage positions and strategies.
                 </p>
-                <Link to="/dashboard" data-no-liquid>
+                <Link to="/dashboard">
                   <Button variant="hero" size="default" className="w-full sm:w-auto">
                     <LayoutDashboard className="w-4 h-4" />
                     Dashboard
@@ -397,7 +221,7 @@ export default function LandingPage() {
                 <p className="text-sm text-muted-foreground mb-6">
                   Sign in with your Mudrex API secret and open the dashboard.
                 </p>
-                <Link to="/auth" data-no-liquid>
+                <Link to="/auth">
                   <Button variant="hero" size="default" className="w-full sm:w-auto">
                     Connect Mudrex
                     <ArrowRight className="w-4 h-4" />
@@ -409,8 +233,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer — no top border */}
-      <footer className="py-10 px-4">
+      {/* Footer */}
+      <footer className="border-t border-border py-8 px-4">
         <div className="container mx-auto flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col items-center gap-3 sm:items-start">
             <div className="flex items-center gap-2">
