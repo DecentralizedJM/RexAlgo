@@ -7,6 +7,16 @@ import PerformanceChart from "@/components/PerformanceChart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   BarChart3,
   Users,
   Wallet,
@@ -18,6 +28,9 @@ import {
   Loader2,
   KeyRound,
   ExternalLink,
+  Shield,
+  Lock,
+  Unplug,
 } from "lucide-react";
 import {
   fetchWallet,
@@ -25,6 +38,7 @@ import {
   fetchPositionHistory,
   fetchSubscriptions,
   linkMudrexKey,
+  unlinkMudrexKey,
   ApiError,
   isMudrexCredentialError,
   type ApiPosition,
@@ -35,6 +49,8 @@ import { AuthGateSplash } from "@/components/AuthGateSplash";
 import { futuresAvailableUsdt } from "@/lib/walletFunding";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
+import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
+import { toast } from "sonner";
 
 /** Cumulative realized P&L from Mudrex position history (one API page). */
 function buildRealizedPnlCurve(positions: ApiPosition[]): { date: string; value: number }[] {
@@ -93,6 +109,24 @@ function formatSessionExpiry(iso: string | null | undefined): string | null {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function MudrexBrandMark() {
+  return (
+    <a
+      href={MUDREX_PRO_TRADING_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group mx-auto mb-6 flex w-full max-w-[14rem] flex-col items-center rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/10 to-primary/5 px-5 py-4 shadow-sm ring-1 ring-primary/10 transition-colors hover:border-primary/40 hover:ring-primary/20"
+    >
+      <span className="bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-600 bg-clip-text text-2xl font-bold tracking-tight text-transparent dark:from-emerald-300 dark:via-emerald-400 dark:to-teal-500">
+        Mudrex
+      </span>
+      <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        Pro Trading · API
+      </span>
+    </a>
+  );
+}
+
 function ConnectMudrexCard() {
   const [secret, setSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
@@ -115,6 +149,8 @@ function ConnectMudrexCard() {
       void queryClient.invalidateQueries({ queryKey: ["wallet"] });
       void queryClient.invalidateQueries({ queryKey: ["positions"] });
       void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      void queryClient.invalidateQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY });
+      toast.success("Mudrex connected");
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -126,70 +162,167 @@ function ConnectMudrexCard() {
     }
   };
 
+  const encryptionPoints = [
+    {
+      icon: Shield,
+      text: "TLS in transit between your browser, RexAlgo, and Mudrex.",
+    },
+    {
+      icon: Lock,
+      text: "API secret encrypted at rest (AES-256-GCM). Never logged; not shown again after you save.",
+    },
+    {
+      icon: KeyRound,
+      text: "Used only to sign Mudrex API requests for your account — not shared with third parties.",
+    },
+  ];
+
   return (
-    <div className="glass rounded-xl p-6 mb-8 animate-fade-up border-2 border-primary/30">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-          <KeyRound className="w-5 h-5 text-primary" />
-        </div>
-        <div>
-          <h2 className="font-semibold">Connect your Mudrex account</h2>
-          <p className="text-xs text-muted-foreground">
-            Link your Mudrex API key to see balances, positions, and trade.
+    <div className="flex w-full flex-col items-center py-6 md:py-12">
+      <div className="w-full max-w-md animate-fade-up">
+        <div className="rounded-2xl border border-border/80 bg-card/90 p-8 shadow-[0_20px_50px_-24px_hsl(var(--primary)/0.25)] backdrop-blur-xl dark:bg-card/70 dark:shadow-[0_24px_60px_-20px_hsl(0_0%_0%/0.45)]">
+          <MudrexBrandMark />
+
+          <h2 className="text-center text-lg font-semibold tracking-tight">Connect Mudrex</h2>
+          <p className="mt-1 text-center text-xs text-muted-foreground">
+            Paste the API secret from Mudrex Pro Trading to unlock your dashboard.
           </p>
+
+          <ul className="mt-6 space-y-3 border-y border-border/60 py-5">
+            {encryptionPoints.map(({ icon: Icon, text }) => (
+              <li key={text} className="flex gap-3 text-left text-xs leading-relaxed text-muted-foreground">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <Icon className="h-3.5 w-3.5 text-primary" aria-hidden />
+                </span>
+                <span>{text}</span>
+              </li>
+            ))}
+          </ul>
+
+          <form onSubmit={handleLink} className="mt-6 space-y-3">
+            <div className="relative">
+              <Input
+                type={showSecret ? "text" : "password"}
+                value={secret}
+                onChange={(e) => {
+                  setSecret(e.target.value);
+                  setError("");
+                }}
+                placeholder="Mudrex API secret"
+                className="h-11 bg-secondary/50 pr-10 font-mono text-sm border-border"
+                disabled={linking}
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSecret(!showSecret)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label={showSecret ? "Hide secret" : "Show secret"}
+              >
+                {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {error ? <p className="text-sm text-loss">{error}</p> : null}
+            <Button
+              type="submit"
+              variant="hero"
+              className="w-full"
+              disabled={!secret.trim() || linking}
+            >
+              {linking ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Linking…
+                </>
+              ) : (
+                "Connect Mudrex"
+              )}
+            </Button>
+            <Button variant="outline" className="w-full" asChild>
+              <a href={MUDREX_PRO_TRADING_URL} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4" />
+                Open Mudrex — create or copy API key
+              </a>
+            </Button>
+          </form>
         </div>
       </div>
-
-      <form onSubmit={handleLink} className="space-y-3 mt-4">
-        <div className="relative">
-          <Input
-            type={showSecret ? "text" : "password"}
-            value={secret}
-            onChange={(e) => { setSecret(e.target.value); setError(""); }}
-            placeholder="Paste your Mudrex API secret"
-            className="bg-secondary/50 border-border pr-10"
-            disabled={linking}
-            autoComplete="off"
-          />
-          <button
-            type="button"
-            onClick={() => setShowSecret(!showSecret)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
-        {error && (
-          <p className="text-sm text-loss">{error}</p>
-        )}
-        <div className="flex items-center gap-3">
-          <Button
-            type="submit"
-            variant="hero"
-            size="sm"
-            disabled={!secret.trim() || linking}
-          >
-            {linking ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Linking…</>
-            ) : (
-              "Connect Mudrex"
-            )}
-          </Button>
-          <a
-            href={MUDREX_PRO_TRADING_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            Get API key <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
-      </form>
-
-      <p className="text-xs text-muted-foreground mt-4 leading-relaxed">
-        Your key is encrypted at rest. You can rotate or unlink it anytime.
-      </p>
     </div>
+  );
+}
+
+function DisconnectMudrexControl() {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const queryClient = useQueryClient();
+
+  const onConfirm = async () => {
+    setBusy(true);
+    try {
+      const result = await unlinkMudrexKey();
+      queryClient.setQueryData(["session", "me"], {
+        user: result.user,
+        sessionExpiresAt: null,
+      });
+      await queryClient.refetchQueries({ queryKey: ["session", "me"] });
+      void queryClient.invalidateQueries({ queryKey: ["wallet"] });
+      void queryClient.invalidateQueries({ queryKey: ["positions"] });
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      void queryClient.invalidateQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY });
+      setOpen(false);
+      toast.success("Mudrex disconnected from RexAlgo");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Could not disconnect. Try again."
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm" className="gap-1.5 border-loss/35 text-loss hover:bg-loss/10 hover:text-loss">
+          <Unplug className="h-4 w-4" />
+          Disconnect Mudrex
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Disconnect Mudrex?</AlertDialogTitle>
+          <AlertDialogDescription className="space-y-3">
+            <span className="block">
+              RexAlgo will remove your stored API secret. Balances, positions, and subscriptions will disappear
+              here until you connect again.
+            </span>
+            <span className="block text-foreground/90">
+              To rotate or revoke the key on Mudrex&apos;s side, use their API keys page — then connect a new
+              secret here if you want.
+            </span>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button variant="secondary" size="sm" className="w-full sm:w-auto" asChild>
+            <a href={MUDREX_PRO_TRADING_URL} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-4 w-4" />
+              Mudrex: keys &amp; API
+            </a>
+          </Button>
+          <div className="flex w-full gap-2 sm:w-auto">
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => void onConfirm()}
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Disconnect"}
+            </Button>
+          </div>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -287,10 +420,16 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
             <p className="text-sm text-muted-foreground">
-              Balances and positions from Mudrex. Refreshes when you focus this tab or use Refresh in the
-              header.
+              {hasMudrexKey ? (
+                <>
+                  Balances and positions from Mudrex. Refreshes when you focus this tab or use Refresh in the
+                  header.
+                </>
+              ) : (
+                <>Connect your Mudrex API key below to load balances, positions, and trading data.</>
+              )}
             </p>
-            {formatSessionExpiry(authQ.data?.sessionExpiresAt) && (
+            {hasMudrexKey && formatSessionExpiry(authQ.data?.sessionExpiresAt) && (
               <p className="text-xs text-muted-foreground mt-1">
                 Browser session until{" "}
                 <span className="text-foreground font-medium">
@@ -300,7 +439,8 @@ export default function DashboardPage() {
               </p>
             )}
           </div>
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {hasMudrexKey && <DisconnectMudrexControl />}
             <Link to="/marketplace">
               <Button variant="outline" size="sm">
                 <BarChart3 className="w-4 h-4" /> Strategies
@@ -316,7 +456,7 @@ export default function DashboardPage() {
 
         {!hasMudrexKey && <ConnectMudrexCard />}
 
-        {underfundedSubs.length > 0 && walletQ.data && (
+        {hasMudrexKey && underfundedSubs.length > 0 && walletQ.data && (
           <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3 text-sm animate-fade-up">
             <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
             <div className="flex-1">
@@ -337,11 +477,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!hasMudrexKey ? (
-          <div className="glass rounded-xl p-8 text-center text-muted-foreground animate-fade-up">
-            <p className="text-sm">Connect your Mudrex API key above to see wallet, positions, and trade data.</p>
-          </div>
-        ) : (
+        {!hasMudrexKey ? null : (
         <>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
