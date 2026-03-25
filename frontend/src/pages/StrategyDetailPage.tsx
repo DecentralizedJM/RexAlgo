@@ -28,6 +28,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSession } from "@/hooks/useAuth";
 
 const riskColors = {
   low: "bg-profit/10 text-profit border-profit/20",
@@ -43,6 +44,8 @@ export default function StrategyDetailPage() {
   const queryClient = useQueryClient();
 
   const [showAllocation, setShowAllocation] = useState(false);
+  const { data: session } = useSession();
+  const hasMudrexKey = session?.user?.hasMudrexKey ?? false;
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["strategy", id],
@@ -114,6 +117,11 @@ export default function StrategyDetailPage() {
 
   async function handleSubscribe(amount: number) {
     if (!strategy) return;
+    if (!hasMudrexKey) {
+      toast.error("Connect your API secret to subscribe.");
+      navigate("/dashboard");
+      return;
+    }
     try {
       await subscribe(strategy.id, String(amount));
       await queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
@@ -199,7 +207,18 @@ export default function StrategyDetailPage() {
               </Button>
             </div>
           ) : (
-            <Button variant="hero" size="sm" onClick={() => setShowAllocation(true)}>
+            <Button
+              variant="hero"
+              size="sm"
+              onClick={() => {
+                if (!hasMudrexKey) {
+                  toast.error("Connect your API secret to continue.");
+                  navigate("/dashboard");
+                  return;
+                }
+                setShowAllocation(true);
+              }}
+            >
               <Play className="w-4 h-4" />
               {strategy.type === "copy_trading" ? "Copy strategy" : "Subscribe"}
             </Button>

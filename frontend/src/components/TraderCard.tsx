@@ -77,7 +77,7 @@ export default function TraderCard({
       <Link to={`/strategy/${id}?from=copy`}>
         <Button variant="outline" size="sm" className="w-full">
           <Copy className="w-4 h-4" />
-          View & subscribe
+          View and copy
         </Button>
       </Link>
     </div>

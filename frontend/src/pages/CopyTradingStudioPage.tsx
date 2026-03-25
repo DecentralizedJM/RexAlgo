@@ -61,6 +61,7 @@ export default function CopyTradingStudioPage() {
   const authQ = useRequireAuth();
   const queryClient = useQueryClient();
   const sessionAuthed = authQ.authed;
+  const hasMudrexKey = authQ.data?.user?.hasMudrexKey ?? false;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [secretFlash, setSecretFlash] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -205,10 +206,17 @@ with urllib.request.urlopen(req, timeout=30) as res:
               List a copy strategy, enable the webhook, and POST signals from your bot. Subscribers mirror
               into their Mudrex accounts.
             </p>
+            {!hasMudrexKey && (
+              <p className="mt-2 text-sm text-warning">
+                Connect your API secret on the Dashboard to create new copy-trading strategies.
+              </p>
+            )}
           </div>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
-              <Button variant="hero">New copy strategy</Button>
+              <Button variant="hero" disabled={!hasMudrexKey}>
+                New copy strategy
+              </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>

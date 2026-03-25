@@ -66,6 +66,7 @@ export default function MarketplaceStudioPage() {
   const authQ = useRequireAuth();
   const queryClient = useQueryClient();
   const sessionAuthed = authQ.authed;
+  const hasMudrexKey = authQ.data?.user?.hasMudrexKey ?? false;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [secretFlash, setSecretFlash] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -247,10 +248,17 @@ with urllib.request.urlopen(req, timeout=30) as res:
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
               Create algo listings, turn on the signed webhook, and mirror signals to subscribers on Mudrex.
             </p>
+            {!hasMudrexKey && (
+              <p className="mt-2 text-sm text-warning">
+                Connect your API secret on the Dashboard to create new algo strategies.
+              </p>
+            )}
           </div>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
-              <Button variant="hero">New algo strategy</Button>
+              <Button variant="hero" disabled={!hasMudrexKey}>
+                New algo strategy
+              </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
