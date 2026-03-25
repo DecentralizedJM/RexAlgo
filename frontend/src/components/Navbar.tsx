@@ -6,13 +6,13 @@ import {
   Menu,
   X,
   LogOut,
-  Radio,
   BookmarkCheck,
-  Sparkles,
   LifeBuoy,
   RefreshCw,
   KeyRound,
   ExternalLink,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { useState, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,12 @@ import { refreshAppData } from "@/lib/refreshAppData";
 import { toast } from "sonner";
 import { useMudrexKeyInvalid } from "@/contexts/MudrexKeyInvalidContext";
 import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const SUPPORT_EMAIL = "help@mudrex.com";
 
@@ -50,6 +56,9 @@ export default function Navbar() {
   const { mudrexKeyInvalid } = useMudrexKeyInvalid();
   const showMudrexKeyBanner =
     Boolean(user) && mudrexKeyInvalid && location.pathname !== "/auth";
+  const onStrategyStudio = location.pathname.startsWith("/marketplace/studio");
+  const onCopyStudio = location.pathname.startsWith("/copy-trading/studio");
+  const studioActive = onStrategyStudio || onCopyStudio;
 
   useLayoutEffect(() => {
     const el = navRef.current;
@@ -107,7 +116,7 @@ export default function Navbar() {
             <Link
               key={link.to}
               to={link.to}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+              className={`flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
                 location.pathname === link.to
                   ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
@@ -118,30 +127,42 @@ export default function Navbar() {
             </Link>
           ))}
           {user && (
-            <>
-              <Link
-                to="/marketplace/studio"
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                  location.pathname.startsWith("/marketplace/studio")
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                }`}
-              >
-                <Sparkles className="w-4 h-4" />
-                Strategy studio
-              </Link>
-              <Link
-                to="/copy-trading/studio"
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                  location.pathname.startsWith("/copy-trading/studio")
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                }`}
-              >
-                <Radio className="w-4 h-4" />
-                Master studio
-              </Link>
-            </>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                    studioActive
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+                  }`}
+                  aria-label="Master studio navigation"
+                >
+                  Master studio
+                  <ChevronDown className="h-4 w-4" aria-hidden />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-44">
+                <DropdownMenuItem
+                  className={`flex items-center justify-between ${
+                    onStrategyStudio ? "bg-secondary text-foreground" : ""
+                  }`}
+                  onSelect={() => navigate("/marketplace/studio")}
+                >
+                  Strategy
+                  {onStrategyStudio && <Check className="h-4 w-4" aria-hidden />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className={`flex items-center justify-between ${
+                    onCopyStudio ? "bg-secondary text-foreground" : ""
+                  }`}
+                  onSelect={() => navigate("/copy-trading/studio")}
+                >
+                  Copy trading
+                  {onCopyStudio && <Check className="h-4 w-4" aria-hidden />}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
 
@@ -325,32 +346,33 @@ export default function Navbar() {
               </Link>
             ))}
             {user && (
-              <>
+              <div className="rounded-lg border border-border/60 p-2">
+                <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Master studio</p>
                 <Link
                   to="/marketplace/studio"
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                    location.pathname.startsWith("/marketplace/studio")
+                  className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    onStrategyStudio
                       ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <Sparkles className="w-4 h-4" />
-                  Strategy studio
+                  Strategy
+                  {onStrategyStudio && <Check className="h-4 w-4" aria-hidden />}
                 </Link>
                 <Link
                   to="/copy-trading/studio"
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                    location.pathname.startsWith("/copy-trading/studio")
+                  className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    onCopyStudio
                       ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <Radio className="w-4 h-4" />
-                  Master studio
+                  Copy trading
+                  {onCopyStudio && <Check className="h-4 w-4" aria-hidden />}
                 </Link>
-              </>
+              </div>
             )}
             <Link to="/about" onClick={() => setMobileOpen(false)}>
               <Button variant="ghost" size="sm" className="w-full justify-start">
