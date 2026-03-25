@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiSecret } from "@/lib/mudrex";
+import { checkLoginRateLimit } from "@/lib/loginRateLimit";
 import {
   encryptApiSecret,
   createSession,
@@ -13,6 +14,17 @@ import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    req.headers.get("x-real-ip") ??
+    "unknown";
+  if (!checkLoginRateLimit(ip)) {
+    return NextResponse.json(
+      { error: "Too many login attempts. Try again in a minute." },
+      { status: 429 }
+    );
+  }
+
   try {
     const { apiSecret, displayName } = await req.json();
 

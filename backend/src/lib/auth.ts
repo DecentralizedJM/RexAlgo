@@ -17,6 +17,15 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "rexalgo-enc-key-32chars-ch
 const ALGORITHM = "aes-256-gcm";
 const COOKIE_NAME = "rexalgo_session";
 
+const DERIVED_KEY = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
+
+if (process.env.NODE_ENV === "production") {
+  if (!process.env.JWT_SECRET)
+    throw new Error("JWT_SECRET must be set in production");
+  if (!process.env.ENCRYPTION_KEY)
+    throw new Error("ENCRYPTION_KEY must be set in production");
+}
+
 /** Mudrex rotates API keys on a ~90-day cadence; sessions should not outlive a valid key. */
 export const MUDREX_API_KEY_MAX_DAYS = 90;
 
@@ -43,9 +52,8 @@ export const SESSION_COOKIE_PATH =
   process.env.REXALGO_SESSION_COOKIE_PATH || "/api";
 
 export function encryptApiSecret(apiSecret: string): string {
-  const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, DERIVED_KEY, iv);
   let encrypted = cipher.update(apiSecret, "utf8", "hex");
   encrypted += cipher.final("hex");
   const authTag = cipher.getAuthTag().toString("hex");
@@ -53,11 +61,10 @@ export function encryptApiSecret(apiSecret: string): string {
 }
 
 export function decryptApiSecret(encrypted: string): string {
-  const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
   const [ivHex, authTagHex, data] = encrypted.split(":");
   const iv = Buffer.from(ivHex, "hex");
   const authTag = Buffer.from(authTagHex, "hex");
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+  const decipher = crypto.createDecipheriv(ALGORITHM, DERIVED_KEY, iv);
   decipher.setAuthTag(authTag);
   let decrypted = decipher.update(data, "hex", "utf8");
   decrypted += decipher.final("utf8");
