@@ -19,12 +19,12 @@
 
 | Area | What you get |
 |------|----------------|
-| **Auth** | Connect with your **Mudrex API secret**; encrypted storage + JWT session |
+| **Auth** | Connect with your **Mudrex API secret**; encrypted storage + JWT session. Without API connection, key actions are disabled until you connect. |
 | **Wallet / trading** | Spot & futures balances, transfers, positions, orders (via Mudrex) |
 | **Algo marketplace** | Browse & subscribe to `algo` strategies with **margin per trade** |
-| **Strategy studio** | Masters create **algo** listings, **webhooks** (HMAC), pause/edit — **`/marketplace/studio`** |
+| **Strategy studio** | Masters create **algo** listings, **webhooks** (HMAC), pause/edit — **`/marketplace/studio`** (open from **Master studio** dropdown → **Strategy**) |
 | **Copy trading** | Browse `copy_trading` strategies, subscribe, same margin model |
-| **Master studio** | Masters create **copy_trading** listings + **webhooks** — **`/copy-trading/studio`** |
+| **Master studio** | Top-nav parent for studio routes with dropdown options: **Strategy** and **Copy trading**. Copy-trading studio route: **`/copy-trading/studio`** |
 | **Signal mirroring** | Signed `POST /api/webhooks/copy-trading/{strategyId}` → mirror **open/close** to subscribers via Mudrex |
 | **Single UI** | All product screens live in **`frontend/`** (Lovable / Vite). **`backend/`** is API-only (+ tiny root status page). |
 
@@ -73,7 +73,7 @@ On the **first** `npm run dev`, the root **`predev`** script creates **`backend/
 | Variable | Required | Notes |
 |----------|----------|--------|
 | `JWT_SECRET` | **Yes** | Long random string (e.g. `openssl rand -hex 32`) |
-| `ENCRYPTION_KEY` | **Yes** | Strong passphrase; used to encrypt Mudrex secrets & webhook signing secrets at rest |
+| `ENCRYPTION_KEY` | **Yes** | Strong passphrase; used to encrypt Mudrex secrets and webhook signing secrets in secure storage |
 | `PUBLIC_APP_URL` | Optional | No trailing slash. Full webhook URLs in **Master** / **Strategy** studio (use ngrok URL → port **3000** for external bots) |
 | `REXALGO_SESSION_MAX_AGE_DAYS` | Optional | Browser session length (JWT + cookie), **1–90** (default **90**). Capped at Mudrex’s typical API key lifetime so the cookie doesn’t outlive a single key rotation. |
 | `REXALGO_DB_PATH` | Optional | Custom SQLite file path (default: under `backend/`) |
@@ -100,6 +100,7 @@ npm run dev
 **Vite** listens on **:8080** (your only tab). It **proxies `/api`** to Next on **127.0.0.1:3000**. `dev:web` waits until **`GET /api/health`** returns **200** (so another random app on port **3000** won’t fool the dev script). HMR stays on **8080**. The session cookie is scoped to **`Path=/api`** so it is not sent to non-API paths on the same host.
 
 Sign in at **`/auth`** with your **Mudrex API secret**.
+Users can browse marketplace and studio pages without an API connection, but key actions such as subscribe, copy, and creating new strategies stay disabled until the API secret is connected on the dashboard.
 
 **Session length:** The HttpOnly session cookie and JWT are issued together and expire after the same period (**default 90 days**, configurable with **`REXALGO_SESSION_MAX_AGE_DAYS`**, max **90**). There is **no sliding refresh**—when the JWT expires, the user signs in again with their API secret (same or newly rotated Mudrex key).
 
@@ -147,9 +148,9 @@ Same as [Quick start §2](#2-environment-file-backend). Reference: **`backend/.e
 - **`REXALGO_SESSION_COOKIE_PATH`** — default **`/api`** (cookie not sent on non-API paths).
 - **`PUBLIC_APP_URL`** — prod API origin or **ngrok** tunnel to **Next :3000** so studio UIs show absolute webhook URLs.
 
-### Copy trading (Master studio + webhooks)
+### Copy trading (Copy trading studio + webhooks)
 
-1. Sign in → **Master studio** (`/copy-trading/studio`) → create a **copy_trading** strategy → **Enable webhook** and copy the **signing secret** (shown once).
+1. Sign in → open **Master studio** in top nav → choose **Copy trading** (`/copy-trading/studio`) → create a **copy_trading** strategy → **Enable webhook** and copy the **signing secret** (shown once).
 2. Your bot runs **outside** RexAlgo (VPS, laptop, cloud). It `POST`s JSON signals to **`POST /api/webhooks/copy-trading/{strategyId}`** with header **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** where **`v1`** is **HMAC-SHA256** of **`${t}.${rawBody}`** (UTF-8) using the signing secret as the HMAC key (UTF-8 bytes of the secret string).
 3. **Subscribers** (users who subscribed to that strategy in the app) get **mirrored** **open** / **close** actions on **their** Mudrex account via the API secret they stored at login. Sizing uses each subscriber’s **margin per trade** and the strategy’s **leverage**.
 4. **Sign out vs mirroring:** **Signing out** only removes the **browser JWT cookie**. The server still has each user’s **encrypted Mudrex API secret** in SQLite. Webhook handling (`executeMirror`) loads subscribers from the DB and calls Mudrex with those secrets—it does **not** use the UI session. So **subscribed strategies keep mirroring after logout** as long as **Mudrex still accepts** each subscriber’s stored key. If a key expires, that subscriber’s mirrors fail until they **sign in again** with a new key (see banner in the app).
@@ -157,10 +158,10 @@ Same as [Quick start §2](#2-environment-file-backend). Reference: **`backend/.e
 
 ### Algo strategies (Strategy studio + webhooks)
 
-1. Sign in → **Strategy studio** (`/marketplace/studio`) → create an **algo** listing → **Enable webhook** and copy the **signing secret** (shown once).
+1. Sign in → open **Master studio** in top nav → choose **Strategy** (`/marketplace/studio`) → create an **algo** listing → **Enable webhook** and copy the **signing secret** (shown once).
 2. **Same** webhook endpoint and **HMAC** contract as copy trading: **`POST /api/webhooks/copy-trading/{strategyId}`** with **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** (HMAC-SHA256 of **`${t}.${rawBody}`**).
 3. **Subscribers** use the marketplace → strategy detail → subscribe; **mirroring** to their Mudrex account works the same as for copy-trading strategies.
-4. **`PUBLIC_APP_URL`** and **ngrok to :3000** apply the same way as in Master studio.
+4. **`PUBLIC_APP_URL`** and **ngrok to :3000** apply the same way as in copy-trading studio.
 
 ### Auth flow
 
