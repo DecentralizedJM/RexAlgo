@@ -419,7 +419,16 @@ export default function DashboardPage() {
       <div className="container mx-auto px-4 main-nav-pad pb-16">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 animate-fade-up">
           <div>
-            <h1 className="text-2xl font-bold">Dashboard</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold">Dashboard</h1>
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
+                <span
+                  className={`h-2 w-2 rounded-full ${hasMudrexKey ? "bg-profit" : "bg-warning"}`}
+                  aria-hidden
+                />
+                {hasMudrexKey ? "API connected" : "API not connected"}
+              </div>
+            </div>
             <p className="text-sm text-muted-foreground">
               {hasMudrexKey ? (
                 <>
@@ -430,13 +439,6 @@ export default function DashboardPage() {
                 <>Connect your Mudrex API key below to load balances, positions, and trading data.</>
               )}
             </p>
-            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-border/70 bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
-              <span
-                className={`h-2 w-2 rounded-full ${hasMudrexKey ? "bg-profit" : "bg-warning"}`}
-                aria-hidden
-              />
-              {hasMudrexKey ? "API connected" : "API not connected"}
-            </div>
             {hasMudrexKey && formatSessionExpiry(authQ.data?.sessionExpiresAt) && (
               <p className="text-xs text-muted-foreground mt-1">
                 Browser session until{" "}
