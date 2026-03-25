@@ -302,24 +302,25 @@ function DisconnectMudrexControl() {
             </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button variant="secondary" size="sm" className="w-full sm:w-auto" asChild>
+        <AlertDialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end sm:gap-2">
+          <Button variant="hero" className="w-full sm:w-auto" asChild>
             <a href={MUDREX_PRO_TRADING_URL} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-4 w-4" />
-              Mudrex: keys &amp; API
+              Visit Rotate Keys
             </a>
           </Button>
-          <div className="flex w-full gap-2 sm:w-auto">
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={busy}
-              onClick={() => void onConfirm()}
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Disconnect"}
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="destructive"
+            className="w-full sm:w-auto"
+            disabled={busy}
+            onClick={() => void onConfirm()}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Disconnect"}
+          </Button>
+          <AlertDialogCancel className="mt-0 w-full sm:w-auto" disabled={busy}>
+            Cancel
+          </AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
