@@ -28,6 +28,30 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+type EquityTooltipPayload = { value?: number; name?: string; dataKey?: string | number };
+
+function EquityTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: EquityTooltipPayload[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const v = payload[0]?.value;
+  if (typeof v !== "number") return null;
+  return (
+    <div className="min-w-[9rem] rounded-md border border-border bg-popover px-3 py-2 text-left shadow-lg !outline-none">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-popover-foreground">
+        Equity <span className="text-foreground/80">:</span> ${v.toFixed(2)}
+      </p>
+    </div>
+  );
+}
+
 function downsampleEquity(
   pts: { t: number; equity: number }[],
   maxPoints: number
@@ -201,21 +225,10 @@ export default function StrategyBacktestPanel({
                       tickFormatter={(v) => `$${Number(v).toLocaleString()}`}
                     />
                     <Tooltip
-                      formatter={(v: number) => [`$${v.toFixed(2)}`, "Equity"]}
-                      labelFormatter={(l) => l}
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--popover))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "calc(var(--radius) - 2px)",
-                        color: "hsl(var(--popover-foreground))",
-                        boxShadow: "0 4px 12px hsl(220 20% 4% / 0.35)",
-                      }}
-                      labelStyle={{
-                        color: "hsl(var(--muted-foreground))",
-                        fontWeight: 500,
-                        marginBottom: 4,
-                      }}
-                      itemStyle={{ color: "hsl(var(--popover-foreground))" }}
+                      content={(props) => <EquityTooltip {...props} />}
+                      cursor={{ stroke: "hsl(var(--muted-foreground) / 0.35)", strokeWidth: 1 }}
+                      wrapperStyle={{ outline: "none" }}
+                      isAnimationActive={false}
                     />
                     <Line type="monotone" dataKey="equity" stroke="hsl(var(--primary))" dot={false} strokeWidth={2} />
                   </LineChart>
