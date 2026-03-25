@@ -306,7 +306,7 @@ function DisconnectMudrexControl() {
           <Button variant="hero" className="w-full sm:w-auto" asChild>
             <a href={MUDREX_PRO_TRADING_URL} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-4 w-4" />
-              Visit Rotate Keys
+              Visit Mudrex
             </a>
           </Button>
           <Button
