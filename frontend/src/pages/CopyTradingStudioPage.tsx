@@ -42,7 +42,7 @@ import {
   ArrowLeft,
   Copy,
   Loader2,
-  Radio,
+  UserCog,
   RefreshCw,
   Power,
   PowerOff,
@@ -198,8 +198,8 @@ with urllib.request.urlopen(req, timeout=30) as res:
               <ArrowLeft className="w-4 h-4" /> Back to copy trading
             </Link>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Radio className="w-7 h-7 text-primary" />
-              Master studio
+              <UserCog className="w-7 h-7 text-primary" />
+              Copy trading studio
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
               List a copy strategy, enable the webhook, and POST signals from your bot. Subscribers mirror

@@ -13,6 +13,7 @@ import {
   ExternalLink,
   ChevronDown,
   Check,
+  UserCog,
 } from "lucide-react";
 import { useState, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -138,6 +139,7 @@ export default function Navbar() {
                   }`}
                   aria-label="Master studio navigation"
                 >
+                  <UserCog className="h-4 w-4" aria-hidden />
                   Master studio
                   <ChevronDown className="h-4 w-4" aria-hidden />
                 </button>
@@ -347,7 +349,10 @@ export default function Navbar() {
             ))}
             {user && (
               <div className="rounded-lg border border-border/60 p-2">
-                <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Master studio</p>
+                <p className="flex items-center gap-1.5 px-2 pb-1 text-xs font-medium text-muted-foreground">
+                  <UserCog className="h-3.5 w-3.5" aria-hidden />
+                  Master studio
+                </p>
                 <Link
                   to="/marketplace/studio"
                   onClick={() => setMobileOpen(false)}
