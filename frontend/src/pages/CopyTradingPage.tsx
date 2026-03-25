@@ -31,8 +31,24 @@ export default function CopyTradingPage() {
     ...liveDataQueryOptions,
   });
 
-  const rows = (data?.strategies ?? []).map(mapCopyStrategy);
-  const sorted = [...rows].sort((a, b) => b[sort] - a[sort]);
+  const rows = (data?.strategies ?? [])
+    .filter((s) => {
+      const creator = (s.creatorName || "").trim().toLowerCase();
+      const strategy = (s.name || "").trim().toLowerCase();
+      if (creator.length < 2 || strategy.length < 2) return false;
+      if (creator === "hfhfh" || strategy === "hfhfh") return false;
+      return true;
+    })
+    .map(mapCopyStrategy);
+  const getSortValue = (
+    row: (typeof rows)[number],
+    key: "roi" | "followers" | "winRate"
+  ) => {
+    if (key === "roi") return Number.isFinite(row.roi) ? row.roi : 0;
+    if (key === "followers") return Number.isFinite(row.followers) ? row.followers : 0;
+    return Number.isFinite(row.winRate) ? row.winRate : 0;
+  };
+  const sorted = [...rows].sort((a, b) => getSortValue(b, sort) - getSortValue(a, sort));
 
   return (
     <div className="min-h-screen bg-background">

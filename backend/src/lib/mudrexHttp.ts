@@ -12,7 +12,7 @@ export function jsonFromMudrexError(error: unknown): NextResponse | null {
   if (status === 401) {
     body.code = "MUDREX_API_KEY_INVALID";
     body.hint =
-      "Mudrex API keys typically expire after about 90 days. Generate or rotate your key at https://mudrex.com/pro-trading then reconnect at Sign in — your strategies and history stay under the same RexAlgo profile.";
+      "Mudrex API keys typically expire after about 90 days. Generate or rotate your key at https://mudrex.com/pro-trading, then reconnect at Sign in. Your strategies and history stay under the same RexAlgo profile.";
   }
   return NextResponse.json(body, { status });
 }

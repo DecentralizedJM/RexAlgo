@@ -1,7 +1,7 @@
 /**
- * Session + secret storage: JWT in HttpOnly cookie (`rexalgo_session`), AES-256-GCM for Mudrex secret at rest.
+ * Session + secret storage: JWT in HttpOnly cookie (`rexalgo_session`), AES-256-GCM for secure Mudrex secret encryption.
  * Env: JWT_SECRET, ENCRYPTION_KEY (see backend/.env.example).
- * @see README.md#architecture — authentication sequence diagram
+ * @see README.md#architecture (authentication sequence diagram)
  */
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";

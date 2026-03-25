@@ -84,7 +84,7 @@ function sortClosedHistoryDescending(positions: ApiPosition[]): ApiPosition[] {
 
 function formatClosedWhen(p: ApiPosition): string {
   const raw = p.closed_at || p.updated_at || p.created_at;
-  if (!raw) return "—";
+  if (!raw) return "N/A";
   try {
     const d = new Date(raw);
     if (!Number.isNaN(d.getTime())) {
@@ -117,12 +117,12 @@ function MudrexBrandMark() {
       rel="noopener noreferrer"
       className="group mx-auto mb-6 flex w-full max-w-[14rem] flex-col items-center rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/10 to-primary/5 px-5 py-4 shadow-sm ring-1 ring-primary/10 transition-colors hover:border-primary/40 hover:ring-primary/20"
     >
-      <span className="bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-600 bg-clip-text text-2xl font-bold tracking-tight text-transparent dark:from-emerald-300 dark:via-emerald-400 dark:to-teal-500">
-        Mudrex
-      </span>
-      <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-        Pro Trading · API
-      </span>
+      <img
+        src="/mudrex-logo.png"
+        alt="Mudrex"
+        className="h-12 w-auto object-contain"
+        loading="lazy"
+      />
     </a>
   );
 }
@@ -165,15 +165,15 @@ function ConnectMudrexCard() {
   const encryptionPoints = [
     {
       icon: Shield,
-      text: "TLS in transit between your browser, RexAlgo, and Mudrex.",
+      text: "All data is encrypted in transit between your browser, RexAlgo, and Mudrex.",
     },
     {
       icon: Lock,
-      text: "API secret encrypted at rest (AES-256-GCM). Never logged; not shown again after you save.",
+      text: "Your API secret is securely encrypted and stored. It is never logged, exposed, or displayed again after you save it.",
     },
     {
       icon: KeyRound,
-      text: "Used only to sign Mudrex API requests for your account — not shared with third parties.",
+      text: "Your secret is used exclusively to sign Mudrex API requests on your behalf and is never shared with third parties.",
     },
   ];
 
@@ -185,7 +185,7 @@ function ConnectMudrexCard() {
 
           <h2 className="text-center text-lg font-semibold tracking-tight">Connect Mudrex</h2>
           <p className="mt-1 text-center text-xs text-muted-foreground">
-            Paste the API secret from Mudrex Pro Trading to unlock your dashboard.
+            Paste your Mudrex API secret to unlock your dashboard.
           </p>
 
           <ul className="mt-6 space-y-3 border-y border-border/60 py-5">
@@ -241,7 +241,7 @@ function ConnectMudrexCard() {
             <Button variant="outline" className="w-full" asChild>
               <a href={MUDREX_PRO_TRADING_URL} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4" />
-                Open Mudrex — create or copy API key
+                Open Mudrex for your API Secret
               </a>
             </Button>
           </form>
@@ -297,8 +297,8 @@ function DisconnectMudrexControl() {
               here until you connect again.
             </span>
             <span className="block text-foreground/90">
-              To rotate or revoke the key on Mudrex&apos;s side, use their API keys page — then connect a new
-              secret here if you want.
+              To rotate or revoke the key on Mudrex&apos;s side, use their API keys page, then connect a new
+              secret here if you need to.
             </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -430,13 +430,20 @@ export default function DashboardPage() {
                 <>Connect your Mudrex API key below to load balances, positions, and trading data.</>
               )}
             </p>
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-border/70 bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
+              <span
+                className={`h-2 w-2 rounded-full ${hasMudrexKey ? "bg-profit" : "bg-warning"}`}
+                aria-hidden
+              />
+              {hasMudrexKey ? "API connected" : "API not connected"}
+            </div>
             {hasMudrexKey && formatSessionExpiry(authQ.data?.sessionExpiresAt) && (
               <p className="text-xs text-muted-foreground mt-1">
                 Browser session until{" "}
                 <span className="text-foreground font-medium">
                   {formatSessionExpiry(authQ.data?.sessionExpiresAt)}
                 </span>
-                . Mudrex may reject the API key sooner (~90 days)—then reconnect at Sign in.
+                . Mudrex may reject the API key sooner (about 90 days). If this happens, reconnect at Sign in.
               </p>
             )}
           </div>
@@ -491,7 +498,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">{s.label}</p>
                   <p className="text-xl font-mono font-bold">
-                    {loading ? "—" : s.value}
+                    {loading ? "N/A" : s.value}
                   </p>
                   {s.label === "Active subscriptions" && (
                     <p className="text-[10px] text-primary mt-0.5">Click to manage</p>
@@ -598,7 +605,7 @@ export default function DashboardPage() {
                           </td>
                           <td className="py-3 px-3 text-right font-mono">{p.quantity}</td>
                           <td className="py-3 px-3 text-right font-mono text-muted-foreground">
-                            {p.leverage ?? "—"}×
+                            {p.leverage ?? "N/A"}×
                           </td>
                           <td className="py-3 px-3 text-right font-mono text-muted-foreground">
                             ${entry.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -671,7 +678,7 @@ export default function DashboardPage() {
                           </td>
                           <td className="py-3 px-3 text-right font-mono">{p.quantity}</td>
                           <td className="py-3 px-3 text-right font-mono text-muted-foreground">
-                            {p.leverage ?? "—"}×
+                            {p.leverage ?? "N/A"}×
                           </td>
                           <td className="py-3 px-3 text-right font-mono text-muted-foreground">
                             ${entry.toLocaleString(undefined, { maximumFractionDigits: 2 })}

@@ -34,10 +34,26 @@ export default function MarketplacePage() {
   });
 
   const strategies = data?.strategies ?? [];
-  const activeList = strategies.filter((s) => s.isActive);
+  const activeList = strategies.filter((s) => {
+    const normalizedName = (s.name || "").trim().toLowerCase();
+    if (!s.isActive) return false;
+    if (normalizedName.length < 2) return false;
+    if (normalizedName === "hfhfh") return false;
+    return true;
+  });
+  const getSortValue = (
+    row: ApiStrategy,
+    key: "returns" | "subscribers" | "winRate"
+  ) => {
+    if (key === "returns") return Number.isFinite(row.totalPnl) ? row.totalPnl : 0;
+    if (key === "subscribers") {
+      return Number.isFinite(row.subscriberCount) ? row.subscriberCount : 0;
+    }
+    return Number.isFinite(row.winRate) ? row.winRate : 0;
+  };
   const filtered = activeList
     .filter((s) => riskFilter === "all" || s.riskLevel === riskFilter)
-    .sort((a, b) => b[sort] - a[sort])
+    .sort((a, b) => getSortValue(b, sort) - getSortValue(a, sort))
     .map(mapStrategy);
 
   return (

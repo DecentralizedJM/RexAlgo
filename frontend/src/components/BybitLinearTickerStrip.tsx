@@ -26,7 +26,7 @@ function buildClientFallback(): TickerApiResponse {
     kind: "major",
     symbol: `${base}USDT`,
     base,
-    lastPrice: "—",
+    lastPrice: "N/A",
     changeFrac: 0,
   }));
   return {
@@ -38,7 +38,7 @@ function buildClientFallback(): TickerApiResponse {
 }
 
 function fmtPrice(s: string): string {
-  if (s === "—") return s;
+  if (s === "N/A") return s;
   const n = Number(s.replace(/,/g, ""));
   if (!Number.isFinite(n)) return s;
   if (n >= 1000)
@@ -334,7 +334,7 @@ export default function BybitLinearTickerStrip() {
 
   /** Flat row (no pill chrome) — avoids border/rounded clipping when symbols or prices are long. */
   const TickerItem = ({ item }: { item: LinearTickerItem }) => {
-    const noQuote = item.lastPrice === "—";
+    const noQuote = item.lastPrice === "N/A";
     const up = item.changeFrac >= 0;
     return (
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs sm:gap-2 sm:text-sm">
@@ -357,7 +357,7 @@ export default function BybitLinearTickerStrip() {
                   : "min-w-[2.65rem] text-right font-mono tabular-nums text-loss sm:min-w-[2.85rem]"
             }
           >
-            {noQuote ? "—" : fmtChange(item.changeFrac)}
+            {noQuote ? "N/A" : fmtChange(item.changeFrac)}
           </span>
         </span>
       </span>

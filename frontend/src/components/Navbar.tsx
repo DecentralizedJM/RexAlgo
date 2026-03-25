@@ -192,23 +192,18 @@ export default function Navbar() {
               </Link>
             </>
           ) : user ? (
-            <>
-              <span className="text-xs text-muted-foreground max-w-[140px] truncate hidden lg:inline" title={user.email || user.displayName}>
-                {user.email || user.displayName}
-              </span>
-              {!user.hasMudrexKey && (
-                <Link to="/dashboard">
-                  <span className="hidden lg:inline-flex items-center gap-1 rounded-full bg-warning/15 border border-warning/30 text-warning text-[10px] font-medium px-2 py-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
-                    No Mudrex key
-                  </span>
-                </Link>
-              )}
+            <div className="hidden md:flex flex-col items-end">
               <Button variant="outline" size="sm" onClick={handleSignOut}>
                 <LogOut className="w-4 h-4" />
                 Sign out
               </Button>
-            </>
+              <span
+                className="mt-1 max-w-[160px] truncate text-[11px] text-muted-foreground"
+                title={user.email || user.displayName}
+              >
+                {user.email || user.displayName}
+              </span>
+            </div>
           ) : (
             <Link to="/auth">
               <Button variant="hero" size="sm">
@@ -244,7 +239,7 @@ export default function Navbar() {
                     rel="noopener noreferrer"
                     className="text-primary font-medium underline-offset-2 hover:underline inline-flex items-center gap-1"
                   >
-                    Open Mudrex Pro Trading
+                    Open Mudrex for your API Secret
                     <ExternalLink className="w-3 h-3 shrink-0" aria-hidden />
                   </a>{" "}
                   to generate or rotate your API key, then sign in here again.
@@ -363,10 +358,13 @@ export default function Navbar() {
               </Button>
             </Link>
             {user ? (
-              <Button variant="outline" size="sm" className="w-full" onClick={handleSignOut}>
-                <LogOut className="w-4 h-4" />
-                Sign out
-              </Button>
+              <div className="space-y-1.5">
+                <Button variant="outline" size="sm" className="w-full" onClick={handleSignOut}>
+                  <LogOut className="w-4 h-4" />
+                  Sign out
+                </Button>
+                <p className="px-1 text-xs text-muted-foreground">{user.email || user.displayName}</p>
+              </div>
             ) : (
               <Link to="/auth" onClick={() => setMobileOpen(false)}>
                 <Button variant="hero" size="sm" className="w-full">

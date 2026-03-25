@@ -732,7 +732,7 @@ function AlgoCreateForm({
       <div className="rounded-lg border border-border/60 p-3 space-y-3 bg-secondary/20">
         <p className="text-xs font-medium text-foreground">Simulation logic (same as listing)</p>
         <p className="text-xs text-muted-foreground">
-          Moving average crossover — used when anyone runs a simulation for this strategy.
+          Moving average crossover, used when anyone runs a simulation for this strategy.
         </p>
         <div className="grid grid-cols-2 gap-2">
           <div>

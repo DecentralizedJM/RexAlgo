@@ -5,7 +5,11 @@ import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { Shield, Target, Code, Globe } from "lucide-react";
 
 const values: { icon: typeof Shield; title: string; desc: ReactNode }[] = [
-  { icon: Shield, title: "Keys", desc: "API secrets encrypted at rest; used only to talk to Mudrex." },
+  {
+    icon: Shield,
+    title: "Keys",
+    desc: "API secrets are securely encrypted and used only to communicate with Mudrex.",
+  },
   { icon: Target, title: "Listings", desc: "Creators publish strategies; subscribers choose margin and risk." },
   { icon: Code, title: "Webhooks", desc: "Studio flows use signed webhooks so bots can post signals safely." },
   {
@@ -13,7 +17,7 @@ const values: { icon: typeof Shield; title: string; desc: ReactNode }[] = [
     title: "Mudrex",
     desc: (
       <>
-        Execution and balances live on Mudrex;{" "}
+        Execution and balances live on Mudrex, and{" "}
         <RexAlgoWordmark className="inline text-sm font-semibold text-foreground" /> is the control layer.
       </>
     ),
@@ -35,7 +39,7 @@ export default function AboutPage() {
           <p className="text-lg text-muted-foreground mb-12 leading-relaxed">
             <RexAlgoWordmark className="inline text-lg font-semibold text-foreground mr-1" /> brings algo
             strategies, copy trading, and subscriptions together in one workspace on Mudrex. We never custody
-            your funds—execution and balances stay on Mudrex.
+            your funds. Execution and balances stay on Mudrex.
           </p>
         </div>
 

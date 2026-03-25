@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "RexAlgo API",
-  description: "Backend API for RexAlgo — use the Vite SPA (frontend/) for the product UI.",
+  description: "Backend API for RexAlgo. Use the Vite SPA (frontend/) for the product UI.",
 };
 
 export default function RootLayout({

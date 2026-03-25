@@ -176,7 +176,7 @@ export default function StrategyDetailPage() {
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              by {strategy.creatorName} · {strategy.symbol} · {strategy.timeframe ?? "—"}
+              by {strategy.creatorName} · {strategy.symbol} · {strategy.timeframe ?? "N/A"}
             </p>
             <p className="text-sm text-muted-foreground mt-2">{strategy.description}</p>
           </div>

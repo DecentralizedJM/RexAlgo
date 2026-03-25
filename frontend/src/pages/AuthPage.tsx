@@ -106,13 +106,13 @@ export default function AuthPage() {
                 </div>
               </div>
               <p className="text-center text-[11px] text-muted-foreground/90">
-                Secured with Google — we never see your password
+                Secured with Google. We never see your password.
               </p>
             </div>
           )}
 
           <p className="text-xs text-muted-foreground text-center mt-8 leading-relaxed">
-            Your identity is tied to your Google email — it stays the same even if you rotate your Mudrex API key.
+            Your identity is tied to your Google email. It stays the same even if you rotate your Mudrex API key.
           </p>
         </div>
       </div>
