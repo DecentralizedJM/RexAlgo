@@ -203,6 +203,19 @@ export default function StrategyBacktestPanel({
                     <Tooltip
                       formatter={(v: number) => [`$${v.toFixed(2)}`, "Equity"]}
                       labelFormatter={(l) => l}
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--popover))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "calc(var(--radius) - 2px)",
+                        color: "hsl(var(--popover-foreground))",
+                        boxShadow: "0 4px 12px hsl(220 20% 4% / 0.35)",
+                      }}
+                      labelStyle={{
+                        color: "hsl(var(--muted-foreground))",
+                        fontWeight: 500,
+                        marginBottom: 4,
+                      }}
+                      itemStyle={{ color: "hsl(var(--popover-foreground))" }}
                     />
                     <Line type="monotone" dataKey="equity" stroke="hsl(var(--primary))" dot={false} strokeWidth={2} />
                   </LineChart>
