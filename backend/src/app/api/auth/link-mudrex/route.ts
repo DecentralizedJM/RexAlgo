@@ -6,7 +6,7 @@ import {
   createSession,
   COOKIE_NAME,
   SESSION_COOKIE_PATH,
-  clearLegacySessionCookie,
+  clearAllSessionCookies,
   getSessionMaxAgeSeconds,
 } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         hasMudrexKey: true,
       },
     });
-    clearLegacySessionCookie(response);
+    clearAllSessionCookies(response);
     response.cookies.set(COOKIE_NAME, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -107,7 +107,7 @@ export async function DELETE() {
         hasMudrexKey: false,
       },
     });
-    clearLegacySessionCookie(response);
+    clearAllSessionCookies(response);
     response.cookies.set(COOKIE_NAME, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

@@ -5,7 +5,7 @@ import {
   createSession,
   COOKIE_NAME,
   SESSION_COOKIE_PATH,
-  clearLegacySessionCookie,
+  clearAllSessionCookies,
   getSessionMaxAgeSeconds,
 } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     const token = await createSession(userId, userName, encrypted, null);
 
     const response = NextResponse.json({ success: true, user: { id: userId, displayName: userName } });
-    clearLegacySessionCookie(response);
+    clearAllSessionCookies(response);
     response.cookies.set(COOKIE_NAME, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
