@@ -182,17 +182,24 @@ export async function requireMudrexSession(): Promise<
 }
 
 /**
- * Clear any legacy session cookie that was set with Path=/ (shared with other localhost apps).
- * Call from login/logout responses so only Path=/api remains.
+ * Aggressively clear any session cookies that might exist for this app.
+ *
+ * Over time we have used different cookie paths (e.g. "/", "/api"); if more than one
+ * `rexalgo_session` cookie is present for the same domain, the server may read a
+ * different one than the browser UI expects. To avoid "sticky" or cross-user sessions,
+ * always call this before setting a new cookie and from logout handlers.
  */
-export function clearLegacySessionCookie(response: NextResponse) {
-  response.cookies.set(COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
+export function clearAllSessionCookies(response: NextResponse) {
+  const paths = new Set<string>(["/", SESSION_COOKIE_PATH, "/api"]);
+  for (const path of paths) {
+    response.cookies.set(COOKIE_NAME, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0,
+      path,
+    });
+  }
 }
 
 export { COOKIE_NAME };
