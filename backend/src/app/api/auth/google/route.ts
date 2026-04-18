@@ -27,7 +27,8 @@ async function verifyGoogleToken(
 ): Promise<GoogleTokenInfo | null> {
   try {
     const res = await fetch(
-      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+      { signal: AbortSignal.timeout(15_000) }
     );
     if (!res.ok) return null;
     const data = (await res.json()) as GoogleTokenInfo;

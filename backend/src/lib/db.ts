@@ -66,17 +66,10 @@ export function ensureDbReady(): Promise<void> {
 }
 
 /**
- * Block module resolution until schema + seed are ready.
- * Next.js server modules support top-level await (Node ESM); this guarantees
- * every route that imports `db` sees a migrated database.
+ * Boot (migrations + seed + notification worker) runs from `src/instrumentation.ts`
+ * `register()` so importing this module does not block on Postgres. That avoids
+ * long hangs on first `/api/auth/google` or `/api/health` after a cold start.
  *
- * Skipped for the one-shot SQLite -> Postgres script which calls `migrate()` itself
- * (it sets `REXALGO_SKIP_DB_BOOT=1`).
+ * Scripts that call `migrate()` themselves set `REXALGO_SKIP_DB_BOOT=1` and must
+ * invoke `ensureDbReady()` / `migrate()` explicitly.
  */
-if (process.env.REXALGO_SKIP_DB_BOOT !== "1") {
-  await ensureDbReady();
-  // Lazy-start the notifications worker so it drains notifications_outbox in
-  // the background. No-ops when TELEGRAM_BOT_TOKEN is unset.
-  const { ensureNotificationsWorker } = await import("./notifications");
-  ensureNotificationsWorker();
-}
