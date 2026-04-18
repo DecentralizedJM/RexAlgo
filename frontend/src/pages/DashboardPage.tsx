@@ -40,6 +40,7 @@ import {
   linkMudrexKey,
   unlinkMudrexKey,
   ApiError,
+  getApiErrorCode,
   isMudrexCredentialError,
   type ApiPosition,
 } from "@/lib/api";
@@ -80,6 +81,44 @@ function sortClosedHistoryDescending(positions: ApiPosition[]): ApiPosition[] {
     const tb = b.closed_at || b.updated_at || b.created_at || "";
     return tb.localeCompare(ta);
   });
+}
+
+function formatLeverageX(leverage: string | undefined): string {
+  const lev = leverage?.trim();
+  return lev ? `${lev}×` : "—";
+}
+
+type FetchIssue = { label: string; err: unknown };
+
+function formatFetchIssueLine(issue: FetchIssue): string {
+  const { label, err } = issue;
+  if (err instanceof ApiError) {
+    const code = getApiErrorCode(err);
+    const suffix = code ? ` [${code}]` : "";
+    return `${label}: ${err.message}${suffix} (HTTP ${err.status})`;
+  }
+  if (err instanceof Error) return `${label}: ${err.message}`;
+  return `${label}: unknown error`;
+}
+
+function mudrexUpstreamHint(issues: FetchIssue[]): string | null {
+  for (const { err } of issues) {
+    if (isMudrexCredentialError(err)) {
+      return "Mudrex rejected the API secret we have on file (often after ~90 days). Open Sign in and paste a new key from Mudrex Pro Trading.";
+    }
+    if (err instanceof ApiError && getApiErrorCode(err) === "MUDREX_RATE_LIMIT") {
+      return "Mudrex rate-limited these requests. Wait a minute, then use Retry or Refresh in the header.";
+    }
+    if (err instanceof ApiError && getApiErrorCode(err) === "MUDREX_UNAVAILABLE") {
+      return "Mudrex returned an overload or maintenance response. Retry shortly.";
+    }
+  }
+  for (const { label, err } of issues) {
+    if (label === "Subscriptions (RexAlgo DB)" && err instanceof ApiError && err.status >= 500) {
+      return "The subscriptions call uses your RexAlgo database on the API host (not Mudrex). If Postgres was down or DATABASE_URL changed, fix Railway env vars and redeploy the API.";
+    }
+  }
+  return null;
 }
 
 function formatClosedWhen(p: ApiPosition): string {
@@ -382,7 +421,11 @@ export default function DashboardPage() {
     navigate("/auth", { replace: true });
   }, [walletQ.error, posQ.error, subQ.error, historyQ.error, navigate]);
 
-  const loading = walletQ.isPending || posQ.isPending || subQ.isPending;
+  /** Each Mudrex endpoint can lag independently — do not gate every stat on the slowest query. */
+  const walletStatPending = walletQ.isPending && walletQ.data === undefined;
+  const subsStatPending = subQ.isPending && subQ.data === undefined;
+  const posStatPending = posQ.isPending && posQ.data === undefined;
+  const openPositionsLoading = posQ.isPending && posQ.data === undefined;
   const futures = walletQ.data?.futures;
   const positions = posQ.data?.positions ?? [];
   const subs = subQ.data?.subscriptions?.filter((s) => s.isActive) ?? [];
@@ -397,10 +440,13 @@ export default function DashboardPage() {
     [historyQ.data?.positions]
   );
 
-  const firstMudrexError =
-    walletQ.error || posQ.error || subQ.error || historyQ.error;
-  const mudrexErrorMessage =
-    firstMudrexError instanceof Error ? firstMudrexError.message : null;
+  const fetchIssues: FetchIssue[] = [
+    ...(walletQ.error ? [{ label: "Futures wallet (Mudrex)", err: walletQ.error }] : []),
+    ...(posQ.error ? [{ label: "Open positions (Mudrex)", err: posQ.error }] : []),
+    ...(subQ.error ? [{ label: "Subscriptions (RexAlgo DB)", err: subQ.error }] : []),
+    ...(historyQ.error ? [{ label: "Position history (Mudrex)", err: historyQ.error }] : []),
+  ];
+  const fetchHint = mudrexUpstreamHint(fetchIssues);
 
   const futBal = parseFloat(futures?.balance ?? "0");
   const chartData = buildRealizedPnlCurve(historyQ.data?.positions ?? []);
@@ -415,16 +461,19 @@ export default function DashboardPage() {
   const statCards = [
     {
       label: "Futures wallet",
+      pending: walletStatPending,
       value: `$${futBal.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
       icon: Wallet,
     },
     {
       label: "Active subscriptions",
+      pending: subsStatPending,
       value: subs.length.toString(),
       icon: BarChart3,
     },
     {
       label: "Open positions",
+      pending: posStatPending,
       value: positions.length.toString(),
       icon: Users,
     },
@@ -443,7 +492,7 @@ export default function DashboardPage() {
                   className={`h-2 w-2 rounded-full ${hasMudrexKey ? "bg-profit" : "bg-warning"}`}
                   aria-hidden
                 />
-                {hasMudrexKey ? "API connected" : "API not connected"}
+                {hasMudrexKey ? "Mudrex key on file" : "Mudrex key not linked"}
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -497,10 +546,15 @@ export default function DashboardPage() {
 
         {hasMudrexKey && (walletQ.isError || posQ.isError || subQ.isError || historyQ.isError) && (
           <div className="mb-6 rounded-xl border border-loss/30 bg-loss/10 p-4 text-sm">
-            <p className="font-medium text-loss">Mudrex data did not load</p>
-            <p className="mt-1 text-xs text-muted-foreground font-mono break-words">
-              {mudrexErrorMessage ?? "Unknown error — try Retry or reconnect your API key from Sign in."}
-            </p>
+            <p className="font-medium text-loss">Some dashboard data failed to load</p>
+            {fetchHint && (
+              <p className="mt-2 text-xs text-foreground/90 leading-relaxed">{fetchHint}</p>
+            )}
+            <ul className="mt-2 space-y-1.5 text-xs text-muted-foreground font-mono break-words list-disc pl-4">
+              {fetchIssues.map((issue) => (
+                <li key={issue.label}>{formatFetchIssueLine(issue)}</li>
+              ))}
+            </ul>
             <Button
               type="button"
               variant="secondary"
@@ -513,7 +567,7 @@ export default function DashboardPage() {
                 void queryClient.invalidateQueries({ queryKey: ["positions", "history"] });
               }}
             >
-              Retry Mudrex
+              Retry all
             </Button>
           </div>
         )}
@@ -552,7 +606,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">{s.label}</p>
                   <p className="text-xl font-mono font-bold">
-                    {loading ? "N/A" : s.value}
+                    {s.pending ? "…" : s.value}
                   </p>
                   {s.label === "Active subscriptions" && (
                     <p className="text-[10px] text-primary mt-0.5">Click to manage</p>
@@ -617,7 +671,7 @@ export default function DashboardPage() {
               Open positions
             </h2>
             <p className="text-xs text-muted-foreground mb-4">Open futures on your Mudrex account.</p>
-            {loading ? (
+            {openPositionsLoading ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
             ) : positions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed border-border/60 bg-secondary/20">
@@ -659,7 +713,7 @@ export default function DashboardPage() {
                           </td>
                           <td className="py-3 px-3 text-right font-mono">{p.quantity}</td>
                           <td className="py-3 px-3 text-right font-mono text-muted-foreground">
-                            {p.leverage ?? "N/A"}×
+                            {formatLeverageX(p.leverage)}
                           </td>
                           <td className="py-3 px-3 text-right font-mono text-muted-foreground">
                             ${entry.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -732,7 +786,7 @@ export default function DashboardPage() {
                           </td>
                           <td className="py-3 px-3 text-right font-mono">{p.quantity}</td>
                           <td className="py-3 px-3 text-right font-mono text-muted-foreground">
-                            {p.leverage ?? "N/A"}×
+                            {formatLeverageX(p.leverage)}
                           </td>
                           <td className="py-3 px-3 text-right font-mono text-muted-foreground">
                             ${entry.toLocaleString(undefined, { maximumFractionDigits: 2 })}

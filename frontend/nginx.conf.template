@@ -11,6 +11,19 @@ server {
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
 
+    # Vite emits fingerprinted files under /assets — safe to cache long-term.
+    location ^~ /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    # Never cache the SPA shell so new deploys always pick up new hashed JS/CSS names.
+    location = /index.html {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+    }
+
+    # SPA (React Router): every non-file path must serve index.html so /admin,
+    # /dashboard, /strategy/:id, etc. work on hard refresh and deep links.
     location / {
         try_files $uri $uri/ /index.html;
     }

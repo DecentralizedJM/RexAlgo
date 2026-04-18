@@ -387,16 +387,24 @@ function mapFuturesPayload(payload: Record<string, unknown> | null): MudrexFutur
       payload,
       "balance",
       "wallet_balance",
-      "available_balance",
+      "walletBalance",
+      "totalWalletBalance",
+      "crossWalletBalance",
+      "marginBalance",
       "futures_balance",
       "total",
-      "total_balance"
+      "total_balance",
+      "available_balance",
+      "availableBalance"
     ),
     locked_amount: pickStr(
       payload,
       "locked_amount",
+      "lockedAmount",
       "locked",
-      "margin_locked"
+      "margin_locked",
+      "usedMargin",
+      "totalInitialMargin"
     ),
     unrealized_pnl: pickStr(
       payload,

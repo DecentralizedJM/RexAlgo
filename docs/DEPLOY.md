@@ -8,8 +8,8 @@
 
 RexAlgo is a **Vite SPA** + **Next.js API** + **Postgres**. The browser calls **relative** `/api/*` with cookies (`Path=/api`, `SameSite=Lax`). That means:
 
-- **Best UX**: One public origin for the UI **and** `/api` (nginx or a host rewrite), so sessions and webhooks work without cross-site cookie changes.
-- **Split domains** (e.g. UI on `*.vercel.app`, API on `*.up.railway.app`) **break login** unless you add CORS + `SameSite=None; Secure` cookies and point the SPA at an absolute API URL — **not** implemented in this repo today.
+- **Best UX**: One **browser** origin for the UI **and** `/api` (nginx, or **Vercel rewrites** to Railway), so session cookies stay on that host (`Path=/api`, `SameSite=Lax`).
+- **Direct cross-origin API** (browser calls `https://*.up.railway.app/api` from `https://your-vercel-domain`) **breaks cookie login** unless you add CORS + `SameSite=None; Secure` — **not** implemented here. **Vercel-only UI + Railway API is fine** when every `/api/*` request goes to your Vercel hostname and Vercel **proxies** to Railway (see Option B).
 
 Below: recommended patterns that keep **same-origin `/api`**.
 
@@ -47,32 +47,41 @@ Below: recommended patterns that keep **same-origin `/api`**.
 
 ---
 
-## Option B — Vercel (static UI) + Railway (API)
+## Option B — Vercel (static UI only) + Railway (API)
 
-Use Vercel only for the **Vite build** and **rewrite** `/api` to Railway so the browser still sees a **single origin** (`https://your-app.vercel.app`).
+The browser only talks to **your Vercel hostname** (e.g. `https://rexalgo.xyz`). Vercel serves the Vite `dist` and **rewrites** `/api/:path*` to your Railway service. Cookies and `fetch("/api/...")` stay same-origin.
 
-1. Deploy the **API** on Railway as in Option A (or any host running the Next standalone server).
-2. Create a **Vercel** project:
-   - **Root directory**: `frontend`
-   - **Framework**: Vite (or “Other”)
-   - **Build command**: `npm run build`
-   - **Output directory**: `dist`
-3. Add rewrites (Dashboard → `vercel.json` or project settings). Example `frontend/vercel.json`:
+### 1. Railway (API)
 
-```json
-{
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://YOUR-RAILWAY-API.up.railway.app/api/:path*"
-    }
-  ]
-}
-```
+- Connect the **GitHub repo at the monorepo root** (same as Option A): [`railway.toml`](../railway.toml) + [`Dockerfile.api`](../Dockerfile.api).
+- Set **`PUBLIC_APP_URL`** (and **`PUBLIC_API_URL`** if you use it) to your **Vercel site URL** — the hostname users and webhooks use in production, e.g. `https://rexalgo.xyz` **with no trailing slash**. Do **not** set this to the raw `*.up.railway.app` URL if users never hit that host in the browser.
 
-Replace `YOUR-RAILWAY-API...` with your real API hostname.
+### 2. Vercel — pick **one** layout (both are valid)
 
-4. Set **`PUBLIC_APP_URL`** on the API to **`https://your-app.vercel.app`** so Master / Strategy studio show webhook URLs that match what external bots can call (through Vercel → Railway).
+| Vercel **Root Directory** | Config file used | Install / build (already in repo) |
+|---------------------------|------------------|-------------------------------------|
+| *(empty — repo root)*     | [`vercel.json`](../vercel.json) | `npm ci`, `npm run build -w @rexalgo/frontend`, output `frontend/dist` |
+| `frontend`                | [`frontend/vercel.json`](../frontend/vercel.json) | `npm install`, `npm run build`, output `dist` |
+
+**Important:** If Root Directory is **`frontend`**, Vercel **does not read** the repo-root `vercel.json`. Keep [`frontend/vercel.json`](../frontend/vercel.json) in sync with root for **rewrites** (Railway URL) and **headers**.
+
+**Important:** There is **no** `package-lock.json` inside `frontend/`. A Vercel **Install Command** of `npm ci` at `frontend/` will fail. The checked-in `frontend/vercel.json` uses **`npm install`** for that case. The repo-root layout uses **`npm ci`** with the root lockfile.
+
+### 3. Point `/api` at Railway
+
+In whichever `vercel.json` applies to your project, the rewrite destination must be your live Railway URL, for example:
+
+`https://rexalgo-production.up.railway.app/api/:path*`
+
+If Railway changes the hostname after a redeploy, update **both** [`vercel.json`](../vercel.json) and [`frontend/vercel.json`](../frontend/vercel.json) and redeploy Vercel.
+
+### 4. Custom domain
+
+Attach **`rexalgo.xyz`** (or your domain) to the **Vercel** project. DNS should point to Vercel, not Railway, for this layout.
+
+### 5. Stale UI after deploy
+
+Trigger a fresh deployment from `main`, hard-refresh or use a private window, and check Cloudflare (if any) is not caching HTML aggressively. The built `index.html` includes `<meta name="rexalgo-build" …>`; view source or the browser console line `[RexAlgo] UI build:` to confirm the new bundle.
 
 **Caveat:** Vercel rewrites add cold-start / edge latency on `/api`; heavy trading traffic may prefer Option A (single region, nginx + API).
 

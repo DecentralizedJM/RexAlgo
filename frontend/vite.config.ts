@@ -1,7 +1,24 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+
+/** Injects git SHA (Vercel/Railway) or ISO time into `index.html` for “did my deploy land?” checks. */
+function rexalgoBuildStamp(): Plugin {
+  const stamp =
+    process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ||
+    process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 12) ||
+    new Date().toISOString();
+  return {
+    name: "rexalgo-build-stamp",
+    transformIndexHtml: {
+      order: "pre",
+      handler(html) {
+        return html.replaceAll("__REXALGO_BUILD__", stamp);
+      },
+    },
+  };
+}
 
 // Dev: use http://127.0.0.1:8080 in the browser — Vite proxies /api → Next (127.0.0.1:3000).
 // (localhost shares cookies across all localhost:* tabs; 127.0.0.1 is a separate cookie jar.)
@@ -23,7 +40,11 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    rexalgoBuildStamp(),
+    react(),
+    mode === "development" && componentTagger(),
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
