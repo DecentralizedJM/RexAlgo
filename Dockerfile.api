@@ -16,6 +16,12 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY backend/ .
 ENV NEXT_TELEMETRY_DISABLED=1
+# `next build` loads server modules (e.g. `lib/db.ts`). No Postgres exists in the
+# image build — supply a throwaway URL and skip migrate/seed until runtime
+# (Railway injects the real `DATABASE_URL` on the runner).
+ENV REXALGO_SKIP_DB_BOOT=1
+ENV PGSSLMODE=disable
+ENV DATABASE_URL=postgres://build:build@127.0.0.1:5432/rexalgo_build?sslmode=disable
 RUN npm run build
 
 FROM base AS runner

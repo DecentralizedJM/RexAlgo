@@ -14,6 +14,9 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV REXALGO_SKIP_DB_BOOT=1
+ENV PGSSLMODE=disable
+ENV DATABASE_URL=postgres://build:build@127.0.0.1:5432/rexalgo_build?sslmode=disable
 RUN npm run build
 
 FROM base AS runner
