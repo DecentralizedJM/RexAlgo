@@ -146,10 +146,15 @@ function ConnectMudrexCard() {
         sessionExpiresAt: null,
       });
       await queryClient.refetchQueries({ queryKey: ["session", "me"] });
-      void queryClient.invalidateQueries({ queryKey: ["wallet"] });
-      void queryClient.invalidateQueries({ queryKey: ["positions"] });
-      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
-      void queryClient.invalidateQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY });
+      // Ensure the new HttpOnly cookie is in effect, then pull Mudrex data immediately
+      // (invalidate alone can race the first fetch before the browser attaches the cookie).
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["wallet", "futures"] }),
+        queryClient.refetchQueries({ queryKey: ["positions"] }),
+        queryClient.refetchQueries({ queryKey: ["subscriptions"] }),
+        queryClient.refetchQueries({ queryKey: ["positions", "history"] }),
+        queryClient.refetchQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY }),
+      ]);
       toast.success("Mudrex connected");
     } catch (err) {
       setError(
@@ -330,36 +335,43 @@ function DisconnectMudrexControl() {
 export default function DashboardPage() {
   const authQ = useRequireAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const sessionAuthed = authQ.authed;
-  const hasMudrexKey = authQ.data?.user?.hasMudrexKey ?? false;
+  const user = authQ.data?.user;
+  const hasMudrexKey = user?.hasMudrexKey ?? false;
+  const isAdmin = user?.isAdmin === true;
 
   const walletQ = useQuery({
     queryKey: ["wallet", "futures"],
     queryFn: () => fetchWallet({ futuresOnly: true }),
     enabled: sessionAuthed && hasMudrexKey,
     ...liveDataQueryOptions,
-    retry: false,
+    retry: 2,
+    retryDelay: (n) => Math.min(1500 * (n + 1), 5000),
   });
   const posQ = useQuery({
     queryKey: ["positions"],
     queryFn: fetchPositions,
     enabled: sessionAuthed && hasMudrexKey,
     ...liveDataQueryOptions,
-    retry: false,
+    retry: 2,
+    retryDelay: (n) => Math.min(1500 * (n + 1), 5000),
   });
   const subQ = useQuery({
     queryKey: ["subscriptions"],
     queryFn: fetchSubscriptions,
     enabled: sessionAuthed && hasMudrexKey,
     ...liveDataQueryOptions,
-    retry: false,
+    retry: 2,
+    retryDelay: (n) => Math.min(1500 * (n + 1), 5000),
   });
   const historyQ = useQuery({
     queryKey: ["positions", "history"],
     queryFn: fetchPositionHistory,
     enabled: sessionAuthed && hasMudrexKey,
     ...liveDataQueryOptions,
-    retry: false,
+    retry: 2,
+    retryDelay: (n) => Math.min(1500 * (n + 1), 5000),
   });
 
   useEffect(() => {
@@ -384,6 +396,11 @@ export default function DashboardPage() {
     () => sortClosedHistoryDescending(historyQ.data?.positions ?? []),
     [historyQ.data?.positions]
   );
+
+  const firstMudrexError =
+    walletQ.error || posQ.error || subQ.error || historyQ.error;
+  const mudrexErrorMessage =
+    firstMudrexError instanceof Error ? firstMudrexError.message : null;
 
   const futBal = parseFloat(futures?.balance ?? "0");
   const chartData = buildRealizedPnlCurve(historyQ.data?.positions ?? []);
@@ -465,6 +482,41 @@ export default function DashboardPage() {
         </div>
 
         {!hasMudrexKey && <ConnectMudrexCard />}
+
+        {isAdmin && (
+          <div className="mb-6 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-up">
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Admin dashboard</span> — approve Master studio
+              requests, list or delete strategies, view users.
+            </p>
+            <Button variant="outline" size="sm" className="shrink-0" asChild>
+              <Link to="/admin">Open /admin</Link>
+            </Button>
+          </div>
+        )}
+
+        {hasMudrexKey && (walletQ.isError || posQ.isError || subQ.isError || historyQ.isError) && (
+          <div className="mb-6 rounded-xl border border-loss/30 bg-loss/10 p-4 text-sm">
+            <p className="font-medium text-loss">Mudrex data did not load</p>
+            <p className="mt-1 text-xs text-muted-foreground font-mono break-words">
+              {mudrexErrorMessage ?? "Unknown error — try Retry or reconnect your API key from Sign in."}
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-3"
+              onClick={() => {
+                void queryClient.invalidateQueries({ queryKey: ["wallet", "futures"] });
+                void queryClient.invalidateQueries({ queryKey: ["positions"] });
+                void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+                void queryClient.invalidateQueries({ queryKey: ["positions", "history"] });
+              }}
+            >
+              Retry Mudrex
+            </Button>
+          </div>
+        )}
 
         {hasMudrexKey && underfundedSubs.length > 0 && walletQ.data && (
           <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-3 text-sm animate-fade-up">

@@ -1,5 +1,6 @@
 import Navbar from "@/components/Navbar";
 import TraderCard from "@/components/TraderCard";
+import { PublicListingsPlaceholder } from "@/components/PublicListingsPlaceholder";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -30,6 +31,8 @@ export default function CopyTradingPage() {
     queryFn: () => fetchStrategies({ type: "copy_trading" }),
     ...liveDataQueryOptions,
   });
+
+  const rawCount = data?.strategies?.length ?? 0;
 
   const rows = (data?.strategies ?? [])
     .filter((s) => {
@@ -62,11 +65,16 @@ export default function CopyTradingPage() {
         </div>
 
         {isError && (
-          <div className="mb-6 p-4 rounded-xl bg-loss/10 border border-loss/20 text-sm text-loss">
-            {(error as Error).message}. Check that the API is up and try again.
+          <div className="mb-10 flex justify-center">
+            <PublicListingsPlaceholder
+              title="Copy trading"
+              loadError={error as Error}
+              retryQueryKeys={[["strategies", "copy"]]}
+            />
           </div>
         )}
 
+        {!isError && (
         <div className="flex gap-2 mb-8 animate-fade-up-delay-1 flex-wrap">
           {(["roi", "followers", "winRate"] as const).map((s) => (
             <button
@@ -82,14 +90,16 @@ export default function CopyTradingPage() {
             </button>
           ))}
         </div>
+        )}
 
-        {isLoading ? (
+        {!isError && isLoading && (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {[1, 2, 3].map((i) => (
               <div key={i} className="glass rounded-xl h-80 animate-pulse" />
             ))}
           </div>
-        ) : (
+        )}
+        {!isError && !isLoading && sorted.length > 0 && (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {sorted.map((t, i) => (
               <TraderCard key={t.id} {...t} delay={i * 80} />
@@ -97,11 +107,17 @@ export default function CopyTradingPage() {
           </div>
         )}
 
-        {!isLoading && sorted.length === 0 && (
+        {!isLoading && !isError && rawCount === 0 && (
+          <div className="flex justify-center py-8">
+            <PublicListingsPlaceholder title="No copy-trading listings yet" />
+          </div>
+        )}
+
+        {!isLoading && !isError && rawCount > 0 && sorted.length === 0 && (
           <div className="text-center py-16 text-muted-foreground space-y-3">
-            <p>No copy-trading strategies yet.</p>
+            <p>No public copy-trading listings match our display rules yet.</p>
             <p className="text-sm">
-              Masters can publish a listing and webhook from{" "}
+              Approved creators publish from{" "}
               <Link to="/copy-trading/studio" className="text-primary hover:underline font-medium">
                 Master studio
               </Link>

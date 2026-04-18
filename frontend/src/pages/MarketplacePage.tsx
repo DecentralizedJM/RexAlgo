@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import StrategyCard from "@/components/StrategyCard";
+import { PublicListingsPlaceholder } from "@/components/PublicListingsPlaceholder";
 import { fetchStrategies, type ApiStrategy } from "@/lib/api";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 
@@ -68,11 +69,17 @@ export default function MarketplacePage() {
         </div>
 
         {isError && (
-          <div className="mb-6 p-4 rounded-xl bg-loss/10 border border-loss/20 text-sm text-loss">
-            {(error as Error).message}. Check that the API is up and try again.
+          <div className="mb-10 flex justify-center">
+            <PublicListingsPlaceholder
+              title="Strategy marketplace"
+              loadError={error as Error}
+              retryQueryKeys={[["strategies", "algo"]]}
+            />
           </div>
         )}
 
+        {!isError && (
+        <>
         <div className="flex flex-col sm:flex-row gap-4 mb-8 animate-fade-up-delay-1">
           <div className="flex gap-2 flex-wrap">
             {riskFilters.map((r) => (
@@ -113,17 +120,12 @@ export default function MarketplacePage() {
             ))}
           </div>
         )}
+        </>
+        )}
 
-        {!isLoading && strategies.length === 0 && (
-          <div className="text-center py-16 text-muted-foreground space-y-3">
-            <p>No algo strategies on the marketplace yet.</p>
-            <p className="text-sm">
-              Publish one from{" "}
-              <Link to="/marketplace/studio" className="text-primary hover:underline font-medium">
-                Strategy studio
-              </Link>
-              .
-            </p>
+        {!isLoading && !isError && strategies.length === 0 && (
+          <div className="flex justify-center py-8">
+            <PublicListingsPlaceholder title="No algo listings yet" />
           </div>
         )}
 
