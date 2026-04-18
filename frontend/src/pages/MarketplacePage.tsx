@@ -71,7 +71,7 @@ export default function MarketplacePage() {
         {isError && (
           <div className="mb-10 flex justify-center">
             <PublicListingsPlaceholder
-              title="Strategy marketplace"
+              listingKind="algo"
               loadError={error as Error}
               retryQueryKeys={[["strategies", "algo"]]}
             />
@@ -125,7 +125,7 @@ export default function MarketplacePage() {
 
         {!isLoading && !isError && strategies.length === 0 && (
           <div className="flex justify-center py-8">
-            <PublicListingsPlaceholder title="No algo listings yet" />
+            <PublicListingsPlaceholder listingKind="algo" />
           </div>
         )}
 

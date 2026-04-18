@@ -67,7 +67,7 @@ export default function CopyTradingPage() {
         {isError && (
           <div className="mb-10 flex justify-center">
             <PublicListingsPlaceholder
-              title="Copy trading"
+              listingKind="copy_trading"
               loadError={error as Error}
               retryQueryKeys={[["strategies", "copy"]]}
             />
@@ -109,7 +109,7 @@ export default function CopyTradingPage() {
 
         {!isLoading && !isError && rawCount === 0 && (
           <div className="flex justify-center py-8">
-            <PublicListingsPlaceholder title="No copy-trading listings yet" />
+            <PublicListingsPlaceholder listingKind="copy_trading" />
           </div>
         )}
 
