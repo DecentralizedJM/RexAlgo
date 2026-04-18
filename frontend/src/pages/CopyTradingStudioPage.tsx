@@ -27,25 +27,30 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useRequireAuth } from "@/hooks/useAuth";
+import { useRequireMasterAccess } from "@/hooks/useAuth";
 import { AuthGateSplash } from "@/components/AuthGateSplash";
 import {
   fetchCopyStudioStrategies,
   createCopyStudioStrategy,
   setCopyStrategyWebhook,
+  renameCopyStrategyWebhook,
   fetchCopyStrategySignals,
   ApiError,
 } from "@/lib/api";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
+import { copyText } from "@/lib/clipboard";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  Check,
   Copy,
   Loader2,
+  Pencil,
   UserCog,
   RefreshCw,
   Power,
   PowerOff,
+  X,
 } from "lucide-react";
 
 function buildWebhookUrl(
@@ -57,14 +62,29 @@ function buildWebhookUrl(
   return `${base}${path}`;
 }
 
+/** Compact relative timestamp for webhook last-delivery hints (e.g. "3m ago"). */
+function formatRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(diff) || diff < 0) return "just now";
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 48) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  return `${d}d ago`;
+}
+
 export default function CopyTradingStudioPage() {
-  const authQ = useRequireAuth();
+  const authQ = useRequireMasterAccess();
   const queryClient = useQueryClient();
-  const sessionAuthed = authQ.authed;
+  const sessionAuthed = authQ.authed && authQ.masterApproved;
   const hasMudrexKey = authQ.data?.user?.hasMudrexKey ?? false;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [secretFlash, setSecretFlash] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
 
   const originFallback =
     typeof window !== "undefined" ? `${window.location.origin}` : "";
@@ -131,6 +151,19 @@ export default function CopyTradingStudioPage() {
     },
   });
 
+  const renameMut = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      renameCopyStrategyWebhook(id, name),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["copy-studio", "strategies"] });
+      setRenameDraft(null);
+      toast.success("Webhook renamed");
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Rename failed");
+    },
+  });
+
   const webhookDisplayUrl = selected
     ? buildWebhookUrl(publicBase, selected.webhookPath, originFallback)
     : "";
@@ -170,14 +203,6 @@ req = urllib.request.Request(
 with urllib.request.urlopen(req, timeout=30) as res:
     print(res.status, res.read().decode())`
     : "";
-
-  async function copyText(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      toast.error("Copy failed");
-    }
-  }
 
   if (!authQ.authResolved) {
     return <AuthGateSplash />;
@@ -237,7 +262,12 @@ with urllib.request.urlopen(req, timeout=30) as res:
               <code className="text-xs break-all flex-1 font-mono bg-background/80 p-2 rounded">
                 {secretFlash}
               </code>
-              <Button type="button" size="sm" variant="outline" onClick={() => void copyText(secretFlash)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void copyText(secretFlash, "Signing secret copied")}
+              >
                 <Copy className="w-4 h-4" />
               </Button>
             </div>
@@ -278,8 +308,21 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   >
                     <div className="font-medium truncate">{s.name}</div>
                     <div className="text-xs text-muted-foreground truncate">{s.symbol}</div>
-                    <div className="text-xs mt-1">
-                      Webhook: {s.webhookEnabled ? "on" : "off"}
+                    <div className="text-xs mt-1 flex items-center gap-2">
+                      <span
+                        className={
+                          s.webhookEnabled
+                            ? "text-profit font-medium"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {s.webhookEnabled ? "webhook on" : "webhook off"}
+                      </span>
+                      {s.webhookLastDeliveryAt && (
+                        <span className="text-muted-foreground">
+                          · {formatRelative(s.webhookLastDeliveryAt)}
+                        </span>
+                      )}
                     </div>
                   </button>
                 ))}
@@ -294,6 +337,99 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     <CardDescription>{selected.description}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      {selected.webhookEnabled ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-profit/15 text-profit px-2 py-0.5 font-medium">
+                          <Check className="w-3 h-3" /> webhook active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-secondary text-muted-foreground px-2 py-0.5 font-medium">
+                          webhook disabled
+                        </span>
+                      )}
+                      <span>
+                        Last delivery:{" "}
+                        {selected.webhookLastDeliveryAt
+                          ? new Date(selected.webhookLastDeliveryAt).toLocaleString()
+                          : "—"}
+                      </span>
+                      {selected.webhookRotatedAt && (
+                        <span>
+                          Rotated:{" "}
+                          {new Date(selected.webhookRotatedAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Webhook name
+                      </Label>
+                      {renameDraft !== null ? (
+                        <div className="flex gap-2 mt-1">
+                          <Input
+                            autoFocus
+                            value={renameDraft}
+                            onChange={(e) => setRenameDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const v = renameDraft.trim();
+                                if (v) renameMut.mutate({ id: selected.id, name: v });
+                              } else if (e.key === "Escape") {
+                                setRenameDraft(null);
+                              }
+                            }}
+                            maxLength={120}
+                          />
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            disabled={renameMut.isPending || !renameDraft.trim()}
+                            onClick={() => {
+                              const v = renameDraft.trim();
+                              if (v) renameMut.mutate({ id: selected.id, name: v });
+                            }}
+                          >
+                            <Check className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setRenameDraft(null)}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-sm font-medium">
+                            {selected.webhookName ?? selected.name}
+                          </span>
+                          {selected.webhookEnabled && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() =>
+                                setRenameDraft(selected.webhookName ?? selected.name)
+                              }
+                              aria-label="Rename webhook"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {!selected.webhookEnabled && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Enable the webhook to rename it.
+                        </p>
+                      )}
+                    </div>
+
                     <div className="flex flex-wrap gap-2">
                       <Button
                         type="button"
@@ -335,7 +471,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                           type="button"
                           size="icon"
                           variant="outline"
-                          onClick={() => void copyText(webhookDisplayUrl)}
+                          onClick={() => void copyText(webhookDisplayUrl, "Webhook URL copied")}
                         >
                           <Copy className="w-4 h-4" />
                         </Button>
@@ -387,7 +523,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                       variant="outline"
                       size="sm"
                       className="mt-2"
-                      onClick={() => void copyText(pythonSnippet)}
+                      onClick={() => void copyText(pythonSnippet, "Snippet copied")}
                     >
                       <Copy className="w-4 h-4 mr-1" /> Copy snippet
                     </Button>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import {
   strategies,
@@ -16,6 +17,8 @@ export async function GET(
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const blocked = await blockIfNoMasterAccess(session.user);
+  if (blocked) return blocked;
 
   const { id: strategyId } = await ctx.params;
 

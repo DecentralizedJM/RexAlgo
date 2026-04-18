@@ -1,6 +1,6 @@
 # RexAlgo
 
-**RexAlgo** is a full-stack platform for **algorithmic strategies** and **copy trading**, built on the [**Mudrex Futures API**](https://docs.trade.mudrex.com/docs/overview). It pairs a premium **Vite + React** UI (shadcn, Tailwind) with a **Next.js** API, SQLite, and optional **Docker** deployment.
+**RexAlgo** is a full-stack platform for **algorithmic strategies** and **copy trading**, built on the [**Mudrex Futures API**](https://docs.trade.mudrex.com/docs/overview). It pairs a premium **Vite + React** UI (shadcn, Tailwind) with a **Next.js** API, **PostgreSQL** (Drizzle), and optional **Docker** deployment.
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
@@ -74,9 +74,12 @@ On the **first** `npm run dev`, the root **`predev`** script creates **`backend/
 |----------|----------|--------|
 | `JWT_SECRET` | **Yes** | Long random string (e.g. `openssl rand -hex 32`) |
 | `ENCRYPTION_KEY` | **Yes** | Strong passphrase; used to encrypt Mudrex secrets and webhook signing secrets in secure storage |
-| `PUBLIC_APP_URL` | Optional | No trailing slash. Full webhook URLs in **Master** / **Strategy** studio (use ngrok URL → port **3000** for external bots) |
+| `DATABASE_URL` | **Yes** | Postgres connection string. Local dev: `postgres://rexalgo:rexalgo@127.0.0.1:5432/rexalgo` (spin up with `docker compose -f docker-compose.dev.yml up -d`) |
+| `ADMIN_EMAILS` | Optional | Comma-separated list of emails with `/admin` access (approve master studio requests, manage strategies) |
+| `PUBLIC_API_URL` | Recommended | No trailing slash. Used to render full webhook URLs (e.g. `https://api.rexalgo.xyz`). In local dev with external bots, set to your ngrok URL to **Next :3000**. |
+| `PUBLIC_APP_URL` | Deprecated alias | Kept for backward compatibility; prefer `PUBLIC_API_URL`. |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` | Optional | For Telegram login + notifications |
 | `REXALGO_SESSION_MAX_AGE_DAYS` | Optional | Browser session length (JWT + cookie), **1–90** (default **90**). Capped at Mudrex’s typical API key lifetime so the cookie doesn’t outlive a single key rotation. |
-| `REXALGO_DB_PATH` | Optional | Custom SQLite file path (default: under `backend/`) |
 
 ```bash
 # If you skipped dev and want to create the file manually:
@@ -120,6 +123,13 @@ curl -s http://127.0.0.1:3000/api/health
 ### Prerequisites
 
 - **Node.js 20+**, **npm 10+**
+- **PostgreSQL 14+** — start the local dev instance with the provided compose file:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+# then add to backend/.env.local:
+# DATABASE_URL=postgres://rexalgo:rexalgo@127.0.0.1:5432/rexalgo
+```
 
 ### Install & run
 
@@ -153,7 +163,7 @@ Same as [Quick start §2](#2-environment-file-backend). Reference: **`backend/.e
 1. Sign in → open **Master studio** in top nav → choose **Copy trading** (`/copy-trading/studio`) → create a **copy_trading** strategy → **Enable webhook** and copy the **signing secret** (shown once).
 2. Your bot runs **outside** RexAlgo (VPS, laptop, cloud). It `POST`s JSON signals to **`POST /api/webhooks/copy-trading/{strategyId}`** with header **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** where **`v1`** is **HMAC-SHA256** of **`${t}.${rawBody}`** (UTF-8) using the signing secret as the HMAC key (UTF-8 bytes of the secret string).
 3. **Subscribers** (users who subscribed to that strategy in the app) get **mirrored** **open** / **close** actions on **their** Mudrex account via the API secret they stored at login. Sizing uses each subscriber’s **margin per trade** and the strategy’s **leverage**.
-4. **Sign out vs mirroring:** **Signing out** only removes the **browser JWT cookie**. The server still has each user’s **encrypted Mudrex API secret** in SQLite. Webhook handling (`executeMirror`) loads subscribers from the DB and calls Mudrex with those secrets—it does **not** use the UI session. So **subscribed strategies keep mirroring after logout** as long as **Mudrex still accepts** each subscriber’s stored key. If a key expires, that subscriber’s mirrors fail until they **sign in again** with a new key (see banner in the app).
+4. **Sign out vs mirroring:** **Signing out** only removes the **browser JWT cookie**. The server still has each user’s **encrypted Mudrex API secret** in Postgres. Webhook handling (`executeMirror`) loads subscribers from the DB and calls Mudrex with those secrets—it does **not** use the UI session. So **subscribed strategies keep mirroring after logout** as long as **Mudrex still accepts** each subscriber’s stored key. If a key expires, that subscriber’s mirrors fail until they **sign in again** with a new key (see banner in the app).
 5. **Local dev**: external bots cannot reach `localhost`; use **ngrok** (or similar) to **`127.0.0.1:3000`** and set **`PUBLIC_APP_URL`** to the tunnel URL. Vite on **8080** is only for the browser; webhooks hit Next directly unless you add a proxy rule.
 
 ### Algo strategies (Strategy studio + webhooks)
@@ -188,17 +198,19 @@ Same as [Quick start §2](#2-environment-file-backend). Reference: **`backend/.e
 
 | Approach | UI | API |
 |----------|-----|-----|
-| **Railway (2 services)** | `frontend/Dockerfile` — set `API_UPSTREAM` to your API’s public URL | `backend/Dockerfile` — attach a **volume** on `/data` for SQLite |
+| **Railway (2 services)** | `frontend/Dockerfile` — set `API_UPSTREAM` to your API’s public URL | `backend/Dockerfile` — point `DATABASE_URL` at Railway Postgres |
 | **Vercel + Railway** | Vite static on Vercel; rewrite `/api/*` → Railway (see `frontend/vercel.example.json`) | Same Next API on Railway |
 | **Docker / VPS** | `docker compose up` (nginx already proxies `/api`) | Same compose file |
 
 Full steps, env vars, and webhook notes: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+Production operations (Postgres, admin dashboard, TV webhooks, Telegram,
+scaling checklist, secret rotation runbook): **[docs/PROD.md](docs/PROD.md)**.
 
 ---
 
 ## Architecture
 
-RexAlgo is a **browser client**, an optional **reverse proxy**, **Next.js**, **SQLite**, and the **Mudrex REST API**. Diagrams render on GitHub; the same blocks live in **`repo/architecture.mmd`**.
+RexAlgo is a **browser client**, an optional **reverse proxy**, **Next.js**, **Postgres**, and the **Mudrex REST API**. Diagrams render on GitHub; the same blocks live in **`repo/architecture.mmd`**.
 
 ### System context
 
@@ -355,7 +367,7 @@ sequenceDiagram
 |-------|------|--------|
 | UI | Vite, React Router, shadcn, TanStack Query, Tailwind | `frontend/` |
 | API | Next.js 16 App Router | `backend/src/app/` |
-| Data | SQLite + Drizzle | `backend/src/lib/db.ts`, `schema.ts` |
+| Data | Postgres + Drizzle | `backend/src/lib/db.ts`, `schema.ts` |
 | Execution | Mudrex REST | `backend/src/lib/mudrex.ts` |
 | Session | JWT HttpOnly cookie + encrypted secret | `backend/src/lib/auth.ts`, `middleware.ts` |
 
@@ -373,7 +385,7 @@ docker compose up --build -d
 ```
 
 Open **http://localhost** (or **http://localhost:8080** if `HOST_PORT=8080`).  
-Nginx serves the UI and proxies **`/api`** to the API container. SQLite persists in volume **`rexalgo_data`**.
+Nginx serves the UI and proxies **`/api`** to the API container. Postgres data persists in volume **`rexalgo_pg`** (see `docker-compose.yml`).
 
 ```bash
 npm run docker:logs   # or: docker compose logs -f

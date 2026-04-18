@@ -2,22 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { desc, eq, and } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { strategies, copyWebhookConfig } from "@/lib/schema";
-
-function publicWebhookBase(): string {
-  const base =
-    process.env.PUBLIC_APP_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "";
-  return base.replace(/\/$/, "");
-}
+import { publicApiBase } from "@/lib/publicUrl";
 
 export async function GET() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const blocked = await blockIfNoMasterAccess(session.user);
+  if (blocked) return blocked;
 
   const rows = await db
     .select()
@@ -33,7 +29,7 @@ export async function GET() {
   const allWh = await db.select().from(copyWebhookConfig);
   const whMap = new Map(allWh.map((w) => [w.strategyId, w]));
 
-  const base = publicWebhookBase();
+  const base = publicApiBase();
 
   const out = rows.map((s) => {
     const w = whMap.get(s.id);
@@ -41,6 +37,9 @@ export async function GET() {
     return {
       ...s,
       webhookEnabled: w?.enabled ?? false,
+      webhookName: w?.name ?? s.name,
+      webhookLastDeliveryAt: w?.lastDeliveryAt?.toISOString() ?? null,
+      webhookRotatedAt: w?.rotatedAt?.toISOString() ?? null,
       webhookUrl: base ? `${base}${path}` : null,
       webhookPath: path,
     };
@@ -57,6 +56,8 @@ export async function POST(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const blocked = await blockIfNoMasterAccess(session.user);
+  if (blocked) return blocked;
 
   try {
     const body = await req.json();
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
       .from(strategies)
       .where(eq(strategies.id, id));
 
-    const base = publicWebhookBase();
+    const base = publicApiBase();
     const path = `/api/webhooks/copy-trading/${id}`;
 
     return NextResponse.json(
@@ -105,6 +106,9 @@ export async function POST(req: NextRequest) {
         strategy: {
           ...created,
           webhookEnabled: false,
+          webhookName: created.name,
+          webhookLastDeliveryAt: null,
+          webhookRotatedAt: null,
           webhookUrl: base ? `${base}${path}` : null,
           webhookPath: path,
         },

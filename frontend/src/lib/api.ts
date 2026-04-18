@@ -72,11 +72,18 @@ export async function apiFetch<T = unknown>(
 
 // ─── Auth ───────────────────────────────────────────────────────────
 
+export type MasterAccessStatus = "none" | "pending" | "approved" | "rejected";
+
 export type SessionUser = {
   id: string;
   displayName: string;
   email: string | null;
   hasMudrexKey: boolean;
+  isAdmin?: boolean;
+  masterAccess?: MasterAccessStatus;
+  telegramId?: string | null;
+  telegramUsername?: string | null;
+  telegramNotifyEnabled?: boolean;
 };
 
 export async function loginWithGoogle(credential: string) {
@@ -162,6 +169,135 @@ export async function fetchSessionInfo(): Promise<{
     sessionMaxAgeDays: typeof data.sessionMaxAgeDays === "number" ? data.sessionMaxAgeDays : 90,
     mudrexKeyMaxDays: typeof data.mudrexKeyMaxDays === "number" ? data.mudrexKeyMaxDays : 90,
   };
+}
+
+// ─── Master Studio access ──────────────────────────────────────────
+
+export type MasterAccessRequest = {
+  id: string;
+  status: "pending" | "approved" | "rejected";
+  note: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+};
+
+export type MasterAccessMe = {
+  status: MasterAccessStatus;
+  isAdmin: boolean;
+  latest: MasterAccessRequest | null;
+};
+
+export async function fetchMasterAccessMe(): Promise<MasterAccessMe> {
+  return apiFetch<MasterAccessMe>("/api/master-access/me");
+}
+
+export async function requestMasterAccess(note?: string) {
+  return apiFetch<{
+    ok: boolean;
+    status: MasterAccessStatus;
+    requestId?: string;
+    message?: string;
+  }>("/api/master-access/request", {
+    method: "POST",
+    body: JSON.stringify({ note: note?.trim() || undefined }),
+  });
+}
+
+// ─── Admin ──────────────────────────────────────────────────────────
+
+export type AdminMasterAccessRow = {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  userDisplayName: string | null;
+  userStrategyCount: number;
+  status: "pending" | "approved" | "rejected";
+  note: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+};
+
+export async function fetchAdminMasterAccess(
+  status: "pending" | "approved" | "rejected" | "all" = "pending"
+) {
+  const params = new URLSearchParams({ status });
+  return apiFetch<{ requests: AdminMasterAccessRow[] }>(
+    `/api/admin/master-access?${params.toString()}`
+  );
+}
+
+export async function reviewMasterAccess(
+  id: string,
+  action: "approve" | "reject",
+  note?: string
+) {
+  return apiFetch<{ ok: boolean; id: string; status: MasterAccessStatus }>(
+    `/api/admin/master-access/${id}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action, note }),
+    }
+  );
+}
+
+export type AdminStrategyRow = {
+  id: string;
+  name: string;
+  type: "algo" | "copy_trading";
+  symbol: string;
+  isActive: boolean;
+  creatorId: string;
+  creatorName: string;
+  creatorEmail: string | null;
+  createdAt: string;
+  subscriberCount: number;
+  webhookEnabled: boolean;
+};
+
+export async function fetchAdminStrategies(
+  type: "algo" | "copy_trading" | "all" = "all"
+) {
+  const params = new URLSearchParams();
+  if (type !== "all") params.set("type", type);
+  return apiFetch<{ strategies: AdminStrategyRow[] }>(
+    `/api/admin/strategies${params.toString() ? `?${params}` : ""}`
+  );
+}
+
+export async function toggleAdminStrategy(id: string, active?: boolean) {
+  return apiFetch<{ ok: boolean; id: string; isActive: boolean }>(
+    `/api/admin/strategies/${id}/toggle`,
+    {
+      method: "POST",
+      body:
+        typeof active === "boolean"
+          ? JSON.stringify({ active })
+          : undefined,
+    }
+  );
+}
+
+export async function deleteAdminStrategy(id: string) {
+  return apiFetch<{ ok: boolean; deleted: { id: string; name: string } }>(
+    `/api/admin/strategies/${id}`,
+    { method: "DELETE" }
+  );
+}
+
+export type AdminUserRow = {
+  id: string;
+  email: string | null;
+  displayName: string;
+  authProvider: string;
+  createdAt: string;
+  strategyCount: number;
+  masterStatus: string | null;
+};
+
+export async function fetchAdminUsers() {
+  return apiFetch<{ users: AdminUserRow[] }>("/api/admin/users");
 }
 
 // ─── Strategies ─────────────────────────────────────────────────────
@@ -304,8 +440,14 @@ export async function patchStrategy(
 
 export type StudioStrategyRow = ApiStrategy & {
   webhookEnabled: boolean;
+  /** Human-friendly webhook label (defaults to strategy name until renamed). */
+  webhookName: string | null;
   webhookUrl: string | null;
   webhookPath: string;
+  /** Most recent accepted delivery, as returned by the API. `null` if none yet. */
+  webhookLastDeliveryAt: string | null;
+  /** Last time the signing secret was rotated. `null` if never rotated since enable. */
+  webhookRotatedAt: string | null;
 };
 
 export async function fetchCopyStudioStrategies() {
@@ -339,6 +481,7 @@ export async function setCopyStrategyWebhook(
   return apiFetch<{
     ok: boolean;
     enabled: boolean;
+    name?: string | null;
     secretPlain?: string | null;
     shownOnce?: boolean;
     message?: string;
@@ -346,6 +489,16 @@ export async function setCopyStrategyWebhook(
     method: "POST",
     body: JSON.stringify({ action }),
   });
+}
+
+export async function renameCopyStrategyWebhook(
+  strategyId: string,
+  name: string
+) {
+  return apiFetch<{ ok: boolean; name: string }>(
+    `/api/copy-trading/studio/strategies/${strategyId}/webhook`,
+    { method: "PATCH", body: JSON.stringify({ name }) }
+  );
 }
 
 export type CopySignalRow = {
@@ -397,6 +550,7 @@ export async function setMarketplaceStrategyWebhook(
   return apiFetch<{
     ok: boolean;
     enabled: boolean;
+    name?: string | null;
     secretPlain?: string | null;
     shownOnce?: boolean;
     message?: string;
@@ -404,6 +558,16 @@ export async function setMarketplaceStrategyWebhook(
     method: "POST",
     body: JSON.stringify({ action }),
   });
+}
+
+export async function renameMarketplaceStrategyWebhook(
+  strategyId: string,
+  name: string
+) {
+  return apiFetch<{ ok: boolean; name: string }>(
+    `/api/marketplace/studio/strategies/${strategyId}/webhook`,
+    { method: "PATCH", body: JSON.stringify({ name }) }
+  );
 }
 
 export async function fetchMarketplaceStrategySignals(strategyId: string) {
@@ -512,5 +676,128 @@ export async function updateSubscriptionMargin(
       method: "PATCH",
       body: JSON.stringify({ marginPerTrade }),
     }
+  );
+}
+
+// ─── Telegram ───────────────────────────────────────────────────────
+
+export type TelegramWidgetPayload = {
+  id: number;
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+  auth_date: number;
+  hash: string;
+};
+
+export async function fetchTelegramConfig() {
+  return apiFetch<{ enabled: boolean; botUsername: string | null }>(
+    "/api/auth/telegram/config"
+  );
+}
+
+export async function loginOrLinkWithTelegram(payload: TelegramWidgetPayload) {
+  return apiFetch<{
+    success: true;
+    linked: boolean;
+    user: SessionUser;
+  }>("/api/auth/telegram", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function unlinkTelegram() {
+  return apiFetch<{ ok: true }>("/api/auth/telegram", { method: "DELETE" });
+}
+
+export async function setTelegramNotifyEnabled(notifyEnabled: boolean) {
+  return apiFetch<{ ok: true; notifyEnabled: boolean }>(
+    "/api/auth/telegram",
+    { method: "PATCH", body: JSON.stringify({ notifyEnabled }) }
+  );
+}
+
+// ─── TV Webhooks ────────────────────────────────────────────────────
+
+export type TvWebhookMode = "manual_trade" | "route_to_strategy";
+
+export type TvWebhookRow = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  mode: TvWebhookMode;
+  strategyId: string | null;
+  maxMarginUsdt: number;
+  createdAt: string;
+  rotatedAt: string | null;
+  lastDeliveryAt: string | null;
+  webhookUrl: string | null;
+  webhookPath: string;
+};
+
+export type TvWebhookEvent = {
+  id: string;
+  idempotencyKey: string;
+  status: "accepted" | "rejected" | "error";
+  detail: string | null;
+  receivedAt: string;
+  clientIp: string | null;
+  payload: unknown;
+};
+
+export async function fetchTvWebhooks() {
+  return apiFetch<{ webhooks: TvWebhookRow[]; publicBaseUrl: string | null }>(
+    "/api/tv-webhooks"
+  );
+}
+
+export async function createTvWebhook(body: {
+  name: string;
+  mode: TvWebhookMode;
+  strategyId?: string | null;
+  maxMarginUsdt?: number;
+}) {
+  return apiFetch<{
+    webhook: TvWebhookRow;
+    secretPlain: string;
+    shownOnce: true;
+    message: string;
+  }>("/api/tv-webhooks", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function patchTvWebhook(
+  id: string,
+  body: Partial<{
+    name: string;
+    enabled: boolean;
+    mode: TvWebhookMode;
+    strategyId: string | null;
+    maxMarginUsdt: number;
+  }>
+) {
+  return apiFetch<{ ok: true }>(`/api/tv-webhooks/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteTvWebhook(id: string) {
+  return apiFetch<{ ok: true }>(`/api/tv-webhooks/${id}`, { method: "DELETE" });
+}
+
+export async function rotateTvWebhookSecret(id: string) {
+  return apiFetch<{
+    ok: true;
+    secretPlain: string;
+    shownOnce: true;
+    message: string;
+  }>(`/api/tv-webhooks/${id}/rotate`, { method: "POST" });
+}
+
+export async function fetchTvWebhookEvents(id: string) {
+  return apiFetch<{ events: TvWebhookEvent[] }>(
+    `/api/tv-webhooks/${id}/events`
   );
 }

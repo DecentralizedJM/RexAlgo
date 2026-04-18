@@ -14,8 +14,10 @@ import {
   ChevronDown,
   Check,
   UserCog,
+  ShieldCheck,
+  Settings,
 } from "lucide-react";
-import { useState, useRef, useLayoutEffect } from "react";
+import { useState, useRef, useLayoutEffect, type ComponentType } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSession } from "@/hooks/useAuth";
@@ -24,6 +26,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { TvMonogram } from "@/components/TvMonogram";
 import { refreshAppData } from "@/lib/refreshAppData";
 import { toast } from "sonner";
 import { useMudrexKeyInvalid } from "@/contexts/MudrexKeyInvalidContext";
@@ -37,11 +40,18 @@ import {
 
 const SUPPORT_EMAIL = "help@mudrex.com";
 
-const navLinks = [
+type NavIcon = ComponentType<{ className?: string }>;
+
+const TvIcon: NavIcon = ({ className }) => (
+  <TvMonogram className={className} size={16} />
+);
+
+const navLinks: Array<{ to: string; label: string; icon: NavIcon }> = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/subscriptions", label: "Subscriptions", icon: BookmarkCheck },
   { to: "/marketplace", label: "Strategies", icon: BarChart3 },
   { to: "/copy-trading", label: "Copy trading", icon: Users },
+  { to: "/tv-webhooks", label: "TV Webhooks", icon: TvIcon },
 ];
 
 export default function Navbar() {
@@ -59,7 +69,11 @@ export default function Navbar() {
     Boolean(user) && mudrexKeyInvalid && location.pathname !== "/auth";
   const onStrategyStudio = location.pathname.startsWith("/marketplace/studio");
   const onCopyStudio = location.pathname.startsWith("/copy-trading/studio");
-  const studioActive = onStrategyStudio || onCopyStudio;
+  const onMasterAccessRequest = location.pathname.startsWith(
+    "/master-studio/request"
+  );
+  const studioActive = onStrategyStudio || onCopyStudio || onMasterAccessRequest;
+  const masterApproved = user?.masterAccess === "approved" || user?.isAdmin === true;
 
   useLayoutEffect(() => {
     const el = navRef.current;
@@ -127,7 +141,7 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
-          {user && (
+          {user && masterApproved && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -165,6 +179,26 @@ export default function Navbar() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+          {user && !masterApproved && (
+            <button
+              type="button"
+              onClick={() => navigate("/master-studio/request")}
+              className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+                onMasterAccessRequest
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
+              }`}
+              aria-label="Request master studio access"
+            >
+              <UserCog className="h-4 w-4" aria-hidden />
+              Master studio
+              {user.masterAccess === "pending" && (
+                <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                  pending
+                </span>
+              )}
+            </button>
           )}
         </div>
 
@@ -215,17 +249,51 @@ export default function Navbar() {
               </Link>
             </>
           ) : user ? (
-            <div className="hidden md:flex flex-col items-end">
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
-                <LogOut className="w-4 h-4" />
-                Sign out
-              </Button>
-              <span
-                className="mt-1 max-w-[160px] truncate text-[11px] text-muted-foreground"
-                title={user.email || user.displayName}
-              >
-                {user.email || user.displayName}
-              </span>
+            <div className="hidden md:flex items-center gap-2">
+              {user.isAdmin && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9"
+                      onClick={() => navigate("/admin")}
+                      aria-label="Admin dashboard"
+                    >
+                      <ShieldCheck className="h-4 w-4" aria-hidden />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Admin dashboard</TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9"
+                    onClick={() => navigate("/settings")}
+                    aria-label="Account settings"
+                  >
+                    <Settings className="h-4 w-4" aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Account settings</TooltipContent>
+              </Tooltip>
+              <div className="flex flex-col items-end">
+                <Button variant="outline" size="sm" onClick={handleSignOut}>
+                  <LogOut className="w-4 h-4" />
+                  Sign out
+                </Button>
+                <span
+                  className="mt-1 max-w-[160px] truncate text-[11px] text-muted-foreground"
+                  title={user.email || user.displayName}
+                >
+                  {user.email || user.displayName}
+                </span>
+              </div>
             </div>
           ) : (
             <Link to="/auth">
@@ -347,7 +415,7 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            {user && (
+            {user && masterApproved && (
               <div className="rounded-lg border border-border/60 p-2">
                 <p className="flex items-center gap-1.5 px-2 pb-1 text-xs font-medium text-muted-foreground">
                   <UserCog className="h-3.5 w-3.5" aria-hidden />
@@ -379,6 +447,27 @@ export default function Navbar() {
                 </Link>
               </div>
             )}
+            {user && !masterApproved && (
+              <Link
+                to="/master-studio/request"
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+                  onMasterAccessRequest
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <UserCog className="h-4 w-4" aria-hidden />
+                  Master studio
+                </span>
+                {user.masterAccess === "pending" && (
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                    pending
+                  </span>
+                )}
+              </Link>
+            )}
             <Link to="/about" onClick={() => setMobileOpen(false)}>
               <Button variant="ghost" size="sm" className="w-full justify-start">
                 About
@@ -386,6 +475,32 @@ export default function Navbar() {
             </Link>
             {user ? (
               <div className="space-y-1.5">
+                {user.isAdmin && (
+                  <Link
+                    to="/admin"
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+                      location.pathname === "/admin"
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    Admin
+                  </Link>
+                )}
+                <Link
+                  to="/settings"
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+                    location.pathname === "/settings"
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Settings className="w-4 h-4" />
+                  Settings
+                </Link>
                 <Button variant="outline" size="sm" className="w-full" onClick={handleSignOut}>
                   <LogOut className="w-4 h-4" />
                   Sign out

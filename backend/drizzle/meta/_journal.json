@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1776531829100,
+      "tag": "0000_0000_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776532009835,
+      "tag": "0001_0001_master_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776532488468,
+      "tag": "0002_0002_copy_webhook_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1776533136845,
+      "tag": "0003_tv_webhooks",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776533564755,
+      "tag": "0004_telegram_and_outbox",
+      "breakpoints": true
+    }
+  ]
+}

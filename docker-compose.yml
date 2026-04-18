@@ -3,6 +3,21 @@
 #   docker compose up --build -d
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rexalgo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rexalgo}
+      POSTGRES_DB: ${POSTGRES_DB:-rexalgo}
+    volumes:
+      - rexalgo_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rexalgo} -d ${POSTGRES_DB:-rexalgo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   api:
     build:
       context: ./backend
@@ -10,12 +25,18 @@ services:
     environment:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-openssl-rand}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-me-32-char-hex-or-string!!}
-      REXALGO_DB_PATH: /data/rexalgo.db
-      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://rexalgo:rexalgo@postgres:5432/rexalgo}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      NODE_ENV: production
+      PGSSLMODE: disable
       REXALGO_SESSION_MAX_AGE_DAYS: ${REXALGO_SESSION_MAX_AGE_DAYS:-}
-    volumes:
-      - rexalgo_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     expose:
       - "3000"
     restart: unless-stopped
@@ -38,4 +59,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  rexalgo_data:
+  rexalgo_pg:

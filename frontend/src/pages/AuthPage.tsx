@@ -7,6 +7,7 @@ import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { loginWithGoogle, ApiError } from "@/lib/api";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
+import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 
 type AuthState = "idle" | "loading" | "error";
 
@@ -108,6 +109,30 @@ export default function AuthPage() {
               <p className="text-center text-[11px] text-muted-foreground/90">
                 Secured with Google. We never see your password.
               </p>
+
+              <div className="mx-auto w-full max-w-[min(100%,20rem)]">
+                <div className="flex items-center gap-3 my-1 text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                  <span className="flex-1 border-t border-border/60" />
+                  or
+                  <span className="flex-1 border-t border-border/60" />
+                </div>
+                <div className="flex justify-center">
+                  <TelegramLoginButton
+                    onSuccess={async () => {
+                      await queryClient.refetchQueries({ queryKey: ["session", "me"] });
+                      void queryClient.invalidateQueries({ queryKey: ["wallet"] });
+                      void queryClient.invalidateQueries({
+                        queryKey: MUDREX_KEY_PROBE_QUERY_KEY,
+                      });
+                      navigate(from, { replace: true });
+                    }}
+                    onError={(msg) => {
+                      setState("error");
+                      setMessage(msg);
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           )}
 

@@ -17,6 +17,10 @@ import MarketplacePage from "./pages/MarketplacePage";
 import MarketplaceStudioPage from "./pages/MarketplaceStudioPage";
 import CopyTradingPage from "./pages/CopyTradingPage";
 import CopyTradingStudioPage from "./pages/CopyTradingStudioPage";
+import MasterAccessRequestPage from "./pages/MasterAccessRequestPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
+import TvWebhooksPage from "./pages/TvWebhooksPage";
+import SettingsPage from "./pages/SettingsPage";
 import StrategyDetailPage from "./pages/StrategyDetailPage";
 import TraderProfilePage from "./pages/TraderProfilePage";
 import NotFound from "./pages/NotFound.tsx";
@@ -53,6 +57,10 @@ const App = () => (
               <Route path="/marketplace/studio" element={<MarketplaceStudioPage />} />
               <Route path="/copy-trading" element={<CopyTradingPage />} />
               <Route path="/copy-trading/studio" element={<CopyTradingStudioPage />} />
+              <Route path="/master-studio/request" element={<MasterAccessRequestPage />} />
+              <Route path="/admin" element={<AdminDashboardPage />} />
+              <Route path="/tv-webhooks" element={<TvWebhooksPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="/strategy/:id" element={<StrategyDetailPage />} />
               <Route path="/trader/:id" element={<TraderProfilePage />} />
               <Route path="*" element={<NotFound />} />

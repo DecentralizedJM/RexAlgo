@@ -1,0 +1,29 @@
+# Local dev dependencies for RexAlgo.
+# Start just Postgres for npm run dev (the API + UI still run on the host via npm run dev).
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml down
+#
+# Then set DATABASE_URL=postgres://rexalgo:rexalgo@127.0.0.1:5432/rexalgo in backend/.env.local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rexalgo-postgres-dev
+    environment:
+      POSTGRES_USER: rexalgo
+      POSTGRES_PASSWORD: rexalgo
+      POSTGRES_DB: rexalgo
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - rexalgo_pg_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rexalgo -d rexalgo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  rexalgo_pg_dev:

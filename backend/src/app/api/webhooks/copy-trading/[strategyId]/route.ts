@@ -103,6 +103,11 @@ export async function POST(
     clientIp,
   });
 
+  await db
+    .update(copyWebhookConfig)
+    .set({ lastDeliveryAt: new Date() })
+    .where(eq(copyWebhookConfig.strategyId, strategyId));
+
   if (!strategy.isActive) {
     return NextResponse.json({
       ok: true,

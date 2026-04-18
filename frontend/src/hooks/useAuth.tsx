@@ -30,3 +30,42 @@ export function useRequireAuth() {
 
   return { ...q, authResolved, authed };
 }
+
+/**
+ * Guard for /marketplace/studio and /copy-trading/studio pages.
+ * Redirects to /master-studio/request when the user is signed in but has not been
+ * approved for Master Studio access yet. Admins pass through.
+ */
+export function useRequireMasterAccess() {
+  const navigate = useNavigate();
+  const q = useRequireAuth();
+  const user = q.data?.user;
+  const masterApproved =
+    user?.masterAccess === "approved" || user?.isAdmin === true;
+
+  useEffect(() => {
+    if (!q.authResolved || !q.authed || !user) return;
+    if (!masterApproved) {
+      navigate("/master-studio/request", { replace: true });
+    }
+  }, [q.authResolved, q.authed, user, masterApproved, navigate]);
+
+  return { ...q, masterApproved };
+}
+
+/** Guard for /admin routes — sends non-admins to /dashboard. */
+export function useRequireAdmin() {
+  const navigate = useNavigate();
+  const q = useRequireAuth();
+  const user = q.data?.user;
+  const isAdmin = user?.isAdmin === true;
+
+  useEffect(() => {
+    if (!q.authResolved || !q.authed || !user) return;
+    if (!isAdmin) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [q.authResolved, q.authed, user, isAdmin, navigate]);
+
+  return { ...q, isAdmin };
+}

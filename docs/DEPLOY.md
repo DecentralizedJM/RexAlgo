@@ -1,6 +1,12 @@
 # Deploying RexAlgo (Railway, Vercel, Docker)
 
-RexAlgo is a **Vite SPA** + **Next.js API** + **SQLite**. The browser calls **relative** `/api/*` with cookies (`Path=/api`, `SameSite=Lax`). That means:
+> Going to production or scaling past a single API instance? Read
+> [`PROD.md`](./PROD.md) for the current environment-variable set (Postgres,
+> `ADMIN_EMAILS`, `PUBLIC_API_URL`, Telegram), the scaling checklist
+> (1k → 10k CCU), and runbooks for secret rotation. This doc focuses on
+> **topology**; PROD covers **operations**.
+
+RexAlgo is a **Vite SPA** + **Next.js API** + **Postgres**. The browser calls **relative** `/api/*` with cookies (`Path=/api`, `SameSite=Lax`). That means:
 
 - **Best UX**: One public origin for the UI **and** `/api` (nginx or a host rewrite), so sessions and webhooks work without cross-site cookie changes.
 - **Split domains** (e.g. UI on `*.vercel.app`, API on `*.up.railway.app`) **break login** unless you add CORS + `SameSite=None; Secure` cookies and point the SPA at an absolute API URL — **not** implemented in this repo today.
