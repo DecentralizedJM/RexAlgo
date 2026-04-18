@@ -448,6 +448,27 @@ export default function DashboardPage() {
   ];
   const fetchHint = mudrexUpstreamHint(fetchIssues);
 
+  const anyFetchError =
+    hasMudrexKey && (walletQ.isError || posQ.isError || subQ.isError || historyQ.isError);
+  const mudrexKeyRejected =
+    anyFetchError &&
+    [walletQ.error, posQ.error, subQ.error, historyQ.error].some(
+      (e) => e != null && isMudrexCredentialError(e)
+    );
+
+  /** Non-admins: do not show misleading $0 when the request failed — use the same “loading” ellipsis. */
+  const walletUserHold = !isAdmin && !mudrexKeyRejected && walletQ.isError;
+  const subsUserHold = !isAdmin && !mudrexKeyRejected && subQ.isError;
+  const posUserHold = !isAdmin && !mudrexKeyRejected && posQ.isError;
+  const openPositionsSectionLoading = openPositionsLoading || posUserHold;
+
+  const retryDashboardQueries = () => {
+    void queryClient.invalidateQueries({ queryKey: ["wallet", "futures"] });
+    void queryClient.invalidateQueries({ queryKey: ["positions"] });
+    void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+    void queryClient.invalidateQueries({ queryKey: ["positions", "history"] });
+  };
+
   const futBal = parseFloat(futures?.balance ?? "0");
   const chartData = buildRealizedPnlCurve(historyQ.data?.positions ?? []);
 
@@ -461,19 +482,19 @@ export default function DashboardPage() {
   const statCards = [
     {
       label: "Futures wallet",
-      pending: walletStatPending,
+      pending: walletStatPending || walletUserHold,
       value: `$${futBal.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
       icon: Wallet,
     },
     {
       label: "Active subscriptions",
-      pending: subsStatPending,
+      pending: subsStatPending || subsUserHold,
       value: subs.length.toString(),
       icon: BarChart3,
     },
     {
       label: "Open positions",
-      pending: posStatPending,
+      pending: posStatPending || posUserHold,
       value: positions.length.toString(),
       icon: Users,
     },
@@ -544,9 +565,9 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {hasMudrexKey && (walletQ.isError || posQ.isError || subQ.isError || historyQ.isError) && (
+        {hasMudrexKey && anyFetchError && isAdmin && (
           <div className="mb-6 rounded-xl border border-loss/30 bg-loss/10 p-4 text-sm">
-            <p className="font-medium text-loss">Some dashboard data failed to load</p>
+            <p className="font-medium text-loss">Some dashboard data failed to load (admin diagnostics)</p>
             {fetchHint && (
               <p className="mt-2 text-xs text-foreground/90 leading-relaxed">{fetchHint}</p>
             )}
@@ -555,20 +576,51 @@ export default function DashboardPage() {
                 <li key={issue.label}>{formatFetchIssueLine(issue)}</li>
               ))}
             </ul>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="mt-3"
-              onClick={() => {
-                void queryClient.invalidateQueries({ queryKey: ["wallet", "futures"] });
-                void queryClient.invalidateQueries({ queryKey: ["positions"] });
-                void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
-                void queryClient.invalidateQueries({ queryKey: ["positions", "history"] });
-              }}
-            >
+            <Button type="button" variant="secondary" size="sm" className="mt-3" onClick={retryDashboardQueries}>
               Retry all
             </Button>
+          </div>
+        )}
+
+        {hasMudrexKey && anyFetchError && !isAdmin && mudrexKeyRejected && (
+          <div className="mb-6 rounded-xl border border-warning/40 bg-warning/10 p-5 sm:p-6 flex flex-col sm:flex-row gap-4 sm:items-center animate-fade-up">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-warning/20">
+              <KeyRound className="h-6 w-6 text-warning" aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold text-foreground">Mudrex could not verify your API key</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Your key may have expired or been rotated in the Mudrex app. Open Sign in and paste a fresh API
+                secret — your RexAlgo profile and strategies stay the same.
+              </p>
+              <Button variant="default" size="sm" className="mt-1 w-full sm:w-auto" asChild>
+                <Link to="/auth">Go to Sign in</Link>
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {hasMudrexKey && anyFetchError && !isAdmin && !mudrexKeyRejected && (
+          <div className="mb-6 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/[0.07] via-background to-background p-5 sm:p-6 shadow-sm animate-fade-up">
+            <div className="flex flex-col sm:flex-row gap-5 sm:items-start">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/15">
+                <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <p className="text-base font-semibold text-foreground tracking-tight">Syncing your trading data</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  We are connecting to Mudrex and your RexAlgo account to load your wallet, subscriptions, and
+                  positions. This usually finishes within a few seconds.
+                </p>
+                <p className="text-xs text-muted-foreground/90 leading-relaxed">
+                  If numbers do not appear after a short wait, use <span className="font-medium text-foreground">Refresh</span>{" "}
+                  in the header, or try again in a moment.
+                </p>
+                <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={retryDashboardQueries}>
+                  Try again
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -654,6 +706,11 @@ export default function DashboardPage() {
           </p>
           {historyQ.isPending ? (
             <p className="text-sm text-muted-foreground py-12 text-center">Loading history from Mudrex…</p>
+          ) : historyQ.isError && !isAdmin ? (
+            <p className="text-sm text-muted-foreground py-12 text-center leading-relaxed max-w-md mx-auto">
+              Performance history will show here once your data finishes syncing. Use{" "}
+              <span className="font-medium text-foreground">Refresh</span> in the header or try again in a moment.
+            </p>
           ) : chartData.length === 0 ? (
             <p className="text-sm text-muted-foreground py-12 text-center">
               No closed P&amp;L in this window yet. Open P&amp;L is above.
@@ -671,7 +728,7 @@ export default function DashboardPage() {
               Open positions
             </h2>
             <p className="text-xs text-muted-foreground mb-4">Open futures on your Mudrex account.</p>
-            {openPositionsLoading ? (
+            {openPositionsSectionLoading ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
             ) : positions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed border-border/60 bg-secondary/20">
@@ -741,6 +798,11 @@ export default function DashboardPage() {
             </p>
             {historyQ.isPending ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading position history…</p>
+            ) : historyQ.isError && !isAdmin ? (
+              <p className="text-sm text-muted-foreground py-8 text-center leading-relaxed max-w-md mx-auto">
+                Trade history will appear here after your account data loads. You can use{" "}
+                <span className="font-medium text-foreground">Refresh</span> in the header to retry.
+              </p>
             ) : closedHistorySorted.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed border-border/60 bg-secondary/20">
                 No closed positions in this history window yet.
