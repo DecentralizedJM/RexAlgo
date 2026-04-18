@@ -23,17 +23,17 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-ENV REXALGO_DB_PATH=/data/rexalgo.db
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /data
+    && rm -rf /var/lib/apt/lists/*
 
 # Same flat standalone layout as backend/Dockerfile (see comment there).
 WORKDIR /app
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+# Drizzle migrations run on first DB use (see backend/src/lib/db.ts).
+COPY --from=builder /app/drizzle ./drizzle
 
 EXPOSE 3000
 CMD ["node", "server.js"]
