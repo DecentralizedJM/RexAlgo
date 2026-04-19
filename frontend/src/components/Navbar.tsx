@@ -26,7 +26,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { TvMonogram } from "@/components/TvMonogram";
+import { TradingViewMark } from "@/components/TradingViewMark";
 import { refreshAppData } from "@/lib/refreshAppData";
 import { toast } from "sonner";
 import { useMudrexKeyInvalid } from "@/contexts/MudrexKeyInvalidContext";
@@ -43,7 +43,7 @@ const SUPPORT_EMAIL = "help@mudrex.com";
 type NavIcon = ComponentType<{ className?: string }>;
 
 const TvIcon: NavIcon = ({ className }) => (
-  <TvMonogram className={className} size={16} />
+  <TradingViewMark className={className} size={16} />
 );
 
 const navLinks: Array<{ to: string; label: string; icon: NavIcon }> = [
