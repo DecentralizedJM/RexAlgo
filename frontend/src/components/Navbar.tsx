@@ -145,7 +145,7 @@ export default function Navbar() {
             >
               <link.icon
                 className={
-                  link.intrinsicIcon ? cn("shrink-0 text-current") : "w-4 h-4"
+                  link.intrinsicIcon ? "shrink-0 text-current" : "w-4 h-4"
                 }
               />
               {link.label}
@@ -423,7 +423,7 @@ export default function Navbar() {
               >
                 <link.icon
                   className={
-                    link.intrinsicIcon ? cn("shrink-0 text-current") : "w-4 h-4"
+                    link.intrinsicIcon ? "shrink-0 text-current" : "w-4 h-4"
                   }
                 />
                 {link.label}
