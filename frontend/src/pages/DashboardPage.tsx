@@ -434,7 +434,7 @@ export default function DashboardPage() {
     () => positions.map((p) => p.symbol).filter((s) => String(s || "").trim() !== ""),
     [positions]
   );
-  const bybitMarks = useBybitLinearMarkPrices(positionSymbols);
+  const bybitFeed = useBybitLinearMarkPrices(positionSymbols);
   const subs = subQ.data?.subscriptions?.filter((s) => s.isActive) ?? [];
   const futAvailable = futuresAvailableUsdt(walletQ.data);
   const underfundedSubs = subs.filter((s) => {
@@ -734,9 +734,13 @@ export default function DashboardPage() {
               <Users className="w-4 h-4 text-primary" />
               Open positions
             </h2>
-            <p className="text-xs text-muted-foreground mb-4">
-              Open futures on your Mudrex account. Unrealized P&amp;L is estimated from entry vs mark (live Bybit
-              mark when connected); excludes fees — use Mudrex for official figures.
+            <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+              Open futures on your Mudrex account. Mudrex tracks the same style of perpetual{" "}
+              <span className="text-foreground/90">marks and scheduled funding</span> as major venues (Bybit-style
+              public feeds are shown here for convenience). Unrealized P&amp;L below is{" "}
+              <span className="text-foreground/90">price-only</span> (entry vs mark); it does{" "}
+              <span className="text-foreground/90">not</span> add trading fees or accrued funding — those are applied
+              on Mudrex&apos;s ledger, so your account can differ slightly. Use Mudrex for official balances and P&amp;L.
             </p>
             {openPositionsSectionLoading ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
@@ -763,13 +767,18 @@ export default function DashboardPage() {
                       const entry = parseFloat(p.entry_price ?? "0");
                       const mudrexMark = parseFloat(p.mark_price ?? "0");
                       const sym = String(p.symbol || "").trim().toUpperCase();
-                      const live = sym ? bybitMarks[sym] : undefined;
+                      const feed = sym ? bybitFeed[sym] : undefined;
+                      const liveMark = feed?.markPrice;
                       const markDisplay =
-                        live ??
+                        liveMark ??
                         (Number.isFinite(mudrexMark) && mudrexMark > 0 ? mudrexMark : NaN);
                       const markForPnl =
-                        live ??
+                        liveMark ??
                         (Number.isFinite(mudrexMark) && mudrexMark > 0 ? mudrexMark : NaN);
+                      const fundPct =
+                        feed?.fundingRate != null && Number.isFinite(feed.fundingRate)
+                          ? (feed.fundingRate * 100).toFixed(4)
+                          : null;
                       const qty = parseFloat(p.quantity ?? "0");
                       const apiUr = parseFloat(p.unrealized_pnl ?? "NaN");
                       const fromApi =
@@ -822,7 +831,7 @@ export default function DashboardPage() {
                                 <span>
                                   ${markDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                 </span>
-                                {live != null && (
+                                {liveMark != null && (
                                   <span className="text-[10px] font-normal text-muted-foreground">
                                     Bybit live
                                   </span>
@@ -834,16 +843,23 @@ export default function DashboardPage() {
                           </td>
                           <td className="py-3 px-3 text-right font-mono">
                             {unreal != null && Number.isFinite(unreal) ? (
-                              <span
-                                className={
-                                  unreal >= 0 ? "font-medium text-profit" : "font-medium text-loss"
-                                }
-                              >
-                                {unreal >= 0 ? "+" : ""}$
-                                {unreal.toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: unrealDecimals,
-                                })}
+                              <span className="inline-flex flex-col items-end gap-0.5">
+                                <span
+                                  className={
+                                    unreal >= 0 ? "font-medium text-profit" : "font-medium text-loss"
+                                  }
+                                >
+                                  {unreal >= 0 ? "+" : ""}$
+                                  {unreal.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: unrealDecimals,
+                                  })}
+                                </span>
+                                {fundPct != null && (
+                                  <span className="text-[10px] font-normal text-muted-foreground tabular-nums">
+                                    Bybit fund {fundPct}%
+                                  </span>
+                                )}
                               </span>
                             ) : (
                               <span className="text-muted-foreground">—</span>

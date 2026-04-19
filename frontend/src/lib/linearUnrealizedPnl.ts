@@ -1,6 +1,7 @@
 /**
- * USDT linear perp unrealized P&amp;L (best-effort, fees not included).
+ * USDT linear perp unrealized P&amp;L (best-effort).
  * Assumes `quantity` is base-asset size (e.g. BTC for BTCUSDT), prices in USDT.
+ * Does not include trading fees or funding accruals — those are venue-ledger items.
  */
 export function linearUnrealizedPnlUsdt(opts: {
   side: "LONG" | "SHORT";

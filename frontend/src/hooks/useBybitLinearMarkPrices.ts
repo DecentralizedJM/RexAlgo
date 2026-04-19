@@ -2,6 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const LINEAR_PUBLIC_WS = "wss://stream.bybit.com/v5/public/linear";
 
+export type BybitLinearPositionFeed = {
+  markPrice?: number;
+  /** Exchange-published funding rate (decimal, e.g. 0.0001 = 0.01%). */
+  fundingRate?: number;
+  /** Next funding settlement (Unix ms). */
+  nextFundingTimeMs?: number;
+};
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -17,12 +25,26 @@ function parsePx(v: unknown): number | undefined {
   return undefined;
 }
 
+function parseFunding(v: unknown): number | undefined {
+  if (v === undefined || v === null || v === "") return undefined;
+  const n = parseFloat(String(v).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function parseNextFundingMs(v: unknown): number | undefined {
+  if (v === undefined || v === null || v === "") return undefined;
+  const n = Number.parseInt(String(v), 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 /**
- * Live mark (or last) prices from Bybit public linear WS for the given symbols (e.g. BTCUSDT).
- * Used to refine unrealized P&amp;L when Mudrex mark is stale or uPnL is omitted.
+ * Live Bybit linear `tickers.{symbol}` fields for open positions: mark (or last),
+ * funding rate, next funding time. Deltas merge into the last snapshot per symbol.
  */
-export function useBybitLinearMarkPrices(symbols: string[]): Record<string, number> {
-  const [marks, setMarks] = useState<Record<string, number>>({});
+export function useBybitLinearMarkPrices(
+  symbols: string[]
+): Record<string, BybitLinearPositionFeed> {
+  const [feeds, setFeeds] = useState<Record<string, BybitLinearPositionFeed>>({});
 
   const symbolsKey = useMemo(() => {
     const s = new Set(
@@ -31,7 +53,7 @@ export function useBybitLinearMarkPrices(symbols: string[]): Record<string, numb
     return [...s].sort().join(",");
   }, [symbols]);
 
-  const pendingRef = useRef<Record<string, number>>({});
+  const pendingRef = useRef<Record<string, BybitLinearPositionFeed>>({});
   const rafRef = useRef<number | null>(null);
 
   const flush = useCallback(() => {
@@ -40,10 +62,10 @@ export function useBybitLinearMarkPrices(symbols: string[]): Record<string, numb
     pendingRef.current = {};
     const keys = Object.keys(batch);
     if (keys.length === 0) return;
-    setMarks((prev) => {
+    setFeeds((prev) => {
       const next = { ...prev };
       for (const k of keys) {
-        next[k] = batch[k];
+        next[k] = { ...prev[k], ...batch[k] };
       }
       return next;
     });
@@ -57,9 +79,21 @@ export function useBybitLinearMarkPrices(symbols: string[]): Record<string, numb
         const sym =
           typeof row.symbol === "string" ? row.symbol.trim().toUpperCase() : "";
         if (!sym) continue;
+        const delta: BybitLinearPositionFeed = {};
         const mark = parsePx(row.markPrice) ?? parsePx(row.lastPrice);
-        if (mark === undefined) continue;
-        pending[sym] = mark;
+        if (mark !== undefined) delta.markPrice = mark;
+        const fr = parseFunding(row.fundingRate);
+        if (fr !== undefined) delta.fundingRate = fr;
+        const nft = parseNextFundingMs(row.nextFundingTime);
+        if (nft !== undefined) delta.nextFundingTimeMs = nft;
+        if (
+          delta.markPrice === undefined &&
+          delta.fundingRate === undefined &&
+          delta.nextFundingTimeMs === undefined
+        ) {
+          continue;
+        }
+        pending[sym] = { ...pending[sym], ...delta };
         touched = true;
       }
       if (touched && rafRef.current == null) {
@@ -71,12 +105,12 @@ export function useBybitLinearMarkPrices(symbols: string[]): Record<string, numb
 
   useEffect(() => {
     if (!symbolsKey) {
-      setMarks({});
+      setFeeds({});
       return;
     }
     const syms = symbolsKey.split(",").filter(Boolean);
     if (syms.length === 0) {
-      setMarks({});
+      setFeeds({});
       return;
     }
 
@@ -179,7 +213,7 @@ export function useBybitLinearMarkPrices(symbols: string[]): Record<string, numb
 
   useEffect(() => {
     const keep = new Set(symbolsKey.split(",").filter(Boolean));
-    setMarks((prev) => {
+    setFeeds((prev) => {
       let changed = false;
       const next = { ...prev };
       for (const k of Object.keys(next)) {
@@ -192,5 +226,5 @@ export function useBybitLinearMarkPrices(symbols: string[]): Record<string, numb
     });
   }, [symbolsKey]);
 
-  return marks;
+  return feeds;
 }
