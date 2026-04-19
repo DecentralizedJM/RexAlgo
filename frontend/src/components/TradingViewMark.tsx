@@ -2,9 +2,8 @@ import { cn } from "@/lib/utils";
 import tvMarkup from "@/assets/tradingview-mark.svg?raw";
 
 /**
- * Renders `src/assets/tradingview-mark.svg` (replace that file with your own SVG).
- * Inlined at build time so `fill="currentColor"` follows the surrounding text color.
- * Use only where you have TradingView trademark permission.
+ * Official square logotype geometry (TradingView media kit), inlined at build time.
+ * Background rect removed; mark uses `currentColor`. Use only per media-kit / trademark rules.
  */
 export function TradingViewMark({
   className,
