@@ -57,6 +57,8 @@ export function ensureDbReady(): Promise<void> {
       await migrate(db, { migrationsFolder });
       const { seedDatabase } = await import("./seed");
       await seedDatabase();
+      const { ensureNotificationsWorker } = await import("./notifications");
+      ensureNotificationsWorker();
     })().catch((err) => {
       bootPromise = null;
       throw err;
@@ -66,9 +68,10 @@ export function ensureDbReady(): Promise<void> {
 }
 
 /**
- * Boot (migrations + seed + notification worker) runs from `src/instrumentation.ts`
- * `register()` so importing this module does not block on Postgres. That avoids
- * long hangs on first `/api/auth/google` or `/api/health` after a cold start.
+ * Boot (migrations + seed + notification worker) runs on first `ensureDbReady()`
+ * (e.g. GET `/api/health` or any route that awaits it). We do not use
+ * `src/instrumentation.ts`: Next.js 16 can evaluate that hook in the Edge runtime,
+ * which cannot load this module (`pg` / Node `crypto`).
  *
  * Scripts that call `migrate()` themselves set `REXALGO_SKIP_DB_BOOT=1` and must
  * invoke `ensureDbReady()` / `migrate()` explicitly.

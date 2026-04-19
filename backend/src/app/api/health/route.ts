@@ -6,8 +6,7 @@ import { ensureDbReady } from "@/lib/db";
  * Root `dev:web` waits on this URL before starting Vite.
  *
  * Awaits `ensureDbReady()` so health stays 503-ish if migrations fail (and so
- * `wait-on` does not start Vite before Postgres is migrated when instrumentation
- * ordering differs by Next version).
+ * `wait-on` does not start Vite before Postgres is migrated).
  */
 export async function GET() {
   if (process.env.REXALGO_SKIP_DB_BOOT !== "1") {

@@ -14,7 +14,7 @@
  *     bump `attempts`, and try again in the next tick up to `MAX_ATTEMPTS`.
  *
  * The worker is started lazily the first time `ensureNotificationsWorker()` is
- * called (imported by `backend/src/lib/db.ts` during boot). Setting
+ * called (from `ensureDbReady()` in `lib/db.ts` after migrations + seed). Setting
  * `REXALGO_DISABLE_NOTIFICATIONS=1` turns it off for tests.
  */
 import { v4 as uuidv4 } from "uuid";
