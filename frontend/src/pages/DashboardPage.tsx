@@ -48,9 +48,7 @@ import { formatPair } from "@/lib/format";
 import { useRequireAuth } from "@/hooks/useAuth";
 import { AuthGateSplash } from "@/components/AuthGateSplash";
 import { futuresAvailableUsdt } from "@/lib/walletFunding";
-import { linearUnrealizedPnlUsdt } from "@/lib/linearUnrealizedPnl";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
-import { useBybitLinearMarkPrices } from "@/hooks/useBybitLinearMarkPrices";
 import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
 import { toast } from "sonner";
@@ -430,11 +428,6 @@ export default function DashboardPage() {
   const openPositionsLoading = posQ.isPending && posQ.data === undefined;
   const futures = walletQ.data?.futures;
   const positions = posQ.data?.positions ?? [];
-  const positionSymbols = useMemo(
-    () => positions.map((p) => p.symbol).filter((s) => String(s || "").trim() !== ""),
-    [positions]
-  );
-  const bybitMarks = useBybitLinearMarkPrices(positionSymbols);
   const subs = subQ.data?.subscriptions?.filter((s) => s.isActive) ?? [];
   const futAvailable = futuresAvailableUsdt(walletQ.data);
   const underfundedSubs = subs.filter((s) => {
@@ -734,10 +727,7 @@ export default function DashboardPage() {
               <Users className="w-4 h-4 text-primary" />
               Open positions
             </h2>
-            <p className="text-xs text-muted-foreground mb-4">
-              Open futures on your Mudrex account. Unrealized P&amp;L is estimated from entry vs mark (live Bybit
-              mark when connected); excludes fees — use Mudrex for official figures.
-            </p>
+            <p className="text-xs text-muted-foreground mb-4">Open futures on your Mudrex account.</p>
             {openPositionsSectionLoading ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
             ) : positions.length === 0 ? (
@@ -755,43 +745,12 @@ export default function DashboardPage() {
                       <th className="text-right py-3 px-3 font-medium">Lev.</th>
                       <th className="text-right py-3 px-3 font-medium">Entry</th>
                       <th className="text-right py-3 px-3 font-medium">Mark</th>
-                      <th className="text-right py-3 px-3 font-medium">Unrealized</th>
                     </tr>
                   </thead>
                   <tbody>
                     {positions.map((p) => {
                       const entry = parseFloat(p.entry_price ?? "0");
-                      const mudrexMark = parseFloat(p.mark_price ?? "0");
-                      const sym = String(p.symbol || "").trim().toUpperCase();
-                      const live = sym ? bybitMarks[sym] : undefined;
-                      const markDisplay =
-                        live ??
-                        (Number.isFinite(mudrexMark) && mudrexMark > 0 ? mudrexMark : NaN);
-                      const markForPnl =
-                        live ??
-                        (Number.isFinite(mudrexMark) && mudrexMark > 0 ? mudrexMark : NaN);
-                      const qty = parseFloat(p.quantity ?? "0");
-                      const apiUr = parseFloat(p.unrealized_pnl ?? "NaN");
-                      const fromApi =
-                        Number.isFinite(apiUr) && Math.abs(apiUr) > 1e-12 ? apiUr : null;
-                      const fromModel =
-                        Number.isFinite(markForPnl) && Number.isFinite(entry) && qty > 0
-                          ? linearUnrealizedPnlUsdt({
-                              side: p.side,
-                              entryPrice: entry,
-                              markPrice: markForPnl,
-                              quantity: qty,
-                            })
-                          : null;
-                      const unreal = fromApi ?? fromModel;
-                      const unrealDecimals =
-                        unreal != null && Number.isFinite(unreal)
-                          ? Math.abs(unreal) < 0.01
-                            ? 6
-                            : Math.abs(unreal) < 1
-                              ? 4
-                              : 2
-                          : 2;
+                      const mark = parseFloat(p.mark_price ?? "0");
                       return (
                         <tr
                           key={p.position_id}
@@ -817,37 +776,7 @@ export default function DashboardPage() {
                             ${entry.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-3 text-right font-mono">
-                            {Number.isFinite(markDisplay) ? (
-                              <span className="inline-flex flex-col items-end gap-0.5">
-                                <span>
-                                  ${markDisplay.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                </span>
-                                {live != null && (
-                                  <span className="text-[10px] font-normal text-muted-foreground">
-                                    Bybit live
-                                  </span>
-                                )}
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono">
-                            {unreal != null && Number.isFinite(unreal) ? (
-                              <span
-                                className={
-                                  unreal >= 0 ? "font-medium text-profit" : "font-medium text-loss"
-                                }
-                              >
-                                {unreal >= 0 ? "+" : ""}$
-                                {unreal.toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: unrealDecimals,
-                                })}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
+                            ${mark.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                           </td>
                         </tr>
                       );
