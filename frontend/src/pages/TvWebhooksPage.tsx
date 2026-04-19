@@ -231,7 +231,7 @@ export default function TvWebhooksPage() {
               <ArrowLeft className="w-4 h-4" /> Back to dashboard
             </Link>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <TradingViewMark height={28} className="text-primary" />
+              <TradingViewMark height={28} />
               Webhooks
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">

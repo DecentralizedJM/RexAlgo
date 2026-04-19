@@ -1,33 +1,35 @@
 import { cn } from "@/lib/utils";
-import tvMarkup from "@/assets/tradingview-mark.svg?raw";
+import tvMarkSrc from "@/assets/tradingview-mark.svg?url";
 
 /**
- * Official square logotype geometry (TradingView media kit), inlined at build time.
- * Background rect removed; mark uses `currentColor`. Use only per media-kit / trademark rules.
+ * Media-kit `square-logo-black.svg` bundled as a URL. Rendered with a fixed **square**
+ * box so flex/CSS cannot stretch the mark non-uniformly.
  */
 export function TradingViewMark({
   className,
   height = 16,
 }: {
   className?: string;
-  /** Pixel height; width follows the SVG viewBox aspect ratio. */
+  /** Square edge length in CSS pixels. */
   height?: number;
 }) {
+  const px = `${height}px`;
   return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center align-middle text-current [&>svg]:block [&>svg]:h-full [&>svg]:w-auto [&>svg]:max-w-none [&>svg]:shrink-0",
-        className
-      )}
+    <img
+      src={tvMarkSrc}
+      alt="TradingView"
+      width={height}
+      height={height}
+      decoding="async"
+      draggable={false}
+      className={cn("block shrink-0 max-w-none select-none object-contain", className)}
       style={{
-        height: `${height}px`,
-        width: "fit-content",
-        maxWidth: "none",
+        width: px,
+        height: px,
+        minWidth: px,
+        minHeight: px,
         flexShrink: 0,
       }}
-      role="img"
-      aria-label="TradingView"
-      dangerouslySetInnerHTML={{ __html: tvMarkup }}
     />
   );
 }
