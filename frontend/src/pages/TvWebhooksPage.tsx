@@ -231,8 +231,8 @@ export default function TvWebhooksPage() {
               <ArrowLeft className="w-4 h-4" /> Back to dashboard
             </Link>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <TradingViewMark size={28} className="text-primary" />
-              TradingView webhooks
+              <TradingViewMark height={28} className="text-primary" />
+              Webhooks
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
               Turn TradingView alerts into trades. Each webhook is signed with its

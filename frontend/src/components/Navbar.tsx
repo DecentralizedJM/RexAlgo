@@ -43,15 +43,21 @@ const SUPPORT_EMAIL = "help@mudrex.com";
 type NavIcon = ComponentType<{ className?: string }>;
 
 const TvIcon: NavIcon = ({ className }) => (
-  <TradingViewMark className={className} size={16} />
+  <TradingViewMark className={className} height={16} />
 );
 
-const navLinks: Array<{ to: string; label: string; icon: NavIcon }> = [
+const navLinks: Array<{
+  to: string;
+  label: string;
+  icon: NavIcon;
+  /** Icon supplies its own width/height (wide marks); skip square w-4 h-4 wrapper. */
+  intrinsicIcon?: boolean;
+}> = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/subscriptions", label: "Subscriptions", icon: BookmarkCheck },
   { to: "/marketplace", label: "Strategies", icon: BarChart3 },
   { to: "/copy-trading", label: "Copy trading", icon: Users },
-  { to: "/tv-webhooks", label: "TV Webhooks", icon: TvIcon },
+  { to: "/tv-webhooks", label: "Webhooks", icon: TvIcon, intrinsicIcon: true },
 ];
 
 export default function Navbar() {
@@ -137,7 +143,11 @@ export default function Navbar() {
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
               }`}
             >
-              <link.icon className="w-4 h-4" />
+              <link.icon
+                className={
+                  link.intrinsicIcon ? cn("shrink-0 text-current") : "w-4 h-4"
+                }
+              />
               {link.label}
             </Link>
           ))}
@@ -411,7 +421,11 @@ export default function Navbar() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <link.icon className="w-4 h-4" />
+                <link.icon
+                  className={
+                    link.intrinsicIcon ? cn("shrink-0 text-current") : "w-4 h-4"
+                  }
+                />
                 {link.label}
               </Link>
             ))}
