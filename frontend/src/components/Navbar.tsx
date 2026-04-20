@@ -27,7 +27,6 @@ import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TradingViewMark } from "@/components/TradingViewMark";
-import { WebhooksMark } from "@/components/WebhooksMark";
 import { refreshAppData } from "@/lib/refreshAppData";
 import { toast } from "sonner";
 import { useMudrexKeyInvalid } from "@/contexts/MudrexKeyInvalidContext";
@@ -150,16 +149,6 @@ export default function Navbar() {
                 }
               />
               {link.label}
-              {link.to === "/tv-webhooks" && (
-                <WebhooksMark
-                  height={15}
-                  className={`shrink-0 opacity-80 ${
-                    location.pathname === link.to
-                      ? "text-foreground"
-                      : "text-muted-foreground"
-                  }`}
-                />
-              )}
             </Link>
           ))}
           {user && masterApproved && (
@@ -438,16 +427,6 @@ export default function Navbar() {
                   }
                 />
                 {link.label}
-                {link.to === "/tv-webhooks" && (
-                  <WebhooksMark
-                    height={16}
-                    className={`shrink-0 opacity-80 ${
-                      location.pathname === link.to
-                        ? "text-foreground"
-                        : "text-muted-foreground"
-                    }`}
-                  />
-                )}
               </Link>
             ))}
             {user && masterApproved && (

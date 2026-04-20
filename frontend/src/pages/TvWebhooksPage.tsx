@@ -229,12 +229,9 @@ export default function TvWebhooksPage() {
             >
               <ArrowLeft className="w-4 h-4" /> Back to dashboard
             </Link>
-            <h1 className="text-2xl font-bold flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold flex items-center gap-2">
               <TradingViewMark height={28} />
-              <span className="inline-flex items-center gap-2">
-                TradingView Webhooks
-                <WebhooksMark height={28} className="text-primary" />
-              </span>
+              TradingView Webhooks
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
               Connect TradingView alerts to auto-execute trades on Mudrex. Each
@@ -250,16 +247,13 @@ export default function TvWebhooksPage() {
                   New webhook
                   <WebhooksMark
                     height={18}
-                    className="brightness-0 invert opacity-95"
+                    className="text-primary-foreground opacity-90"
                   />
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 pr-8">
-                    Create TradingView webhook
-                    <WebhooksMark height={22} className="text-primary shrink-0" />
-                  </DialogTitle>
+                  <DialogTitle>Create TradingView webhook</DialogTitle>
                 </DialogHeader>
                 <CreateTvWebhookForm
                   loading={createMut.isPending}
@@ -310,10 +304,7 @@ export default function TvWebhooksPage() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Your webhook URL
-                  <WebhooksMark height={22} className="text-primary" />
-                </CardTitle>
+                <CardTitle>Your webhook URL</CardTitle>
                 <CardDescription>
                   Generate a signed webhook URL and secret, then paste the URL into
                   your TradingView alert.
@@ -344,7 +335,7 @@ export default function TvWebhooksPage() {
                     <>
                       <WebhooksMark
                         height={22}
-                        className="brightness-0 invert opacity-95"
+                        className="text-primary-foreground opacity-90"
                       />
                       Generate webhook URL
                     </>
@@ -358,10 +349,7 @@ export default function TvWebhooksPage() {
                   </DialogTrigger>
                   <DialogContent className="max-w-md">
                     <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2 pr-8">
-                        Create TradingView webhook
-                        <WebhooksMark height={22} className="text-primary shrink-0" />
-                      </DialogTitle>
+                      <DialogTitle>Create TradingView webhook</DialogTitle>
                     </DialogHeader>
                     <CreateTvWebhookForm
                       loading={createMut.isPending}
@@ -379,10 +367,7 @@ export default function TvWebhooksPage() {
           <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  Your TradingView webhooks
-                  <WebhooksMark height={20} className="text-muted-foreground" />
-                </CardTitle>
+                <CardTitle className="text-base">Your TradingView webhooks</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {webhooks.map((w) => (
@@ -392,7 +377,7 @@ export default function TvWebhooksPage() {
                     onClick={() => setSelectedId(w.id)}
                     className={`w-full text-left rounded-lg border p-3 text-sm transition-colors ${
                       selectedId === w.id
-                        ? "border-primary bg-primary/10"
+                        ? "border-primary/40 bg-secondary ring-1 ring-primary/15"
                         : "border-border hover:bg-secondary/50"
                     }`}
                   >

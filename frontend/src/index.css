@@ -5,50 +5,50 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light: warm stone neutrals, muted emerald accent — calmer, premium feel */
+  /* Light: warm neutrals, subdued green accent — less saturation than before */
   :root {
-    --background: 40 16% 97%;
-    --foreground: 220 18% 11%;
+    --background: 42 14% 96%;
+    --foreground: 220 16% 14%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 18% 11%;
+    --card: 40 12% 99%;
+    --card-foreground: 220 16% 14%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 18% 11%;
+    --popover: 40 12% 99%;
+    --popover-foreground: 220 16% 14%;
 
-    --primary: 162 32% 34%;
-    --primary-foreground: 40 20% 99%;
+    --primary: 158 20% 38%;
+    --primary-foreground: 42 18% 98%;
 
-    --secondary: 40 12% 93%;
+    --secondary: 40 11% 92%;
     --secondary-foreground: 220 14% 22%;
 
-    --muted: 40 10% 94%;
-    --muted-foreground: 220 9% 44%;
+    --muted: 40 9% 93%;
+    --muted-foreground: 220 9% 42%;
 
-    --accent: 162 28% 36%;
-    --accent-foreground: 40 20% 99%;
+    --accent: 158 18% 40%;
+    --accent-foreground: 42 18% 98%;
 
-    --destructive: 0 62% 44%;
+    --destructive: 0 55% 42%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 40 12% 90%;
-    --input: 40 10% 91%;
-    --ring: 162 32% 34%;
+    --border: 40 10% 88%;
+    --input: 40 9% 90%;
+    --ring: 158 20% 38%;
 
     --radius: 0.75rem;
 
-    --profit: 158 30% 32%;
-    --loss: 0 62% 44%;
-    --warning: 36 52% 44%;
+    --profit: 156 18% 36%;
+    --loss: 0 55% 42%;
+    --warning: 32 38% 46%;
 
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 220 18% 11%;
-    --sidebar-primary: 162 32% 34%;
-    --sidebar-primary-foreground: 40 20% 99%;
-    --sidebar-accent: 40 10% 94%;
+    --sidebar-background: 40 12% 99%;
+    --sidebar-foreground: 220 16% 14%;
+    --sidebar-primary: 158 20% 38%;
+    --sidebar-primary-foreground: 42 18% 98%;
+    --sidebar-accent: 40 9% 93%;
     --sidebar-accent-foreground: 220 14% 22%;
-    --sidebar-border: 40 12% 90%;
-    --sidebar-ring: 162 32% 34%;
+    --sidebar-border: 40 10% 88%;
+    --sidebar-ring: 158 20% 38%;
   }
 
   .dark {
@@ -189,8 +189,7 @@
   }
 
   html:not(.dark) .glass {
-    /* Use /90 (theme scale); /88 is not a valid Tailwind opacity modifier */
-    @apply bg-white/90 backdrop-blur-md border-border/40 shadow-[0_1px_2px_hsl(220_16%_10%/0.04),0_8px_24px_-8px_hsl(220_16%_10%/0.08)];
+    @apply bg-white/88 backdrop-blur-md border-border/35 shadow-[0_1px_1px_hsl(220_14%_12%/0.03),0_6px_20px_-10px_hsl(220_14%_12%/0.05)];
   }
 }
 
@@ -207,10 +206,10 @@
 
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 20px hsl(var(--primary) / 0.1);
+    box-shadow: 0 0 16px hsl(var(--primary) / 0.06);
   }
   50% {
-    box-shadow: 0 0 30px hsl(var(--primary) / 0.25);
+    box-shadow: 0 0 22px hsl(var(--primary) / 0.12);
   }
 }
 
