@@ -231,7 +231,7 @@ export default function TvWebhooksPage() {
             </Link>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <TradingViewMark height={28} />
-              TradingView Webhooks
+              Webhooks
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
               Connect TradingView alerts to auto-execute trades on Mudrex. Each
@@ -253,7 +253,7 @@ export default function TvWebhooksPage() {
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Create TradingView webhook</DialogTitle>
+                  <DialogTitle>Create webhook</DialogTitle>
                 </DialogHeader>
                 <CreateTvWebhookForm
                   loading={createMut.isPending}
@@ -318,7 +318,7 @@ export default function TvWebhooksPage() {
                   disabled={createMut.isPending}
                   onClick={() =>
                     createMut.mutate({
-                      name: `TradingView · ${new Date().toLocaleString(undefined, {
+                      name: `Webhooks · ${new Date().toLocaleString(undefined, {
                         dateStyle: "medium",
                         timeStyle: "short",
                       })}`,
@@ -349,7 +349,7 @@ export default function TvWebhooksPage() {
                   </DialogTrigger>
                   <DialogContent className="max-w-md">
                     <DialogHeader>
-                      <DialogTitle>Create TradingView webhook</DialogTitle>
+                      <DialogTitle>Create webhook</DialogTitle>
                     </DialogHeader>
                     <CreateTvWebhookForm
                       loading={createMut.isPending}
@@ -367,7 +367,7 @@ export default function TvWebhooksPage() {
           <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Your TradingView webhooks</CardTitle>
+                <CardTitle className="text-base">Your webhooks</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {webhooks.map((w) => (

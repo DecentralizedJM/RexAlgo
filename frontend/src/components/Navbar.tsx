@@ -57,7 +57,7 @@ const navLinks: Array<{
   { to: "/subscriptions", label: "Subscriptions", icon: BookmarkCheck },
   { to: "/marketplace", label: "Strategies", icon: BarChart3 },
   { to: "/copy-trading", label: "Copy trading", icon: Users },
-  { to: "/tv-webhooks", label: "TradingView", icon: TvIcon, intrinsicIcon: true },
+  { to: "/tv-webhooks", label: "Webhooks", icon: TvIcon, intrinsicIcon: true },
 ];
 
 export default function Navbar() {
