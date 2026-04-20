@@ -189,7 +189,15 @@
   }
 
   html:not(.dark) .glass {
-    @apply bg-white/88 backdrop-blur-md border-border/35 shadow-[0_1px_1px_hsl(220_14%_12%/0.03),0_6px_20px_-10px_hsl(220_14%_12%/0.05)];
+    /* Avoid @apply bg-white/88 — Tailwind rejects that utility inside @apply on Vercel. */
+    background-color: hsl(0 0% 100% / 0.88);
+    backdrop-filter: blur(12px);
+    border-width: 1px;
+    border-style: solid;
+    border-color: hsl(var(--border) / 0.35);
+    box-shadow:
+      0 1px 1px hsl(220 14% 12% / 0.03),
+      0 6px 20px -10px hsl(220 14% 12% / 0.05);
   }
 }
 
