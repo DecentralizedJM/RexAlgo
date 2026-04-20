@@ -87,8 +87,19 @@ export default function TvWebhooksPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [secretFlash, setSecretFlash] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  /** Bumps when the create dialog opens so the form remounts with fresh defaults. */
+  const [createFormNonce, setCreateFormNonce] = useState(0);
+  const defaultNewWebhookName = useMemo(
+    () =>
+      `Webhook · ${new Date().toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })}`,
+    [createFormNonce]
+  );
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
+
 
   const listQ = useQuery({
     queryKey: ["tv-webhooks"],
@@ -234,15 +245,21 @@ export default function TvWebhooksPage() {
               Webhooks
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Connect TradingView alerts to auto-execute trades on Mudrex. Each
-              webhook URL is signed; paste the JSON message format from the guide
-              into your alert.
+              Connect TradingView alerts to auto-execute trades on Mudrex. Paste
+              the JSON message format from the guide into your alert after your relay
+              is signing requests (see below).
             </p>
           </div>
-          {webhooks.length > 0 && (
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          {!listQ.isLoading && (
+            <Dialog
+              open={createOpen}
+              onOpenChange={(open) => {
+                setCreateOpen(open);
+                if (open) setCreateFormNonce((n) => n + 1);
+              }}
+            >
               <DialogTrigger asChild>
-                <Button variant="hero" className="gap-1.5">
+                <Button variant="hero" className="gap-1.5 shrink-0">
                   <Plus className="w-4 h-4 shrink-0" />
                   New webhook
                   <WebhooksMark
@@ -256,6 +273,8 @@ export default function TvWebhooksPage() {
                   <DialogTitle>Create webhook</DialogTitle>
                 </DialogHeader>
                 <CreateTvWebhookForm
+                  key={createFormNonce}
+                  initialName={defaultNewWebhookName}
                   loading={createMut.isPending}
                   ownedStrategies={ownedStrategies}
                   masterApproved={masterApproved}
@@ -271,13 +290,14 @@ export default function TvWebhooksPage() {
             <p className="font-medium text-profit mb-2">
               Signing secret (copy now — shown once)
             </p>
-            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-              Your webhook URL is unique to your account—treat it as private and do
-              not share it. RexAlgo still requires a valid{" "}
-              <code className="text-[11px]">X-RexAlgo-Signature</code> on every
-              request; TradingView cannot add that header, so a small relay signs the
-              body with this secret. That way a leaked URL alone cannot trigger
-              trades—only whoever has the secret can produce a valid signature.
+            <p className="text-xs text-foreground/90 mb-2 leading-relaxed">
+              <span className="font-medium text-foreground">Why?</span> A private URL
+              only hides your endpoint. RexAlgo still requires a cryptographic
+              signature on every request so a leaked URL cannot place trades by
+              itself. Your small relay uses this secret to build{" "}
+              <code className="text-[11px]">X-RexAlgo-Signature</code>; TradingView
+              cannot set that header directly. Keep the URL and this secret
+              confidential.
             </p>
             <div className="flex gap-2 items-center">
               <code className="text-xs break-all flex-1 font-mono bg-background/80 p-2 rounded">
@@ -312,64 +332,14 @@ export default function TvWebhooksPage() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Your webhook URL</CardTitle>
+                <CardTitle>Get started</CardTitle>
                 <CardDescription>
-                  Create your private webhook URL, then paste it into your TradingView
-                  alert. You will also get a signing secret for the relay that adds{" "}
-                  <code className="text-[11px]">X-RexAlgo-Signature</code> (see the
-                  setup guide below).
+                  Use <strong>New webhook</strong> above to choose a name, manual vs
+                  route-to-strategy mode, and safety caps. Defaults are filled in—you
+                  can edit everything before you create. Afterward, copy the URL and
+                  signing secret into your relay and TradingView alert (guide below).
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col items-center gap-4 py-6">
-                <Button
-                  variant="hero"
-                  size="lg"
-                  className="gap-2"
-                  disabled={createMut.isPending}
-                  onClick={() =>
-                    createMut.mutate({
-                      name: `Webhooks · ${new Date().toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}`,
-                      mode: "manual_trade",
-                      maxMarginUsdt: 50,
-                      defaultLeverage: 5,
-                      defaultRiskPct: 2,
-                    })
-                  }
-                >
-                  {createMut.isPending ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      <WebhooksMark
-                        height={22}
-                        className="text-primary-foreground opacity-90"
-                      />
-                      Generate webhook URL
-                    </>
-                  )}
-                </Button>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                  <DialogTrigger asChild>
-                    <Button type="button" variant="link" size="sm" className="text-muted-foreground">
-                      Advanced: custom name or route to strategy…
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Create webhook</DialogTitle>
-                    </DialogHeader>
-                    <CreateTvWebhookForm
-                      loading={createMut.isPending}
-                      ownedStrategies={ownedStrategies}
-                      masterApproved={masterApproved}
-                      onSubmit={(v) => createMut.mutate(v)}
-                    />
-                  </DialogContent>
-                </Dialog>
-              </CardContent>
             </Card>
             <TradingViewSetupDocs />
           </div>
@@ -1053,11 +1023,14 @@ function EventStatus({ status }: { status: "accepted" | "rejected" | "error" }) 
 }
 
 function CreateTvWebhookForm({
+  initialName = "",
   onSubmit,
   loading,
   ownedStrategies,
   masterApproved,
 }: {
+  /** Prefilled when the dialog opens (parent remounts with `key` for a fresh value). */
+  initialName?: string;
   loading: boolean;
   ownedStrategies: Array<{ id: string; name: string; type: "algo" | "copy_trading" }>;
   masterApproved: boolean;
@@ -1070,7 +1043,7 @@ function CreateTvWebhookForm({
     defaultRiskPct?: number;
   }) => void;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialName);
   const [mode, setMode] = useState<TvWebhookMode>("manual_trade");
   const [strategyId, setStrategyId] = useState<string>("");
   const [maxMargin, setMaxMargin] = useState("50");
@@ -1207,8 +1180,23 @@ function CreateTvWebhookForm({
         </div>
       )}
 
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}
+      <Button
+        type="submit"
+        variant="hero"
+        className="w-full gap-2"
+        disabled={loading}
+      >
+        {loading ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <>
+            <WebhooksMark
+              height={18}
+              className="text-primary-foreground opacity-90"
+            />
+            Create webhook
+          </>
+        )}
       </Button>
     </form>
   );
