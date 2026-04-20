@@ -33,7 +33,9 @@ export type NotificationKind =
   | "copy_signal_received"
   | "copy_mirror_error"
   | "tv_alert_executed"
-  | "strategy_deleted_by_admin";
+  | "strategy_deleted_by_admin"
+  | "strategy_approved"
+  | "strategy_rejected";
 
 export type NotificationPayload = {
   kind: NotificationKind;
