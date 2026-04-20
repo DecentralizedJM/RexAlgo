@@ -269,7 +269,15 @@ export default function TvWebhooksPage() {
         {secretFlash && (
           <div className="mb-6 p-4 rounded-xl border border-profit/30 bg-profit/10 text-sm">
             <p className="font-medium text-profit mb-2">
-              Signing secret (copy now; one-time display)
+              Signing secret (copy now — shown once)
+            </p>
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+              Your webhook URL is unique to your account—treat it as private and do
+              not share it. RexAlgo still requires a valid{" "}
+              <code className="text-[11px]">X-RexAlgo-Signature</code> on every
+              request; TradingView cannot add that header, so a small relay signs the
+              body with this secret. That way a leaked URL alone cannot trigger
+              trades—only whoever has the secret can produce a valid signature.
             </p>
             <div className="flex gap-2 items-center">
               <code className="text-xs break-all flex-1 font-mono bg-background/80 p-2 rounded">
@@ -306,8 +314,10 @@ export default function TvWebhooksPage() {
               <CardHeader>
                 <CardTitle>Your webhook URL</CardTitle>
                 <CardDescription>
-                  Generate a signed webhook URL and secret, then paste the URL into
-                  your TradingView alert.
+                  Create your private webhook URL, then paste it into your TradingView
+                  alert. You will also get a signing secret for the relay that adds{" "}
+                  <code className="text-[11px]">X-RexAlgo-Signature</code> (see the
+                  setup guide below).
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col items-center gap-4 py-6">
@@ -452,9 +462,9 @@ export default function TvWebhooksPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete webhook?</AlertDialogTitle>
               <AlertDialogDescription>
-                The signing secret becomes invalid immediately. Any TradingView
-                alert pointing to this URL will start returning 403. Delivery
-                history is also removed.
+                This webhook URL and its signing secret stop working immediately.
+                Any alert or relay still using them will get errors. Delivery history
+                is removed.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -582,9 +592,10 @@ function TradingViewSetupDocs() {
           </div>
           <p className="text-xs text-muted-foreground">
             RexAlgo verifies <code className="text-xs">X-RexAlgo-Signature</code> on each
-            request. TradingView cannot set headers — use a tiny Cloudflare Worker or
-            script that receives the alert, signs the raw body with your webhook secret,
-            and forwards it to the RexAlgo URL unchanged.
+            request. TradingView cannot set custom headers, so use a tiny Cloudflare
+            Worker (or similar) that receives the alert, signs the raw body with your
+            signing secret, and forwards it to your RexAlgo webhook URL unchanged.
+            Keep both the URL and the secret private.
           </p>
         </CardContent>
       </Card>
@@ -772,7 +783,8 @@ function TvWebhookDetail({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground -mt-1">
-            Rotating invalidates the previous secret (same as revoking the old URL).
+            Rotating issues a new secret (shown once). Update your relay; the old
+            secret stops working immediately.
           </p>
 
           <div>
