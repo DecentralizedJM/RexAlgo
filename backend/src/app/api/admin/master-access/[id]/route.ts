@@ -75,3 +75,51 @@ export async function POST(
 
   return NextResponse.json({ ok: true, id, status: nextStatus });
 }
+
+/**
+ * Hard-delete a master-access request row (admin only). Removes studio access
+ * when the deleted row was `approved`. Pending/rejected rows can be removed for
+ * cleanup; the user may submit a new request afterward if no other blockers.
+ */
+export async function DELETE(
+  _req: Request,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const block = blockIfNotAdmin(session.user);
+  if (block) return block;
+
+  const { id } = await ctx.params;
+
+  const [existing] = await db
+    .select()
+    .from(masterAccessRequests)
+    .where(eq(masterAccessRequests.id, id));
+  if (!existing) {
+    return NextResponse.json({ error: "Request not found" }, { status: 404 });
+  }
+
+  await db.delete(masterAccessRequests).where(eq(masterAccessRequests.id, id));
+
+  if (existing.status === "approved") {
+    void queueNotification(existing.userId, {
+      kind: "master_access_revoked",
+      text:
+        "🚫 <b>Master Studio access was removed by an admin</b> — you can no longer open the strategy studios until you are approved again.",
+    });
+  } else if (existing.status === "pending") {
+    void queueNotification(existing.userId, {
+      kind: "master_access_rejected",
+      text:
+        "ℹ️ <b>Your Master Studio request was withdrawn by an admin</b> — you may submit a new request if you still need access.",
+    });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    deleted: { id: existing.id, userId: existing.userId, status: existing.status },
+  });
+}

@@ -42,12 +42,14 @@ import { AuthGateSplash } from "@/components/AuthGateSplash";
 import {
   fetchAdminMasterAccess,
   reviewMasterAccess,
+  deleteAdminMasterAccessRequest,
   fetchAdminStrategies,
   toggleAdminStrategy,
   deleteAdminStrategy,
   fetchAdminUsers,
   fetchAdminUserDetail,
   reviewAdminStrategy,
+  type AdminMasterAccessRow,
   type AdminStrategyRow,
   type AdminUserRow,
   type StrategyReviewStatus,
@@ -130,11 +132,23 @@ export default function AdminDashboardPage() {
   );
 }
 
+function masterAccessDeleteConfirmTarget(r: {
+  userEmail: string | null;
+  userDisplayName: string | null;
+  userId: string;
+}): string {
+  return (r.userEmail ?? r.userDisplayName ?? r.userId).trim();
+}
+
 function MasterAccessTab() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<
     "pending" | "approved" | "rejected" | "all"
   >("pending");
+  const [masterToDelete, setMasterToDelete] = useState<AdminMasterAccessRow | null>(
+    null
+  );
+  const [masterDeleteConfirm, setMasterDeleteConfirm] = useState("");
 
   const q = useQuery({
     queryKey: ["admin", "master-access", filter],
@@ -154,6 +168,25 @@ function MasterAccessTab() {
     onError: (err) =>
       toast.error(err instanceof Error ? err.message : "Action failed"),
   });
+
+  const masterDeleteMut = useMutation({
+    mutationFn: (id: string) => deleteAdminMasterAccessRequest(id),
+    onSuccess: async () => {
+      toast.success("Master access record removed");
+      setMasterToDelete(null);
+      setMasterDeleteConfirm("");
+      await qc.invalidateQueries({ queryKey: ["admin", "master-access"] });
+      await qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Delete failed"),
+  });
+
+  const canConfirmMasterDelete = useMemo(() => {
+    if (!masterToDelete) return false;
+    const want = masterAccessDeleteConfirmTarget(masterToDelete).toLowerCase();
+    return masterDeleteConfirm.trim().toLowerCase() === want;
+  }, [masterToDelete, masterDeleteConfirm]);
 
   return (
     <Card>
@@ -250,7 +283,7 @@ function MasterAccessTab() {
                 </TableCell>
                 <TableCell className="text-right">
                   {r.status === "pending" ? (
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         size="sm"
                         variant="outline"
@@ -270,15 +303,41 @@ function MasterAccessTab() {
                       >
                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Approve
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground"
+                        disabled={masterDeleteMut.isPending}
+                        onClick={() => {
+                          setMasterToDelete(r);
+                          setMasterDeleteConfirm("");
+                        }}
+                      >
+                        Remove
+                      </Button>
                     </div>
                   ) : (
-                    <span className="text-xs text-muted-foreground">
-                      {r.reviewedBy
-                        ? `by ${r.reviewedBy}`
-                        : r.reviewedAt
-                        ? new Date(r.reviewedAt).toLocaleString()
-                        : "—"}
-                    </span>
+                    <div className="flex flex-col items-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={masterDeleteMut.isPending}
+                        onClick={() => {
+                          setMasterToDelete(r);
+                          setMasterDeleteConfirm("");
+                        }}
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" />
+                        {r.status === "approved" ? "Revoke access" : "Delete"}
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        {r.reviewedBy
+                          ? `by ${r.reviewedBy}`
+                          : r.reviewedAt
+                          ? new Date(r.reviewedAt).toLocaleString()
+                          : "—"}
+                      </span>
+                    </div>
                   )}
                 </TableCell>
               </TableRow>
@@ -286,6 +345,90 @@ function MasterAccessTab() {
           </TableBody>
         </Table>
       </CardContent>
+
+      <Dialog
+        open={Boolean(masterToDelete)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setMasterToDelete(null);
+            setMasterDeleteConfirm("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {masterToDelete?.status === "approved"
+                ? "Revoke master studio access?"
+                : "Remove master access request?"}
+            </DialogTitle>
+            <DialogDescription>
+              {masterToDelete?.status === "approved" ? (
+                <>
+                  This removes the user&apos;s approval row. They immediately lose
+                  access to Master Studio until a new request is approved.
+                </>
+              ) : masterToDelete?.status === "pending" ? (
+                <>
+                  This deletes the pending request. The user can submit a new
+                  request later.
+                </>
+              ) : (
+                <>This permanently deletes the rejected request record.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="master-delete-confirm">
+              Type{" "}
+              <span className="font-medium text-foreground">
+                {masterToDelete
+                  ? masterAccessDeleteConfirmTarget(masterToDelete)
+                  : ""}
+              </span>{" "}
+              to confirm
+            </Label>
+            <Input
+              id="master-delete-confirm"
+              value={masterDeleteConfirm}
+              onChange={(e) => setMasterDeleteConfirm(e.target.value)}
+              placeholder={
+                masterToDelete
+                  ? masterAccessDeleteConfirmTarget(masterToDelete)
+                  : ""
+              }
+              autoComplete="off"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMasterToDelete(null);
+                setMasterDeleteConfirm("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!canConfirmMasterDelete || masterDeleteMut.isPending}
+              onClick={() =>
+                masterToDelete && masterDeleteMut.mutate(masterToDelete.id)
+              }
+            >
+              {masterDeleteMut.isPending && (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
+              )}
+              {masterToDelete?.status === "approved"
+                ? "Revoke"
+                : masterToDelete?.status === "pending"
+                ? "Remove request"
+                : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
@@ -619,6 +762,12 @@ function StrategiesTab() {
               </span>{" "}
               and cascade-remove subscriptions, webhook config, signal history,
               and mirror attempts. This cannot be undone.
+              {toDelete?.status === "approved" && (
+                <span className="block mt-2 text-warning">
+                  This strategy is approved and may have live subscribers — they will
+                  lose access immediately.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

@@ -30,6 +30,7 @@ const MAX_ATTEMPTS = 5;
 export type NotificationKind =
   | "master_access_approved"
   | "master_access_rejected"
+  | "master_access_revoked"
   | "copy_signal_received"
   | "copy_mirror_error"
   | "tv_alert_executed"

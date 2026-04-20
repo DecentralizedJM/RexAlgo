@@ -250,6 +250,13 @@ export async function reviewMasterAccess(
   );
 }
 
+export async function deleteAdminMasterAccessRequest(id: string) {
+  return apiFetch<{
+    ok: boolean;
+    deleted: { id: string; userId: string; status: string };
+  }>(`/api/admin/master-access/${id}`, { method: "DELETE" });
+}
+
 export type StrategyReviewStatus = "pending" | "approved" | "rejected";
 
 export type AdminStrategyRow = {
