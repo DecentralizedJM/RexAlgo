@@ -1,34 +1,33 @@
 /**
  * Parse a TradingView-style alert payload into one of our internal trade intents.
  *
- * TV alerts are POSTed as the body of a user-defined JSON template — we cannot
- * dictate the exact keys, but we accept a handful of common shapes:
+ * Supported shapes:
  *
- *   1. "RexAlgo native" envelope (same as copy-trade webhooks):
+ *   1. RexAlgo copy-signal envelope (for `route_to_strategy`, or advanced
+ *      `manual_trade` users):
  *      {
  *        "idempotency_key": "...",
  *        "action": "open" | "close",
  *        "symbol": "BTCUSDT",
  *        "side": "LONG" | "SHORT",
  *        "trigger_type": "MARKET" | "LIMIT",
- *        "price": "..."                     // required for LIMIT
+ *        "price": "..."
  *      }
  *
- *   2. A trader-friendly TradingView alert template:
+ *   2. Simple TradingView JSON (recommended for `manual_trade`):
  *      {
- *        "ticker": "{{ticker}}",            // BTCUSDT.P, BINANCE:BTCUSDT, etc.
- *        "action": "buy" | "sell" | "exit" | "close" | "long" | "short",
- *        "qty":    "0.01" | "5%" | "25 USDT",   // manual mode only
- *        "orderType": "market" | "limit",
- *        "price":  "{{close}}",
- *        "id":     "{{timenow}}"            // used as idempotency key
+ *        "action": "buy" | "sell" | "long" | "short" | "close" | "exit",
+ *        "symbol": "BTCUSDT",
+ *        "leverage": 5,
+ *        "qty": 0.01,
+ *        "sl": 97000,
+ *        "tp": 101000,
+ *        "risk_pct": 2
  *      }
  *
- * Unknown fields are ignored. Obvious mismatches (missing symbol, invalid side)
- * return `{ ok: false }` so the webhook route can log the rejection and return a
- * 400. We intentionally stay permissive: everything that can be mapped to the
- * signed copy-trade schema goes through `parseCopySignalV1`, which remains the
- * single source of truth for signal validation.
+ *   Optional `id` or `idempotency_key` — when set, duplicates reuse that key.
+ *   When omitted, the webhook route dedupes by a stable hash of the raw body so
+ *   TradingView retries do not double-place orders without extra JSON fields.
  *
  * @see backend/src/lib/copyMirror.ts#parseCopySignalV1
  */
@@ -38,24 +37,47 @@ import { parseCopySignalV1, type CopySignalV1 } from "@/lib/copyMirror";
 /** A single Mudrex order on the webhook owner's account. */
 export type ManualTradeIntent = {
   kind: "manual_trade";
-  idempotency_key: string;
   symbol: string;
   side: "LONG" | "SHORT";
   /** `"open"` places an order, `"close"` closes the matching open position. */
   action: "open" | "close";
   trigger_type: "MARKET" | "LIMIT";
   price?: string;
-  /**
-   * Optional USDT margin override parsed from `qty: "25 USDT"` alerts. When
-   * absent, the TV webhook route falls back to `tvWebhooks.maxMarginUsdt`.
-   */
+  /** Parsed from `qty: "25 USDT"` when not using fixed contract qty. */
   marginUsdtHint?: number;
+  /** Fixed base-asset quantity (contracts), when `qty` is a plain number. */
+  baseQty?: number;
+  /** 1–100 as string for Mudrex `createOrder`. */
+  leverageStr?: string;
+  stoplosPrice?: string;
+  takeprofitPrice?: string;
+  /** Percent of futures wallet balance to allocate (clamped to max margin cap). */
+  riskPct?: number;
 };
 
 export type ParsedTvAlert =
-  | { ok: true; route: { kind: "copy_signal"; signal: CopySignalV1 } }
-  | { ok: true; route: ManualTradeIntent }
+  | {
+      ok: true;
+      route: { kind: "copy_signal"; signal: CopySignalV1 };
+      clientIdempotencyKey: string;
+    }
+  | {
+      ok: true;
+      route: ManualTradeIntent;
+      clientIdempotencyKey: string | null;
+    }
   | { ok: false; reason: string };
+
+/** Stable dedupe key: explicit client id, else SHA-256 of webhook + raw body. */
+export function tvWebhookDedupeKey(
+  webhookId: string,
+  rawBody: string,
+  clientExplicit: string | null
+): string {
+  const t = clientExplicit?.trim();
+  if (t) return t;
+  return `body:${crypto.createHash("sha256").update(`${webhookId}\n${rawBody}`).digest("hex")}`;
+}
 
 /** Normalise TradingView ticker forms to plain uppercase Mudrex symbols. */
 function normaliseSymbol(raw: unknown): string {
@@ -108,13 +130,69 @@ function parseMarginHint(raw: unknown): number | undefined {
   return n;
 }
 
+/** Plain numeric contract qty (not `"25 USDT"` margin hints). */
+function parseBaseQty(raw: unknown): number | undefined {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) return raw;
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (/USDT|USD$/i.test(t)) return undefined;
+    const n = parseFloat(t);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return undefined;
+}
+
+function coercePriceString(v: unknown): string | undefined {
+  if (v == null) return undefined;
+  const n = typeof v === "number" ? v : parseFloat(String(v).trim());
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return String(n);
+}
+
+function parseRiskPct(o: Record<string, unknown>): number | undefined {
+  const raw = o.risk_pct ?? o.riskPct;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    return Math.min(raw, 100);
+  }
+  if (typeof raw === "string") {
+    const n = parseFloat(raw.trim());
+    if (Number.isFinite(n) && n > 0) return Math.min(n, 100);
+  }
+  return undefined;
+}
+
+function parseLeverageField(raw: unknown): string | undefined {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    const x = Math.min(100, Math.max(1, Math.round(raw)));
+    return String(x);
+  }
+  if (typeof raw === "string") {
+    const n = parseFloat(raw.trim());
+    if (Number.isFinite(n) && n > 0) {
+      const x = Math.min(100, Math.max(1, Math.round(n)));
+      return String(x);
+    }
+  }
+  return undefined;
+}
+
+function roundBaseQtyToStep(q: number, minQty: number, step: number): number {
+  if (!Number.isFinite(q) || q <= 0) return 0;
+  if (step <= 0 || !Number.isFinite(step)) return 0;
+  const steps = Math.floor(q / step);
+  let out = steps * step;
+  if (out < minQty) {
+    const minSteps = Math.ceil(minQty / step);
+    out = minSteps * step;
+  }
+  return out;
+}
+
+export { roundBaseQtyToStep };
+
 /**
- * Try the native copy-signal shape first, then fall back to the trader-friendly
- * template for manual-trade routes.
- *
- * `mode` decides which adapter is *tried*:
- *   - `route_to_strategy` only accepts native copy-signal shapes.
- *   - `manual_trade` accepts either, but returns a ManualTradeIntent.
+ * Try the native copy-signal shape first, then fall back to the simple
+ * TradingView template for manual-trade routes.
  */
 export function parseTvAlert(
   body: unknown,
@@ -126,14 +204,19 @@ export function parseTvAlert(
 
   const native = parseCopySignalV1(body);
   if (native.ok) {
+    const key = native.signal.idempotency_key;
     if (mode === "route_to_strategy") {
-      return { ok: true, route: { kind: "copy_signal", signal: native.signal } };
+      return {
+        ok: true,
+        clientIdempotencyKey: key,
+        route: { kind: "copy_signal", signal: native.signal },
+      };
     }
     return {
       ok: true,
+      clientIdempotencyKey: key,
       route: {
         kind: "manual_trade",
-        idempotency_key: native.signal.idempotency_key,
         symbol: native.signal.symbol,
         side: native.signal.side,
         action: native.signal.action,
@@ -151,12 +234,12 @@ export function parseTvAlert(
   }
 
   const o = body as Record<string, unknown>;
-  const idempotency_key =
+  const explicitKey =
     typeof o.idempotency_key === "string" && o.idempotency_key.trim()
       ? o.idempotency_key.trim()
       : typeof o.id === "string" && o.id.trim()
         ? o.id.trim()
-        : `tv_${crypto.randomBytes(12).toString("hex")}`;
+        : null;
 
   const symbol =
     normaliseSymbol(o.symbol) ||
@@ -170,7 +253,8 @@ export function parseTvAlert(
   if (!inferred) {
     return {
       ok: false,
-      reason: "action must be buy/sell/long/short/close or a copy-signal envelope",
+      reason:
+        "action must be buy/sell/long/short/close/exit, or use the signed copy-signal envelope",
     };
   }
 
@@ -196,17 +280,27 @@ export function parseTvAlert(
     return { ok: false, reason: "price required for LIMIT alerts" };
   }
 
+  const baseQty = parseBaseQty(o.qty) ?? parseBaseQty(o.quantity);
+  const marginUsdtHint = baseQty
+    ? undefined
+    : parseMarginHint(o.qty ?? o.quantity ?? o.margin);
+
   return {
     ok: true,
+    clientIdempotencyKey: explicitKey,
     route: {
       kind: "manual_trade",
-      idempotency_key,
       symbol,
       side,
       action: inferred.action,
       trigger_type,
       price: trigger_type === "LIMIT" ? priceRaw : undefined,
-      marginUsdtHint: parseMarginHint(o.qty ?? o.quantity ?? o.margin),
+      marginUsdtHint,
+      baseQty,
+      leverageStr: parseLeverageField(o.leverage),
+      stoplosPrice: coercePriceString(o.sl ?? o.stopLoss ?? o.stop_loss),
+      takeprofitPrice: coercePriceString(o.tp ?? o.takeProfit ?? o.take_profit),
+      riskPct: parseRiskPct(o),
     },
   };
 }

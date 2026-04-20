@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { blockIfNotAdmin } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
@@ -11,8 +11,9 @@ import {
 } from "@/lib/schema";
 
 /**
- * Admin strategy directory. Supports `?type=algo|copy_trading|all` (default all).
- * Returns creator, webhook state, subscription count.
+ * Admin strategy directory. Supports `?type=algo|copy_trading|all` (default all)
+ * and `?status=pending|approved|rejected|all` (default all).
+ * Returns creator, webhook state, subscription count, review status.
  */
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -24,6 +25,24 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const type = url.searchParams.get("type");
+  const statusParam = url.searchParams.get("status") ?? "all";
+
+  const clauses: SQL<unknown>[] = [];
+  if (type === "algo" || type === "copy_trading") {
+    clauses.push(eq(strategies.type, type));
+  }
+  if (statusParam !== "all") {
+    const parsed = statusParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(
+        (s): s is "pending" | "approved" | "rejected" =>
+          s === "pending" || s === "approved" || s === "rejected"
+      );
+    if (parsed.length > 0) {
+      clauses.push(inArray(strategies.status, parsed));
+    }
+  }
 
   const base = db
     .select({
@@ -32,6 +51,10 @@ export async function GET(req: NextRequest) {
       type: strategies.type,
       symbol: strategies.symbol,
       isActive: strategies.isActive,
+      status: strategies.status,
+      rejectionReason: strategies.rejectionReason,
+      reviewedBy: strategies.reviewedBy,
+      reviewedAt: strategies.reviewedAt,
       creatorId: strategies.creatorId,
       creatorName: strategies.creatorName,
       creatorEmail: users.email,
@@ -52,13 +75,12 @@ export async function GET(req: NextRequest) {
     .orderBy(desc(strategies.createdAt));
 
   const rows =
-    type === "algo" || type === "copy_trading"
-      ? await base.where(eq(strategies.type, type))
-      : await base;
+    clauses.length > 0 ? await base.where(and(...clauses)) : await base;
 
   return NextResponse.json({
     strategies: rows.map((r) => ({
       ...r,
+      reviewedAt: r.reviewedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
     })),
   });

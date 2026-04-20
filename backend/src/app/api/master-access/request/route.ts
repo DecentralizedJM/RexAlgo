@@ -7,6 +7,24 @@ import { db } from "@/lib/db";
 import { masterAccessRequests } from "@/lib/schema";
 
 const MAX_NOTE = 1000;
+const MAX_PHONE = 40;
+const MIN_PHONE_DIGITS = 6;
+
+/**
+ * Permissive phone-number validation. Accepts local or international numbers
+ * (digits, spaces, `+`, `-`, parentheses) with at least 6 digits so the team
+ * has something dialable. We intentionally do not enforce E.164 because users
+ * submit a wide variety of regional formats.
+ */
+function normalisePhone(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_PHONE) return null;
+  if (!/^[+\d\s()\-]+$/.test(trimmed)) return null;
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length < MIN_PHONE_DIGITS) return null;
+  return trimmed;
+}
 
 /**
  * Submit a new master-studio access request.
@@ -27,11 +45,23 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  let body: { note?: string } = {};
+  let body: { note?: string; contactPhone?: string } = {};
   try {
-    body = (await req.json()) as { note?: string };
+    body = (await req.json()) as { note?: string; contactPhone?: string };
   } catch {
-    /* body is optional */
+    /* body is optional — but contactPhone is required so we'll catch it below */
+  }
+
+  const contactPhone = normalisePhone(body.contactPhone);
+  if (!contactPhone) {
+    return NextResponse.json(
+      {
+        error:
+          "A valid contact phone number is required (6+ digits; + - ( ) and spaces allowed).",
+        code: "CONTACT_PHONE_REQUIRED",
+      },
+      { status: 400 }
+    );
   }
 
   const note =
@@ -83,6 +113,7 @@ export async function POST(req: NextRequest) {
     userId: session.user.id,
     status: "pending",
     note,
+    contactPhone,
   });
 
   return NextResponse.json({ ok: true, status: "pending", requestId: id });

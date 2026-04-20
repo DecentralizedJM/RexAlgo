@@ -6,11 +6,12 @@
  *      webhooks; swap to Redis before horizontal scale — see repo TODOs).
  *   2. Verify `X-RexAlgo-Signature: t=<unix>,v1=<hmac>` against the stored
  *      per-webhook secret.
- *   3. Parse the alert with `parseTvAlert`. The adapter accepts both our native
- *      copy-signal envelope and a trader-friendly
- *      `{ ticker, action, qty, orderType, price, id }` template.
- *   4. Insert into `tv_webhook_events` (unique on `(webhook_id, idempotency_key)`
- *      so TV's at-least-once retries are harmless).
+ *   3. Parse the alert with `parseTvAlert` (simple `{ action, symbol, leverage,
+ *      sl, tp, qty, risk_pct }` for manual mode, or the signed copy-signal for
+ *      route-to-strategy).
+ *   4. Insert into `tv_webhook_events` (unique on `(webhook_id, idempotency_key)`).
+ *      Dedupe key is optional `id` / `idempotency_key` in the JSON; if omitted,
+ *      a stable hash of the raw body is used so TradingView retries stay safe.
  *   5. Execute according to `mode`:
  *        - `route_to_strategy`  → delegate to `executeMirror` with the owned
  *          strategy (must be active).
@@ -30,21 +31,25 @@ import {
 } from "@/lib/schema";
 import { decryptApiSecret } from "@/lib/auth";
 import { verifyCopyWebhookSignature } from "@/lib/copyWebhookHmac";
-import { parseTvAlert, type ManualTradeIntent } from "@/lib/tvAlert";
+import {
+  parseTvAlert,
+  roundBaseQtyToStep,
+  tvWebhookDedupeKey,
+  type ManualTradeIntent,
+} from "@/lib/tvAlert";
 import { executeMirror } from "@/lib/copyMirror";
 import { queueNotification } from "@/lib/notifications";
 import { checkCopyWebhookRateLimit } from "@/lib/copyWebhookRateLimit";
 import {
   createOrder,
   getAsset,
+  getFuturesBalance,
   listOpenPositions,
   closePosition,
   setLeverage,
 } from "@/lib/mudrex";
 import { computeFollowerQuantity } from "@/lib/copyMirror";
-
-/** Hard caps so a single alert can never place absurd notional. */
-const FALLBACK_LEVERAGE = "5";
+import { logTrade } from "@/lib/tradeLedger";
 
 async function recordEvent(
   webhookId: string,
@@ -65,20 +70,17 @@ async function recordEvent(
       clientIp,
     });
   } catch {
-    /* duplicate idempotency key – TV retry – ignore silently */
+    /* duplicate dedupe key — TradingView retry — ignore silently */
   }
 }
 
 async function runManualTrade(
   intent: ManualTradeIntent,
   apiSecret: string,
-  maxMarginUsdt: number
+  maxMarginUsdt: number,
+  userId: string,
+  tradeDefaults: { defaultLeverage: number; defaultRiskPct: number }
 ): Promise<{ ok: true; orderId: string } | { ok: false; detail: string }> {
-  const margin =
-    intent.marginUsdtHint && intent.marginUsdtHint > 0
-      ? Math.min(intent.marginUsdtHint, maxMarginUsdt)
-      : maxMarginUsdt;
-
   if (intent.action === "close") {
     try {
       const open = await listOpenPositions(apiSecret, "background");
@@ -117,12 +119,64 @@ async function runManualTrade(
 
   const minQty = parseFloat(asset.min_quantity || "0");
   const step = parseFloat(asset.quantity_step || "0.001");
-  const lev = parseFloat(FALLBACK_LEVERAGE);
-  const qty = computeFollowerQuantity(margin, lev, mark, minQty, step);
+
+  const levStr =
+    intent.leverageStr && intent.leverageStr.trim()
+      ? intent.leverageStr.trim()
+      : String(
+          Math.min(
+            100,
+            Math.max(1, Math.round(Number(tradeDefaults.defaultLeverage) || 5))
+          )
+        );
+  const levNum = parseFloat(levStr);
+  if (!Number.isFinite(levNum) || levNum <= 0) {
+    return { ok: false, detail: "Invalid leverage" };
+  }
+
+  const defRisk = Number(tradeDefaults.defaultRiskPct);
+  const defaultRiskOk = Number.isFinite(defRisk) && defRisk >= 0 && defRisk <= 100;
+  const effectiveRiskPct =
+    intent.riskPct != null && intent.riskPct > 0
+      ? intent.riskPct
+      : defaultRiskOk && defRisk > 0
+        ? defRisk
+        : undefined;
+
+  let qty: number;
+  if (intent.baseQty != null && intent.baseQty > 0) {
+    let q = roundBaseQtyToStep(intent.baseQty, minQty, step);
+    const maxNotional = maxMarginUsdt * levNum;
+    const maxQtyByCap = maxNotional / mark;
+    q = Math.min(q, roundBaseQtyToStep(maxQtyByCap, minQty, step));
+    qty = q;
+  } else {
+    let marginUsdt: number;
+    if (intent.marginUsdtHint && intent.marginUsdtHint > 0) {
+      marginUsdt = Math.min(intent.marginUsdtHint, maxMarginUsdt);
+    } else if (effectiveRiskPct != null && effectiveRiskPct > 0) {
+      try {
+        const bal = await getFuturesBalance(apiSecret);
+        const avail = parseFloat(bal.balance || "0");
+        if (Number.isFinite(avail) && avail > 0) {
+          marginUsdt = Math.min(maxMarginUsdt, (avail * effectiveRiskPct) / 100);
+        } else {
+          marginUsdt = maxMarginUsdt;
+        }
+      } catch {
+        marginUsdt = maxMarginUsdt;
+      }
+    } else {
+      marginUsdt = maxMarginUsdt;
+    }
+    qty = computeFollowerQuantity(marginUsdt, levNum, mark, minQty, step);
+  }
+
   if (qty <= 0) {
     return {
       ok: false,
-      detail: "Computed quantity below minimum — raise maxMarginUsdt or qty hint",
+      detail:
+        "Computed quantity below minimum — raise max margin cap, risk %, or qty",
     };
   }
 
@@ -130,7 +184,7 @@ async function runManualTrade(
     await setLeverage(
       apiSecret,
       intent.symbol,
-      FALLBACK_LEVERAGE,
+      levStr,
       "ISOLATED",
       "background"
     );
@@ -145,12 +199,20 @@ async function runManualTrade(
         symbol: intent.symbol,
         side: intent.side,
         quantity: String(qty),
-        leverage: FALLBACK_LEVERAGE,
+        leverage: levStr,
         triggerType: intent.trigger_type,
         price: intent.trigger_type === "LIMIT" ? intent.price : undefined,
+        stoplosPrice: intent.stoplosPrice,
+        takeprofitPrice: intent.takeprofitPrice,
       },
       "background"
     );
+    void logTrade({
+      userId,
+      source: "tv",
+      order,
+      markPriceFallback: mark,
+    });
     return { ok: true, orderId: order.order_id };
   } catch (e) {
     return {
@@ -205,14 +267,22 @@ export async function POST(
 
   const parsed = parseTvAlert(json, wh.mode);
   if (!parsed.ok) {
-    await recordEvent(wh.id, `bad_${Date.now()}`, rawBody, "rejected", parsed.reason, clientIp);
+    await recordEvent(
+      wh.id,
+      `reject:${uuidv4()}`,
+      rawBody,
+      "rejected",
+      parsed.reason,
+      clientIp
+    );
     return NextResponse.json({ error: parsed.reason }, { status: 400 });
   }
 
-  const idempotencyKey =
-    parsed.route.kind === "copy_signal"
-      ? parsed.route.signal.idempotency_key
-      : parsed.route.idempotency_key;
+  const idempotencyKey = tvWebhookDedupeKey(
+    wh.id,
+    rawBody,
+    parsed.clientIdempotencyKey
+  );
 
   const existing = await db
     .select({ id: tvWebhookEvents.id })
@@ -262,11 +332,14 @@ export async function POST(
       .set({ lastDeliveryAt: new Date() })
       .where(eq(tvWebhooks.id, wh.id));
 
-    if (!strategy.isActive) {
+    if (!strategy.isActive || strategy.status !== "approved") {
       return NextResponse.json({
         ok: true,
         mirrored: false,
-        reason: "strategy_inactive",
+        reason:
+          strategy.status !== "approved"
+            ? "strategy_not_approved"
+            : "strategy_inactive",
       });
     }
 
@@ -297,7 +370,16 @@ export async function POST(
     return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
   }
 
-  const result = await runManualTrade(parsed.route, apiSecret, wh.maxMarginUsdt);
+  const result = await runManualTrade(
+    parsed.route,
+    apiSecret,
+    wh.maxMarginUsdt,
+    wh.userId,
+    {
+      defaultLeverage: Number(wh.defaultLeverage ?? 5),
+      defaultRiskPct: Number(wh.defaultRiskPct ?? 2),
+    }
+  );
   await recordEvent(
     wh.id,
     idempotencyKey,
@@ -314,7 +396,7 @@ export async function POST(
   if (!result.ok) {
     void queueNotification(wh.userId, {
       kind: "copy_mirror_error",
-      text: `⚠️ TV webhook <b>${wh.name}</b> failed to execute: ${result.detail}`,
+      text: `⚠️ TradingView webhook <b>${wh.name}</b> failed to execute: ${result.detail}`,
     });
     return NextResponse.json({ ok: false, error: result.detail }, { status: 502 });
   }
@@ -322,7 +404,7 @@ export async function POST(
   void queueNotification(wh.userId, {
     kind: "tv_alert_executed",
     text:
-      `📈 TV webhook <b>${wh.name}</b>\n` +
+      `📈 TradingView webhook <b>${wh.name}</b>\n` +
       `${parsed.route.action === "open" ? "Opened" : "Closed"} ${parsed.route.side} ${parsed.route.symbol}` +
       ` (${parsed.route.trigger_type}) · order <code>${result.orderId}</code>`,
   });

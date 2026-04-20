@@ -108,11 +108,14 @@ export async function POST(
     .set({ lastDeliveryAt: new Date() })
     .where(eq(copyWebhookConfig.strategyId, strategyId));
 
-  if (!strategy.isActive) {
+  if (!strategy.isActive || strategy.status !== "approved") {
     return NextResponse.json({
       ok: true,
       mirrored: false,
-      reason: "strategy_inactive",
+      reason:
+        strategy.status !== "approved"
+          ? "strategy_not_approved"
+          : "strategy_inactive",
       signalId,
       summary: { processed: 0, ok: 0, errors: 0 },
     });

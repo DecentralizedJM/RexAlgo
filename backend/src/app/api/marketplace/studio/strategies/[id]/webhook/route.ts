@@ -58,6 +58,26 @@ export async function POST(
     );
   }
 
+  // Owners may always disable. Enabling or rotating a webhook is only
+  // permitted for approved listings so we don't accept live traffic for a
+  // strategy an admin has not yet reviewed.
+  if (
+    (action === "enable" || action === "rotate") &&
+    strategy.status !== "approved"
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          strategy.status === "pending"
+            ? "This strategy is awaiting admin review — webhook can only be enabled after approval."
+            : "This strategy was rejected — edit and reapply before enabling the webhook.",
+        code: "STRATEGY_NOT_APPROVED",
+        status: strategy.status,
+      },
+      { status: 409 }
+    );
+  }
+
   const [existing] = await db
     .select()
     .from(copyWebhookConfig)

@@ -27,6 +27,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useRequireMasterAccess } from "@/hooks/useAuth";
 import { AuthGateSplash } from "@/components/AuthGateSplash";
 import {
@@ -35,6 +45,11 @@ import {
   setCopyStrategyWebhook,
   renameCopyStrategyWebhook,
   fetchCopyStrategySignals,
+  updateCopyStudioStrategy,
+  deleteCopyStudioStrategy,
+  resubmitCopyStudioStrategy,
+  type StudioStrategyRow,
+  type StrategyReviewStatus,
   ApiError,
 } from "@/lib/api";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
@@ -50,8 +65,40 @@ import {
   RefreshCw,
   Power,
   PowerOff,
+  Send,
+  Trash2,
   X,
 } from "lucide-react";
+
+/**
+ * Small status pill used in the list and detail header. Colours echo the
+ * existing profit/warning/loss tokens so we don't introduce new palette
+ * entries.
+ */
+function StatusBadge({ status }: { status: StrategyReviewStatus }) {
+  const map: Record<StrategyReviewStatus, { label: string; cls: string }> = {
+    pending: {
+      label: "Pending review",
+      cls: "bg-warning/15 text-warning",
+    },
+    approved: {
+      label: "Approved",
+      cls: "bg-profit/15 text-profit",
+    },
+    rejected: {
+      label: "Rejected",
+      cls: "bg-loss/15 text-loss",
+    },
+  };
+  const s = map[status];
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${s.cls}`}
+    >
+      {s.label}
+    </span>
+  );
+}
 
 function buildWebhookUrl(
   publicBase: string | null,
@@ -85,6 +132,8 @@ export default function CopyTradingStudioPage() {
   const [secretFlash, setSecretFlash] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const originFallback =
     typeof window !== "undefined" ? `${window.location.origin}` : "";
@@ -101,6 +150,8 @@ export default function CopyTradingStudioPage() {
     [studioQ.data?.strategies]
   );
   const publicBase = studioQ.data?.publicBaseUrl ?? null;
+  const slots = studioQ.data?.slots ?? { used: 0, limit: 5 };
+  const slotsFull = slots.used >= slots.limit;
 
   useEffect(() => {
     if (!selectedId && strategies.length > 0) {
@@ -161,6 +212,53 @@ export default function CopyTradingStudioPage() {
     },
     onError: (e) => {
       toast.error(e instanceof ApiError ? e.message : "Rename failed");
+    },
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Parameters<typeof updateCopyStudioStrategy>[1];
+    }) => updateCopyStudioStrategy(id, patch),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["copy-studio", "strategies"],
+      });
+      setEditOpen(false);
+      toast.success("Strategy updated");
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Update failed");
+    },
+  });
+
+  const resubmitMut = useMutation({
+    mutationFn: (id: string) => resubmitCopyStudioStrategy(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["copy-studio", "strategies"],
+      });
+      toast.success("Submitted for re-review");
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Resubmit failed");
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteCopyStudioStrategy(id),
+    onSuccess: () => {
+      setDeleteOpen(false);
+      void queryClient.invalidateQueries({
+        queryKey: ["copy-studio", "strategies"],
+      });
+      toast.success("Strategy deleted");
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Delete failed");
     },
   });
 
@@ -237,22 +335,36 @@ with urllib.request.urlopen(req, timeout=30) as res:
               </p>
             )}
           </div>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button variant="hero" disabled={!hasMudrexKey}>
-                New copy strategy
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create copy-trading strategy</DialogTitle>
-              </DialogHeader>
-              <CreateStrategyForm
-                loading={createMut.isPending}
-                onSubmit={(v) => createMut.mutate(v)}
-              />
-            </DialogContent>
-          </Dialog>
+          <div className="flex flex-col items-start sm:items-end gap-1">
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="hero"
+                  disabled={!hasMudrexKey || slotsFull}
+                  title={
+                    slotsFull
+                      ? "You've hit the 5-listing limit. Delete a rejected or pending listing to free a slot."
+                      : undefined
+                  }
+                >
+                  New copy strategy
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create copy-trading strategy</DialogTitle>
+                </DialogHeader>
+                <CreateStrategyForm
+                  loading={createMut.isPending}
+                  onSubmit={(v) => createMut.mutate(v)}
+                />
+              </DialogContent>
+            </Dialog>
+            <p className="text-xs text-muted-foreground">
+              Slots: <span className="font-medium text-foreground">{slots.used}</span>/
+              {slots.limit} · rejected listings don&apos;t count
+            </p>
+          </div>
         </div>
 
         {secretFlash && (
@@ -306,7 +418,12 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         : "border-border hover:bg-secondary/50"
                     }`}
                   >
-                    <div className="font-medium truncate">{s.name}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate flex-1 min-w-0">
+                        {s.name}
+                      </span>
+                      <StatusBadge status={s.status} />
+                    </div>
                     <div className="text-xs text-muted-foreground truncate">{s.symbol}</div>
                     <div className="text-xs mt-1 flex items-center gap-2">
                       <span
@@ -333,10 +450,71 @@ with urllib.request.urlopen(req, timeout=30) as res:
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>{selected.name}</CardTitle>
-                    <CardDescription>{selected.description}</CardDescription>
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <CardTitle className="flex items-center gap-2 flex-wrap">
+                          <span className="truncate">{selected.name}</span>
+                          <StatusBadge status={selected.status} />
+                        </CardTitle>
+                        <CardDescription>{selected.description}</CardDescription>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {selected.status !== "approved" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditOpen(true)}
+                          >
+                            <Pencil className="w-4 h-4 mr-1" /> Edit
+                          </Button>
+                        )}
+                        {selected.status === "rejected" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={resubmitMut.isPending}
+                            onClick={() => resubmitMut.mutate(selected.id)}
+                          >
+                            <Send className="w-4 h-4 mr-1" /> Reapply
+                          </Button>
+                        )}
+                        {selected.status !== "approved" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="text-loss hover:text-loss"
+                            onClick={() => setDeleteOpen(true)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" /> Delete
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {selected.status === "pending" && (
+                      <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
+                        <p className="font-medium text-warning">Awaiting admin review</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Your listing is hidden from subscribers and the webhook cannot
+                          accept deliveries until it&apos;s approved.
+                        </p>
+                      </div>
+                    )}
+                    {selected.status === "rejected" && (
+                      <div className="rounded-lg border border-loss/30 bg-loss/10 p-3 text-sm">
+                        <p className="font-medium text-loss">Rejected</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {selected.rejectionReason?.trim()
+                            ? selected.rejectionReason
+                            : "No reason was provided. Edit the listing and reapply, or delete it."}
+                        </p>
+                      </div>
+                    )}
+
                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       {selected.webhookEnabled ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-profit/15 text-profit px-2 py-0.5 font-medium">
@@ -435,7 +613,16 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={webhookMut.isPending || selected.webhookEnabled}
+                        disabled={
+                          webhookMut.isPending ||
+                          selected.webhookEnabled ||
+                          selected.status !== "approved"
+                        }
+                        title={
+                          selected.status !== "approved"
+                            ? "Webhook can only be enabled after admin approval."
+                            : undefined
+                        }
                         onClick={() => webhookMut.mutate({ id: selected.id, action: "enable" })}
                       >
                         <Power className="w-4 h-4 mr-1" />
@@ -455,7 +642,14 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={webhookMut.isPending}
+                        disabled={
+                          webhookMut.isPending || selected.status !== "approved"
+                        }
+                        title={
+                          selected.status !== "approved"
+                            ? "Webhook can only be rotated for approved listings."
+                            : undefined
+                        }
                         onClick={() => webhookMut.mutate({ id: selected.id, action: "rotate" })}
                       >
                         <RefreshCw className="w-4 h-4 mr-1" />
@@ -578,12 +772,179 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   Mudrex errors). You are responsible for your bot and your subscribers&apos; understanding
                   of risk.
                 </p>
+
+                <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Edit copy-trading strategy</DialogTitle>
+                    </DialogHeader>
+                    <EditStrategyForm
+                      initial={selected}
+                      loading={updateMut.isPending}
+                      onSubmit={(patch) =>
+                        updateMut.mutate({ id: selected.id, patch })
+                      }
+                    />
+                  </DialogContent>
+                </Dialog>
+
+                <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete this listing?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This removes &quot;{selected.name}&quot; from your studio and cancels
+                        any open webhook config. Active subscribers (if any) will be
+                        unsubscribed. This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(e) => {
+                          e.preventDefault();
+                          deleteMut.mutate(selected.id);
+                        }}
+                        disabled={deleteMut.isPending}
+                        className="bg-loss hover:bg-loss/90"
+                      >
+                        {deleteMut.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "Delete"
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function EditStrategyForm({
+  initial,
+  onSubmit,
+  loading,
+}: {
+  initial: StudioStrategyRow;
+  loading: boolean;
+  onSubmit: (patch: Parameters<typeof updateCopyStudioStrategy>[1]) => void;
+}) {
+  const [name, setName] = useState(initial.name);
+  const [description, setDescription] = useState(initial.description);
+  const [symbol, setSymbol] = useState(initial.symbol);
+  const [side, setSide] = useState<"LONG" | "SHORT" | "BOTH">(
+    (initial.side as "LONG" | "SHORT" | "BOTH") ?? "BOTH"
+  );
+  const [leverage, setLeverage] = useState(initial.leverage ?? "1");
+  const [riskLevel, setRiskLevel] = useState<"low" | "medium" | "high">(
+    initial.riskLevel
+  );
+  const [timeframe, setTimeframe] = useState(initial.timeframe ?? "1h");
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!name.trim() || !description.trim() || !symbol.trim()) return;
+        onSubmit({
+          name: name.trim(),
+          description: description.trim(),
+          symbol: symbol.trim().toUpperCase(),
+          side,
+          leverage,
+          riskLevel,
+          timeframe,
+        });
+      }}
+    >
+      <div>
+        <Label htmlFor="edit-cs-name">Name</Label>
+        <Input
+          id="edit-cs-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="mt-1"
+          required
+        />
+      </div>
+      <div>
+        <Label htmlFor="edit-cs-desc">Description</Label>
+        <Textarea
+          id="edit-cs-desc"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="mt-1 min-h-[100px]"
+          required
+        />
+      </div>
+      <div>
+        <Label htmlFor="edit-cs-sym">Symbol (Mudrex)</Label>
+        <Input
+          id="edit-cs-sym"
+          value={symbol}
+          onChange={(e) => setSymbol(e.target.value)}
+          className="mt-1 font-mono"
+          required
+        />
+      </div>
+      <div>
+        <Label>Side</Label>
+        <Select value={side} onValueChange={(v) => setSide(v as typeof side)}>
+          <SelectTrigger className="mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="BOTH">BOTH</SelectItem>
+            <SelectItem value="LONG">LONG</SelectItem>
+            <SelectItem value="SHORT">SHORT</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="edit-cs-lev">Leverage</Label>
+        <Input
+          id="edit-cs-lev"
+          value={leverage}
+          onChange={(e) => setLeverage(e.target.value)}
+          className="mt-1 font-mono"
+        />
+      </div>
+      <div>
+        <Label>Risk</Label>
+        <Select
+          value={riskLevel}
+          onValueChange={(v) => setRiskLevel(v as typeof riskLevel)}
+        >
+          <SelectTrigger className="mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="low">Low</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="edit-cs-tf">Timeframe</Label>
+        <Input
+          id="edit-cs-tf"
+          value={timeframe}
+          onChange={(e) => setTimeframe(e.target.value)}
+          className="mt-1"
+        />
+      </div>
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save changes"}
+      </Button>
+    </form>
   );
 }
 

@@ -27,6 +27,7 @@ import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TradingViewMark } from "@/components/TradingViewMark";
+import { WebhooksMark } from "@/components/WebhooksMark";
 import { refreshAppData } from "@/lib/refreshAppData";
 import { toast } from "sonner";
 import { useMudrexKeyInvalid } from "@/contexts/MudrexKeyInvalidContext";
@@ -57,7 +58,7 @@ const navLinks: Array<{
   { to: "/subscriptions", label: "Subscriptions", icon: BookmarkCheck },
   { to: "/marketplace", label: "Strategies", icon: BarChart3 },
   { to: "/copy-trading", label: "Copy trading", icon: Users },
-  { to: "/tv-webhooks", label: "Webhooks", icon: TvIcon, intrinsicIcon: true },
+  { to: "/tv-webhooks", label: "TradingView", icon: TvIcon, intrinsicIcon: true },
 ];
 
 export default function Navbar() {
@@ -149,6 +150,16 @@ export default function Navbar() {
                 }
               />
               {link.label}
+              {link.to === "/tv-webhooks" && (
+                <WebhooksMark
+                  height={15}
+                  className={`shrink-0 opacity-80 ${
+                    location.pathname === link.to
+                      ? "text-foreground"
+                      : "text-muted-foreground"
+                  }`}
+                />
+              )}
             </Link>
           ))}
           {user && masterApproved && (
@@ -427,6 +438,16 @@ export default function Navbar() {
                   }
                 />
                 {link.label}
+                {link.to === "/tv-webhooks" && (
+                  <WebhooksMark
+                    height={16}
+                    className={`shrink-0 opacity-80 ${
+                      location.pathname === link.to
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                    }`}
+                  />
+                )}
               </Link>
             ))}
             {user && masterApproved && (

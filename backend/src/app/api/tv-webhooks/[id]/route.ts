@@ -39,6 +39,8 @@ export async function PATCH(
     mode?: string;
     strategyId?: string | null;
     maxMarginUsdt?: number;
+    defaultLeverage?: number;
+    defaultRiskPct?: number;
   };
   try {
     body = await req.json();
@@ -97,6 +99,20 @@ export async function PATCH(
       );
     }
     patch.maxMarginUsdt = Math.min(m, MAX_MARGIN_CAP);
+  }
+
+  if (
+    typeof body.defaultLeverage === "number" &&
+    Number.isFinite(body.defaultLeverage)
+  ) {
+    patch.defaultLeverage = Math.min(100, Math.max(1, Math.round(body.defaultLeverage)));
+  }
+
+  if (
+    typeof body.defaultRiskPct === "number" &&
+    Number.isFinite(body.defaultRiskPct)
+  ) {
+    patch.defaultRiskPct = Math.min(100, Math.max(0, body.defaultRiskPct));
   }
 
   if (Object.keys(patch).length === 0) {

@@ -203,7 +203,7 @@ Same as [Quick start §2](#2-environment-file-backend). Reference: **`backend/.e
 | **Docker / VPS** | `docker compose up` (nginx already proxies `/api`) | Same compose file |
 
 Full steps, env vars, and webhook notes: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
-Production operations (Postgres, admin dashboard, TV webhooks, Telegram,
+Production operations (Postgres, admin dashboard, TradingView webhooks, Telegram,
 scaling checklist, secret rotation runbook): **[docs/PROD.md](docs/PROD.md)**.
 
 ---

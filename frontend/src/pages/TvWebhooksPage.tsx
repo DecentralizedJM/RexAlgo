@@ -1,13 +1,9 @@
 /**
- * TV Webhooks (Phase 5).
+ * TradingView webhooks (Phase 5).
  *
- * A user-owned page where any signed-in user can spin up one or more
- * signed TradingView webhook URLs, pick between `manual_trade` (a single Mudrex
- * order on their account) and `route_to_strategy` (feeds an existing
- * copy-trade strategy they own), and review the delivery log.
- *
- * Secrets are shown exactly once per create/rotate and cleared on dismiss — the
- * page intentionally does not keep them in persistent state.
+ * Signed-in users create signed webhook URLs, choose `manual_trade` (one Mudrex
+ * order per alert) or `route_to_strategy` (copy-signal into a strategy they own),
+ * and review the delivery log. Secrets are shown once per create/rotate.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -64,6 +60,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { TradingViewMark } from "@/components/TradingViewMark";
+import { WebhooksMark } from "@/components/WebhooksMark";
 import {
   ApiError,
   createTvWebhook,
@@ -186,6 +183,8 @@ export default function TvWebhooksPage() {
         mode: TvWebhookMode;
         strategyId: string | null;
         maxMarginUsdt: number;
+        defaultLeverage: number;
+        defaultRiskPct: number;
       }>;
     }) => patchTvWebhook(id, body),
     onSuccess: () => {
@@ -230,34 +229,47 @@ export default function TvWebhooksPage() {
             >
               <ArrowLeft className="w-4 h-4" /> Back to dashboard
             </Link>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <h1 className="text-2xl font-bold flex flex-wrap items-center gap-2">
               <TradingViewMark height={28} />
-              Webhooks
+              <span className="inline-flex items-center gap-2">
+                TradingView Webhooks
+                <WebhooksMark height={28} className="text-primary" />
+              </span>
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Turn TradingView alerts into trades. Each webhook is signed with its
-              own secret and can either execute a single order on your Mudrex
-              account or route signals into one of your copy-trading strategies.
+              Connect TradingView alerts to auto-execute trades on Mudrex. Each
+              webhook URL is signed; paste the JSON message format from the guide
+              into your alert.
             </p>
           </div>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button variant="hero">
-                <Plus className="w-4 h-4 mr-1" /> New webhook
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Create TV webhook</DialogTitle>
-              </DialogHeader>
-              <CreateTvWebhookForm
-                loading={createMut.isPending}
-                ownedStrategies={ownedStrategies}
-                masterApproved={masterApproved}
-                onSubmit={(v) => createMut.mutate(v)}
-              />
-            </DialogContent>
-          </Dialog>
+          {webhooks.length > 0 && (
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button variant="hero" className="gap-1.5">
+                  <Plus className="w-4 h-4 shrink-0" />
+                  New webhook
+                  <WebhooksMark
+                    height={18}
+                    className="brightness-0 invert opacity-95"
+                  />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 pr-8">
+                    Create TradingView webhook
+                    <WebhooksMark height={22} className="text-primary shrink-0" />
+                  </DialogTitle>
+                </DialogHeader>
+                <CreateTvWebhookForm
+                  loading={createMut.isPending}
+                  ownedStrategies={ownedStrategies}
+                  masterApproved={masterApproved}
+                  onSubmit={(v) => createMut.mutate(v)}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         {secretFlash && (
@@ -295,20 +307,82 @@ export default function TvWebhooksPage() {
             <Loader2 className="w-8 h-8 animate-spin" />
           </div>
         ) : webhooks.length === 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>No TV webhooks yet</CardTitle>
-              <CardDescription>
-                Create a webhook to get a signed URL and secret you can paste into
-                a TradingView alert.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Your webhook URL
+                  <WebhooksMark height={22} className="text-primary" />
+                </CardTitle>
+                <CardDescription>
+                  Generate a signed webhook URL and secret, then paste the URL into
+                  your TradingView alert.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center gap-4 py-6">
+                <Button
+                  variant="hero"
+                  size="lg"
+                  className="gap-2"
+                  disabled={createMut.isPending}
+                  onClick={() =>
+                    createMut.mutate({
+                      name: `TradingView · ${new Date().toLocaleString(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}`,
+                      mode: "manual_trade",
+                      maxMarginUsdt: 50,
+                      defaultLeverage: 5,
+                      defaultRiskPct: 2,
+                    })
+                  }
+                >
+                  {createMut.isPending ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <WebhooksMark
+                        height={22}
+                        className="brightness-0 invert opacity-95"
+                      />
+                      Generate webhook URL
+                    </>
+                  )}
+                </Button>
+                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                  <DialogTrigger asChild>
+                    <Button type="button" variant="link" size="sm" className="text-muted-foreground">
+                      Advanced: custom name or route to strategy…
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 pr-8">
+                        Create TradingView webhook
+                        <WebhooksMark height={22} className="text-primary shrink-0" />
+                      </DialogTitle>
+                    </DialogHeader>
+                    <CreateTvWebhookForm
+                      loading={createMut.isPending}
+                      ownedStrategies={ownedStrategies}
+                      masterApproved={masterApproved}
+                      onSubmit={(v) => createMut.mutate(v)}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </CardContent>
+            </Card>
+            <TradingViewSetupDocs />
+          </div>
         ) : (
           <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Your webhooks</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2">
+                  Your TradingView webhooks
+                  <WebhooksMark height={20} className="text-muted-foreground" />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {webhooks.map((w) => (
@@ -365,6 +439,17 @@ export default function TvWebhooksPage() {
                 onChangeMargin={(maxMarginUsdt) =>
                   patchMut.mutate({ id: selected.id, body: { maxMarginUsdt } })
                 }
+                onSaveTradeDefaults={(defaultLeverage, defaultRiskPct) =>
+                  patchMut.mutate(
+                    {
+                      id: selected.id,
+                      body: { defaultLeverage, defaultRiskPct },
+                    },
+                    {
+                      onSuccess: () => toast.success("Settings saved"),
+                    }
+                  )
+                }
                 onDelete={() => setDeleteConfirmId(selected.id)}
                 rotating={rotateMut.isPending}
                 patching={patchMut.isPending}
@@ -409,6 +494,119 @@ type EventsQueryResult = ReturnType<
   typeof useQuery<Awaited<ReturnType<typeof fetchTvWebhookEvents>>, Error>
 >;
 
+const TRADINGVIEW_ALERT_BUY =
+  "{\n" +
+  '  "action": "buy",\n' +
+  '  "symbol": "BTCUSDT",\n' +
+  '  "leverage": 5,\n' +
+  '  "sl": {{close}} * 0.97,\n' +
+  '  "tp": {{close}} * 1.06\n' +
+  "}";
+
+const TRADINGVIEW_ALERT_SELL =
+  "{\n" +
+  '  "action": "sell",\n' +
+  '  "symbol": "BTCUSDT",\n' +
+  '  "leverage": 5,\n' +
+  '  "sl": {{close}} * 1.03,\n' +
+  '  "tp": {{close}} * 0.94\n' +
+  "}";
+
+const TRADINGVIEW_ALERT_CLOSE =
+  "{\n" + '  "action": "close",\n' + '  "symbol": "BTCUSDT"\n' + "}";
+
+function TradingViewSetupDocs() {
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">How to set up</CardTitle>
+          <CardDescription asChild>
+            <ol className="list-decimal list-inside space-y-1 text-sm">
+              <li>Open TradingView → go to your chart with the strategy or indicator.</li>
+              <li>Create an alert → set the condition to your strategy.</li>
+              <li>
+                Enable <strong>Webhook URL</strong> and paste your RexAlgo webhook URL.
+              </li>
+              <li>Set the alert message to the JSON format in the next section.</li>
+            </ol>
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Alert message format</CardTitle>
+          <CardDescription>
+            Optional fields: <code className="text-xs">qty</code> (fixed size),{" "}
+            <code className="text-xs">risk_pct</code> (% of futures wallet, capped by
+            your max margin), <code className="text-xs">leverage</code>,{" "}
+            <code className="text-xs">sl</code>, <code className="text-xs">tp</code>.
+            Omit <code className="text-xs">id</code> — TradingView retries are deduped
+            automatically from the message body.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Buy / Long</p>
+            <div className="flex justify-end mb-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void copyText(TRADINGVIEW_ALERT_BUY, "Copied")}
+              >
+                <Copy className="w-3 h-3 mr-1" /> Copy
+              </Button>
+            </div>
+            <pre className="text-xs bg-secondary/50 p-4 rounded-lg overflow-x-auto font-mono whitespace-pre">
+              {TRADINGVIEW_ALERT_BUY}
+            </pre>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Sell / Short</p>
+            <div className="flex justify-end mb-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void copyText(TRADINGVIEW_ALERT_SELL, "Copied")}
+              >
+                <Copy className="w-3 h-3 mr-1" /> Copy
+              </Button>
+            </div>
+            <pre className="text-xs bg-secondary/50 p-4 rounded-lg overflow-x-auto font-mono whitespace-pre">
+              {TRADINGVIEW_ALERT_SELL}
+            </pre>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Close position</p>
+            <div className="flex justify-end mb-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => void copyText(TRADINGVIEW_ALERT_CLOSE, "Copied")}
+              >
+                <Copy className="w-3 h-3 mr-1" /> Copy
+              </Button>
+            </div>
+            <pre className="text-xs bg-secondary/50 p-4 rounded-lg overflow-x-auto font-mono whitespace-pre">
+              {TRADINGVIEW_ALERT_CLOSE}
+            </pre>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            RexAlgo verifies <code className="text-xs">X-RexAlgo-Signature</code> on each
+            request. TradingView cannot set headers — use a tiny Cloudflare Worker or
+            script that receives the alert, signs the raw body with your webhook secret,
+            and forwards it to the RexAlgo URL unchanged.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function TvWebhookDetail({
   webhook,
   ownedStrategies,
@@ -419,6 +617,7 @@ function TvWebhookDetail({
   onRename,
   onChangeStrategy,
   onChangeMargin,
+  onSaveTradeDefaults,
   onDelete,
   rotating,
   patching,
@@ -433,23 +632,22 @@ function TvWebhookDetail({
   onRename: (name: string) => void;
   onChangeStrategy: (strategyId: string | null) => void;
   onChangeMargin: (maxMargin: number) => void;
+  onSaveTradeDefaults: (defaultLeverage: number, defaultRiskPct: number) => void;
   onDelete: () => void;
   rotating: boolean;
   patching: boolean;
   eventsQ: EventsQueryResult;
 }) {
   const [marginDraft, setMarginDraft] = useState(String(webhook.maxMarginUsdt));
+  const [defLevDraft, setDefLevDraft] = useState(String(webhook.defaultLeverage ?? 5));
+  const [defRiskDraft, setDefRiskDraft] = useState(String(webhook.defaultRiskPct ?? 2));
   useEffect(() => {
     setMarginDraft(String(webhook.maxMarginUsdt));
   }, [webhook.id, webhook.maxMarginUsdt]);
-
-  const tvAlertTemplate = `{
-  "idempotency_key": "{{strategy.order.id}}-{{timenow}}",
-  "action": "open",
-  "symbol": "{{ticker}}",
-  "side": "LONG",
-  "trigger_type": "MARKET"
-}`;
+  useEffect(() => {
+    setDefLevDraft(String(webhook.defaultLeverage ?? 5));
+    setDefRiskDraft(String(webhook.defaultRiskPct ?? 2));
+  }, [webhook.id, webhook.defaultLeverage, webhook.defaultRiskPct]);
 
   return (
     <div className="space-y-6">
@@ -585,9 +783,12 @@ function TvWebhookDetail({
               onClick={onRotate}
             >
               <RefreshCw className={`w-4 h-4 mr-1 ${rotating ? "animate-spin" : ""}`} />
-              Rotate secret
+              Rotate signing secret
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Rotating invalidates the previous secret (same as revoking the old URL).
+          </p>
 
           <div>
             <Label className="text-xs text-muted-foreground">Webhook URL</Label>
@@ -649,12 +850,15 @@ function TvWebhookDetail({
 
           {webhook.mode === "manual_trade" && (
             <div>
-              <Label htmlFor="tv-max-margin" className="text-xs text-muted-foreground">
+              <Label
+                htmlFor="tradingview-margin-cap"
+                className="text-xs text-muted-foreground"
+              >
                 Max margin per alert (USDT)
               </Label>
               <div className="flex gap-2 mt-1">
                 <Input
-                  id="tv-max-margin"
+                  id="tradingview-margin-cap"
                   type="number"
                   min={1}
                   step={1}
@@ -680,68 +884,111 @@ function TvWebhookDetail({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Hard cap on every manual-trade alert. Alerts may also send{" "}
-                <code>qty: "25 USDT"</code> but we never exceed this cap.
+                Hard safety cap on margin per alert. Fixed <code>qty</code>,{" "}
+                <code>risk_pct</code>, and <code>qty: &quot;25 USDT&quot;</code> hints
+                are clamped to this value.
               </p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">TradingView alert setup</CardTitle>
-          <CardDescription>
-            Paste the URL into the alert's "Webhook URL" field and use one of the
-            templates below as the message body. The alert must also attach an{" "}
-            <code className="text-xs">X-RexAlgo-Signature</code> header signed
-            with your secret. TradingView cannot add headers directly — run the
-            proxy script below on any host (Cloudflare Worker, Lambda, tiny VM)
-            that signs and forwards the body.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <Label className="text-xs text-muted-foreground">
-                Alert message body (JSON)
-              </Label>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => void copyText(tvAlertTemplate, "Template copied")}
-              >
-                <Copy className="w-3 h-3 mr-1" /> Copy
-              </Button>
+      {webhook.mode === "manual_trade" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Default settings</CardTitle>
+            <CardDescription>
+              Used when your TradingView alert omits <code className="text-xs">leverage</code>{" "}
+              or <code className="text-xs">risk_pct</code>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="tradingview-def-lev" className="text-xs text-muted-foreground">
+                  Default leverage (1–100)
+                </Label>
+                <Input
+                  id="tradingview-def-lev"
+                  type="number"
+                  min={1}
+                  max={100}
+                  step={1}
+                  value={defLevDraft}
+                  onChange={(e) => setDefLevDraft(e.target.value)}
+                  className="mt-1 font-mono text-sm"
+                />
+              </div>
+              <div>
+                <Label htmlFor="tradingview-def-risk" className="text-xs text-muted-foreground">
+                  Risk per trade (% of futures wallet)
+                </Label>
+                <Input
+                  id="tradingview-def-risk"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={defRiskDraft}
+                  onChange={(e) => setDefRiskDraft(e.target.value)}
+                  className="mt-1 font-mono text-sm"
+                />
+              </div>
             </div>
-            <pre className="text-xs bg-secondary/50 p-4 rounded-lg overflow-x-auto font-mono">
-              {tvAlertTemplate}
-            </pre>
-          </div>
+            <p className="text-xs text-muted-foreground">
+              Set risk to <code className="text-xs">0</code> to always use the max margin
+              cap above (no wallet-percent sizing).
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="hero"
+              disabled={patching}
+              onClick={() => {
+                const lev = parseFloat(defLevDraft);
+                const risk = parseFloat(defRiskDraft);
+                if (!Number.isFinite(lev) || lev < 1 || lev > 100) {
+                  toast.error("Leverage must be between 1 and 100");
+                  return;
+                }
+                if (!Number.isFinite(risk) || risk < 0 || risk > 100) {
+                  toast.error("Risk % must be between 0 and 100");
+                  return;
+                }
+                onSaveTradeDefaults(Math.round(lev), risk);
+              }}
+            >
+              Save settings
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-          <div>
-            <Label className="text-xs text-muted-foreground">
-              Manual-trade trader template (accepts TV placeholders)
-            </Label>
-            <pre className="text-xs bg-secondary/50 p-4 rounded-lg overflow-x-auto font-mono">
+      {webhook.mode === "manual_trade" ? (
+        <TradingViewSetupDocs />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Route-to-strategy message format</CardTitle>
+            <CardDescription>
+              This mode expects the signed RexAlgo copy-signal JSON (not the simple
+              buy/sell template). Include a unique{" "}
+              <code className="text-xs">idempotency_key</code> per intent.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-xs bg-secondary/50 p-4 rounded-lg overflow-x-auto font-mono whitespace-pre">
               {`{
-  "id": "{{timenow}}",
-  "ticker": "{{ticker}}",
-  "action": "buy",
-  "orderType": "market",
-  "qty": "10 USDT"
+  "idempotency_key": "{{strategy.order.id}}-{{timenow}}",
+  "action": "open",
+  "symbol": "BTCUSDT",
+  "side": "LONG",
+  "trigger_type": "MARKET"
 }`}
             </pre>
-            <p className="text-xs text-muted-foreground mt-1">
-              <code>action</code>: <code>buy</code>/<code>sell</code>/
-              <code>long</code>/<code>short</code>/<code>close</code>.{" "}
-              <code>qty</code> accepts <code>"25 USDT"</code>; we clamp it to your
-              max margin cap.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -764,7 +1011,7 @@ function TvWebhookDetail({
                     <th className="py-2 pr-2">Time</th>
                     <th className="py-2 pr-2">Status</th>
                     <th className="py-2 pr-2">Detail</th>
-                    <th className="py-2 pr-2">Idempotency</th>
+                    <th className="py-2 pr-2">Dedupe key</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -822,12 +1069,16 @@ function CreateTvWebhookForm({
     mode: TvWebhookMode;
     strategyId?: string | null;
     maxMarginUsdt?: number;
+    defaultLeverage?: number;
+    defaultRiskPct?: number;
   }) => void;
 }) {
   const [name, setName] = useState("");
   const [mode, setMode] = useState<TvWebhookMode>("manual_trade");
   const [strategyId, setStrategyId] = useState<string>("");
   const [maxMargin, setMaxMargin] = useState("50");
+  const [defLev, setDefLev] = useState("5");
+  const [defRisk, setDefRisk] = useState("2");
 
   const canPickStrategy = masterApproved && ownedStrategies.length > 0;
 
@@ -843,6 +1094,8 @@ function CreateTvWebhookForm({
           return;
         }
         const marginNum = parseFloat(maxMargin);
+        const lev = parseFloat(defLev);
+        const risk = parseFloat(defRisk);
         onSubmit({
           name: nm,
           mode,
@@ -851,13 +1104,21 @@ function CreateTvWebhookForm({
             mode === "manual_trade" && Number.isFinite(marginNum) && marginNum > 0
               ? marginNum
               : undefined,
+          defaultLeverage:
+            mode === "manual_trade" && Number.isFinite(lev) && lev >= 1 && lev <= 100
+              ? Math.round(lev)
+              : undefined,
+          defaultRiskPct:
+            mode === "manual_trade" && Number.isFinite(risk) && risk >= 0 && risk <= 100
+              ? risk
+              : undefined,
         });
       }}
     >
       <div>
-        <Label htmlFor="tv-name">Name</Label>
+        <Label htmlFor="tradingview-wh-name">Name</Label>
         <Input
-          id="tv-name"
+          id="tradingview-wh-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. ETH 4h breakout"
@@ -902,21 +1163,50 @@ function CreateTvWebhookForm({
       )}
 
       {mode === "manual_trade" && (
-        <div>
-          <Label htmlFor="tv-margin">Max margin per alert (USDT)</Label>
-          <Input
-            id="tv-margin"
-            type="number"
-            min={1}
-            step={1}
-            value={maxMargin}
-            onChange={(e) => setMaxMargin(e.target.value)}
-            className="mt-1 font-mono"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Hard safety cap. Alerts that send <code>qty</code> are clamped to this
-            value.
-          </p>
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="tradingview-wh-margin">Max margin per alert (USDT)</Label>
+            <Input
+              id="tradingview-wh-margin"
+              type="number"
+              min={1}
+              step={1}
+              value={maxMargin}
+              onChange={(e) => setMaxMargin(e.target.value)}
+              className="mt-1 font-mono"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Hard safety cap on margin per alert.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="tradingview-wh-lev">Default leverage</Label>
+              <Input
+                id="tradingview-wh-lev"
+                type="number"
+                min={1}
+                max={100}
+                step={1}
+                value={defLev}
+                onChange={(e) => setDefLev(e.target.value)}
+                className="mt-1 font-mono"
+              />
+            </div>
+            <div>
+              <Label htmlFor="tradingview-wh-risk">Default risk %</Label>
+              <Input
+                id="tradingview-wh-risk"
+                type="number"
+                min={0}
+                max={100}
+                step={0.5}
+                value={defRisk}
+                onChange={(e) => setDefRisk(e.target.value)}
+                className="mt-1 font-mono"
+              />
+            </div>
+          </div>
         </div>
       )}
 

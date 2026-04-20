@@ -78,6 +78,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
     }
 
+    // Block subscriptions to strategies that have not passed admin review (or
+    // that the creator has deactivated). The studio / admin dashboards never
+    // use this endpoint so this does not affect owners.
+    if (strategy.status !== "approved" || !strategy.isActive) {
+      return NextResponse.json(
+        {
+          error:
+            strategy.status === "approved"
+              ? "Strategy is currently paused by its creator"
+              : "Strategy is not available for subscription",
+          code: "STRATEGY_NOT_AVAILABLE",
+        },
+        { status: 409 }
+      );
+    }
+
     const existing = await db
       .select()
       .from(subscriptions)

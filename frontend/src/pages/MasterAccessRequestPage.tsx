@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
@@ -22,11 +23,20 @@ import {
 import { toast } from "sonner";
 import { ArrowRight, Loader2, ShieldCheck, Clock, XCircle } from "lucide-react";
 
+/** Permissive contact-phone check matching the backend. */
+function isValidPhone(value: string): boolean {
+  const t = value.trim();
+  if (t.length === 0 || t.length > 40) return false;
+  if (!/^[+\d\s()\-]+$/.test(t)) return false;
+  return t.replace(/\D/g, "").length >= 6;
+}
+
 export default function MasterAccessRequestPage() {
   const authQ = useRequireAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
 
   const meQ = useQuery({
     queryKey: ["master-access", "me"],
@@ -39,7 +49,8 @@ export default function MasterAccessRequestPage() {
   const latest = meQ.data?.latest ?? null;
 
   const submitMut = useMutation({
-    mutationFn: () => requestMasterAccess(note),
+    mutationFn: () =>
+      requestMasterAccess({ note, contactPhone }),
     onSuccess: async (res) => {
       toast.success(
         res.status === "approved"
@@ -47,8 +58,20 @@ export default function MasterAccessRequestPage() {
           : "Request submitted for review"
       );
       setNote("");
-      await queryClient.invalidateQueries({ queryKey: ["master-access", "me"] });
-      await queryClient.invalidateQueries({ queryKey: ["session", "me"] });
+      setContactPhone("");
+      // Invalidate + refetch so the card immediately flips to "Pending review"
+      // without waiting for staleTime — this is the fix for the "stale page"
+      // bug that was reported.
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["master-access", "me"],
+          refetchType: "active",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["session", "me"],
+          refetchType: "active",
+        }),
+      ]);
       if (res.status === "approved") {
         navigate("/marketplace/studio");
       }
@@ -102,6 +125,7 @@ export default function MasterAccessRequestPage() {
   const isApproved = status === "approved";
   const isPending = status === "pending";
   const canSubmit = !isApproved && !isPending;
+  const phoneOk = isValidPhone(contactPhone);
 
   return (
     <div className="min-h-screen bg-background">
@@ -140,6 +164,11 @@ export default function MasterAccessRequestPage() {
                   </span>
                 </div>
                 <div className="mt-1 font-medium capitalize">{latest.status}</div>
+                {latest.contactPhone?.trim() && (
+                  <p className="mt-2 text-xs font-mono text-foreground/90">
+                    Contact: {latest.contactPhone}
+                  </p>
+                )}
                 {latest.note && (
                   <p className="mt-2 text-xs text-muted-foreground whitespace-pre-wrap">
                     {latest.note}
@@ -155,25 +184,52 @@ export default function MasterAccessRequestPage() {
             )}
 
             {canSubmit && (
-              <div className="space-y-2">
-                <label
-                  htmlFor="master-access-note"
-                  className="text-sm font-medium"
-                >
-                  How will you use Master Studio? (optional)
-                </label>
-                <Textarea
-                  id="master-access-note"
-                  placeholder="e.g. I run an ETH trend-following bot and want to list it for copy trading."
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  rows={5}
-                  maxLength={1000}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Max 1000 characters. Optional — but helps reviewers approve faster.
-                </p>
-              </div>
+              <>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="master-access-phone"
+                    className="text-sm font-medium"
+                  >
+                    Contact phone number
+                    <span className="text-loss"> *</span>
+                  </label>
+                  <Input
+                    id="master-access-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+91 98765 43210"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    maxLength={40}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Required so the RexAlgo team can follow up on your
+                    application. Digits, +, -, spaces and parentheses allowed.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="master-access-note"
+                    className="text-sm font-medium"
+                  >
+                    How will you use Master Studio? (optional)
+                  </label>
+                  <Textarea
+                    id="master-access-note"
+                    placeholder="e.g. I run an ETH trend-following bot and want to list it for copy trading."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    rows={5}
+                    maxLength={1000}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Max 1000 characters. Optional — but helps reviewers approve faster.
+                  </p>
+                </div>
+              </>
             )}
           </CardContent>
 
@@ -184,7 +240,9 @@ export default function MasterAccessRequestPage() {
               </Button>
             ) : (
               <Button
-                disabled={!canSubmit || submitMut.isPending}
+                disabled={
+                  !canSubmit || !phoneOk || submitMut.isPending
+                }
                 onClick={() => submitMut.mutate()}
               >
                 {submitMut.isPending && (

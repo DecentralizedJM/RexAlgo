@@ -82,7 +82,7 @@ interface RateLimiterConfig {
   standard: TierLimits;
   /** Default max wait for interactive callers (e.g. user route). */
   maxWaitInteractiveMs: number;
-  /** Default max wait for background callers (copy-mirror, TV webhook, pagination). */
+  /** Default max wait for background callers (copy-mirror, TradingView webhook, pagination). */
   maxWaitBackgroundMs: number;
 }
 

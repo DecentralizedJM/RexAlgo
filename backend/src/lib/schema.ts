@@ -4,7 +4,7 @@
  *
  * Later phases extend this file with additional tables:
  *   Phase 2: masterAccessRequests
- *   Phase 5: tvWebhooks, tvWebhookEvents
+ *   Phase 5: TradingView webhooks (tv_webhooks, tv_webhook_events)
  *   Phase 6: notificationsOutbox + telegram fields on users
  *
  * @see backend/src/lib/db.ts | README.md#architecture
@@ -17,6 +17,7 @@ import {
   boolean,
   timestamp,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -58,6 +59,24 @@ export const strategies = pgTable("strategies", {
   /** JSON: { engine, params } — drives strategy-bound simulation (see lib/backtest/spec.ts). */
   backtestSpecJson: text("backtest_spec_json"),
   isActive: boolean("is_active").notNull().default(true),
+  /**
+   * Per-strategy admin review state.
+   *   pending  → default for new and re-submitted listings. Hidden from public
+   *              listings; webhook deliveries are rejected.
+   *   approved → public listing enabled; webhook may be enabled by owner.
+   *   rejected → hidden from public; owner may edit, resubmit, or delete.
+   * Existing pre-v2 rows were migrated to `pending` on deployment.
+   */
+  status: text("status", {
+    enum: ["pending", "approved", "rejected"],
+  })
+    .notNull()
+    .default("pending"),
+  rejectionReason: text("rejection_reason"),
+  reviewedBy: text("reviewed_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: "date" }),
   totalPnl: doublePrecision("total_pnl").notNull().default(0),
   winRate: doublePrecision("win_rate").notNull().default(0),
   totalTrades: integer("total_trades").notNull().default(0),
@@ -82,28 +101,51 @@ export const subscriptions = pgTable("subscriptions", {
     .defaultNow(),
 });
 
-export const tradeLogs = pgTable("trade_logs", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  strategyId: text("strategy_id").references(() => strategies.id, {
-    onDelete: "set null",
-  }),
-  orderId: text("order_id"),
-  symbol: text("symbol").notNull(),
-  side: text("side").notNull(),
-  quantity: text("quantity").notNull(),
-  entryPrice: text("entry_price"),
-  exitPrice: text("exit_price"),
-  pnl: text("pnl"),
-  status: text("status", { enum: ["open", "closed", "cancelled"] })
-    .notNull()
-    .default("open"),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-    .notNull()
-    .defaultNow(),
-});
+/**
+ * Forward-looking local ledger of every order RexAlgo placed on the user's behalf.
+ * Used to aggregate per-user trading volume in the admin dashboard.
+ *
+ * `source` distinguishes the code path that placed the order:
+ *   manual → dashboard / mobile ad-hoc order (`/api/mudrex/orders`)
+ *   copy   → copy-trade mirror fill (`lib/copyMirror.ts`)
+ *   tv     → TradingView webhook manual_trade (`/api/webhooks/tv/[id]`)
+ *
+ * `notionalUsdt` is stored as a numeric string (mirrors the rest of the
+ * money-field convention). It is `qty * orderPrice` (or last-known mark price
+ * when order price is not available).
+ */
+export const tradeLogs = pgTable(
+  "trade_logs",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    strategyId: text("strategy_id").references(() => strategies.id, {
+      onDelete: "set null",
+    }),
+    orderId: text("order_id"),
+    symbol: text("symbol").notNull(),
+    side: text("side").notNull(),
+    quantity: text("quantity").notNull(),
+    entryPrice: text("entry_price"),
+    exitPrice: text("exit_price"),
+    pnl: text("pnl"),
+    /** Which code path placed this order (see table docstring). */
+    source: text("source", { enum: ["manual", "copy", "tv"] })
+      .notNull()
+      .default("manual"),
+    /** Order notional (qty * price) at fill time, USDT, numeric string. */
+    notionalUsdt: text("notional_usdt"),
+    status: text("status", { enum: ["open", "closed", "cancelled"] })
+      .notNull()
+      .default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("trade_logs_user_created_idx").on(t.userId, t.createdAt)]
+);
 
 /** Webhook signing secret (encrypted) for master’s external bot. */
 export const copyWebhookConfig = pgTable("copy_webhook_config", {
@@ -174,6 +216,12 @@ export const masterAccessRequests = pgTable("master_access_requests", {
     .notNull()
     .default("pending"),
   note: text("note"),
+  /**
+   * Required contact phone the RexAlgo team can use to follow up (any format;
+   * server validates length + a permissive character set so users can pass
+   * local or international numbers). Empty string for pre-v2 rows.
+   */
+  contactPhone: text("contact_phone").notNull().default(""),
   reviewedBy: text("reviewed_by"),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: "date" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
@@ -184,8 +232,8 @@ export const masterAccessRequests = pgTable("master_access_requests", {
 /**
  * User-owned TradingView webhook endpoints (Phase 5).
  *
- * Each row gives one TV alert a unique signed URL. The `mode` decides what happens
- * when an alert is accepted:
+ * Each row gives one TradingView alert a unique signed URL. The `mode` decides
+ * what happens when an alert is accepted:
  *   - `manual_trade`     → execute a single Mudrex order on the owner's account
  *                          using the fields extracted from the alert payload.
  *   - `route_to_strategy`→ forward the alert through the existing copy-trade
@@ -193,10 +241,8 @@ export const masterAccessRequests = pgTable("master_access_requests", {
  *                          owned by the same user and have copy-trade webhooks
  *                          enabled).
  *
- * TV alerts themselves do not ship HMAC; we still require our
- * `X-RexAlgo-Signature` header so users can sign from any Pine `alert()` /
- * `alertcondition()` using a small helper (or Pine "Webhook URL" + static bearer
- * query-param variant). See `backend/src/lib/tvAlert.ts` for the adapter.
+ * TradingView does not attach custom headers; callers sign the JSON body and set
+ * `X-RexAlgo-Signature` from a tiny proxy or worker. See `backend/src/lib/tvAlert.ts`.
  */
 export const tvWebhooks = pgTable("tv_webhooks", {
   id: text("id").primaryKey(),
@@ -215,6 +261,13 @@ export const tvWebhooks = pgTable("tv_webhooks", {
   }),
   /** Max notional (USDT) per manual-trade alert — a safety cap. */
   maxMarginUsdt: doublePrecision("max_margin_usdt").notNull().default(50),
+  /** Used when the alert JSON omits `leverage` (manual_trade). */
+  defaultLeverage: doublePrecision("default_leverage").notNull().default(5),
+  /**
+   * Used when the alert omits `risk_pct`: margin = futures_wallet × pct/100,
+   * clamped to `max_margin_usdt`.
+   */
+  defaultRiskPct: doublePrecision("default_risk_pct").notNull().default(2),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),

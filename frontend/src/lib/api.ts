@@ -177,6 +177,7 @@ export type MasterAccessRequest = {
   id: string;
   status: "pending" | "approved" | "rejected";
   note: string | null;
+  contactPhone: string;
   reviewedBy: string | null;
   reviewedAt: string | null;
   createdAt: string;
@@ -192,7 +193,10 @@ export async function fetchMasterAccessMe(): Promise<MasterAccessMe> {
   return apiFetch<MasterAccessMe>("/api/master-access/me");
 }
 
-export async function requestMasterAccess(note?: string) {
+export async function requestMasterAccess(args: {
+  note?: string;
+  contactPhone: string;
+}) {
   return apiFetch<{
     ok: boolean;
     status: MasterAccessStatus;
@@ -200,7 +204,10 @@ export async function requestMasterAccess(note?: string) {
     message?: string;
   }>("/api/master-access/request", {
     method: "POST",
-    body: JSON.stringify({ note: note?.trim() || undefined }),
+    body: JSON.stringify({
+      note: args.note?.trim() || undefined,
+      contactPhone: args.contactPhone.trim(),
+    }),
   });
 }
 
@@ -214,6 +221,7 @@ export type AdminMasterAccessRow = {
   userStrategyCount: number;
   status: "pending" | "approved" | "rejected";
   note: string | null;
+  contactPhone: string;
   reviewedBy: string | null;
   reviewedAt: string | null;
   createdAt: string;
@@ -242,12 +250,18 @@ export async function reviewMasterAccess(
   );
 }
 
+export type StrategyReviewStatus = "pending" | "approved" | "rejected";
+
 export type AdminStrategyRow = {
   id: string;
   name: string;
   type: "algo" | "copy_trading";
   symbol: string;
   isActive: boolean;
+  status: StrategyReviewStatus;
+  rejectionReason: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
   creatorId: string;
   creatorName: string;
   creatorEmail: string | null;
@@ -257,13 +271,31 @@ export type AdminStrategyRow = {
 };
 
 export async function fetchAdminStrategies(
-  type: "algo" | "copy_trading" | "all" = "all"
+  type: "algo" | "copy_trading" | "all" = "all",
+  status: StrategyReviewStatus | "all" = "all"
 ) {
   const params = new URLSearchParams();
   if (type !== "all") params.set("type", type);
+  if (status !== "all") params.set("status", status);
   return apiFetch<{ strategies: AdminStrategyRow[] }>(
     `/api/admin/strategies${params.toString() ? `?${params}` : ""}`
   );
+}
+
+export async function reviewAdminStrategy(
+  id: string,
+  action: "approve" | "reject",
+  reason?: string
+) {
+  return apiFetch<{
+    ok: boolean;
+    id: string;
+    status: StrategyReviewStatus;
+    reason?: string | null;
+  }>(`/api/admin/strategies/${id}/review`, {
+    method: "POST",
+    body: JSON.stringify({ action, reason }),
+  });
 }
 
 export async function toggleAdminStrategy(id: string, active?: boolean) {
@@ -292,12 +324,97 @@ export type AdminUserRow = {
   displayName: string;
   authProvider: string;
   createdAt: string;
+  hasMudrexKey: boolean;
+  telegramLinked: boolean;
+  telegramUsername: string | null;
   strategyCount: number;
+  approvedStrategyCount: number;
+  subscriptionCount: number;
+  tvWebhookCount: number;
+  totalVolumeUsdt: string;
   masterStatus: string | null;
 };
 
 export async function fetchAdminUsers() {
   return apiFetch<{ users: AdminUserRow[] }>("/api/admin/users");
+}
+
+export type AdminUserDetail = {
+  user: {
+    id: string;
+    email: string | null;
+    displayName: string;
+    authProvider: string;
+    createdAt: string;
+    hasMudrexKey: boolean;
+    telegramLinked: boolean;
+    telegramUsername: string | null;
+    telegramNotifyEnabled: boolean;
+  };
+  strategies: Array<{
+    id: string;
+    name: string;
+    type: "algo" | "copy_trading";
+    symbol: string;
+    isActive: boolean;
+    status: StrategyReviewStatus;
+    rejectionReason: string | null;
+    subscriberCount: number;
+    createdAt: string;
+  }>;
+  subscriptions: Array<{
+    id: string;
+    strategyId: string;
+    marginPerTrade: string;
+    isActive: boolean;
+    createdAt: string;
+    strategyName: string | null;
+    strategyType: "algo" | "copy_trading" | null;
+    strategyStatus: StrategyReviewStatus | null;
+    strategySymbol: string | null;
+    creatorId: string | null;
+  }>;
+  tvWebhooks: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    mode: "manual_trade" | "route_to_strategy";
+    strategyId: string | null;
+    maxMarginUsdt: number;
+    lastDeliveryAt: string | null;
+    createdAt: string;
+  }>;
+  recentTrades: Array<{
+    id: string;
+    symbol: string;
+    side: string;
+    quantity: string;
+    entryPrice: string | null;
+    source: "manual" | "copy" | "tv";
+    notionalUsdt: string | null;
+    status: string;
+    strategyId: string | null;
+    orderId: string | null;
+    createdAt: string;
+  }>;
+  volume: {
+    totalUsdt: string;
+    bySource: Record<"manual" | "copy" | "tv", string>;
+    countsBySource: Record<"manual" | "copy" | "tv", number>;
+  };
+  masterRequests: Array<{
+    id: string;
+    status: "pending" | "approved" | "rejected";
+    note: string | null;
+    contactPhone: string;
+    reviewedBy: string | null;
+    reviewedAt: string | null;
+    createdAt: string;
+  }>;
+};
+
+export async function fetchAdminUserDetail(id: string) {
+  return apiFetch<AdminUserDetail>(`/api/admin/users/${id}`);
 }
 
 // ─── Strategies ─────────────────────────────────────────────────────
@@ -325,6 +442,14 @@ export type ApiStrategy = {
   /** Raw JSON from API; parse with {@link parseStrategyBacktestSpec}. */
   backtestSpecJson?: string | null;
   isActive: boolean;
+  /**
+   * Admin review state. Public listing endpoints already filter to
+   * `approved`, but studio listings return all states so the creator sees
+   * pending / rejected rows too.
+   */
+  status?: StrategyReviewStatus;
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
   totalPnl: number;
   winRate: number;
   totalTrades: number;
@@ -439,6 +564,9 @@ export async function patchStrategy(
 // ─── Copy trading — Master studio ───────────────────────────────────
 
 export type StudioStrategyRow = ApiStrategy & {
+  status: StrategyReviewStatus;
+  rejectionReason: string | null;
+  reviewedAt: string | null;
   webhookEnabled: boolean;
   /** Human-friendly webhook label (defaults to strategy name until renamed). */
   webhookName: string | null;
@@ -450,10 +578,13 @@ export type StudioStrategyRow = ApiStrategy & {
   webhookRotatedAt: string | null;
 };
 
+export type StrategySlotInfo = { used: number; limit: number };
+
 export async function fetchCopyStudioStrategies() {
   return apiFetch<{
     strategies: StudioStrategyRow[];
     publicBaseUrl: string | null;
+    slots: StrategySlotInfo;
   }>("/api/copy-trading/studio/strategies");
 }
 
@@ -516,12 +647,49 @@ export async function fetchCopyStrategySignals(strategyId: string) {
   );
 }
 
+export type CopyStudioStrategyPatch = {
+  name?: string;
+  description?: string;
+  symbol?: string;
+  side?: "LONG" | "SHORT" | "BOTH";
+  leverage?: string;
+  riskLevel?: "low" | "medium" | "high";
+  timeframe?: string;
+  stoplossPct?: number | null;
+  takeprofitPct?: number | null;
+};
+
+export async function updateCopyStudioStrategy(
+  strategyId: string,
+  patch: CopyStudioStrategyPatch
+) {
+  return apiFetch<{ strategy: StudioStrategyRow }>(
+    `/api/copy-trading/studio/strategies/${strategyId}`,
+    { method: "PATCH", body: JSON.stringify(patch) }
+  );
+}
+
+export async function deleteCopyStudioStrategy(strategyId: string) {
+  return apiFetch<{ ok: boolean; id: string }>(
+    `/api/copy-trading/studio/strategies/${strategyId}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function resubmitCopyStudioStrategy(strategyId: string) {
+  return apiFetch<{ ok: boolean; strategy: StudioStrategyRow }>(
+    `/api/copy-trading/studio/strategies/${strategyId}/resubmit`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
 // ─── Marketplace — Strategy studio (algo) ───────────────────────────
 
 export async function fetchMarketplaceStudioStrategies() {
   return apiFetch<{
     strategies: StudioStrategyRow[];
     publicBaseUrl: string | null;
+    slots: StrategySlotInfo;
   }>("/api/marketplace/studio/strategies");
 }
 
@@ -573,6 +741,34 @@ export async function renameMarketplaceStrategyWebhook(
 export async function fetchMarketplaceStrategySignals(strategyId: string) {
   return apiFetch<{ signals: CopySignalRow[] }>(
     `/api/marketplace/studio/strategies/${strategyId}/signals`
+  );
+}
+
+export type MarketplaceStudioStrategyPatch = CopyStudioStrategyPatch & {
+  backtestSpec?: StrategyBacktestSpec;
+};
+
+export async function updateMarketplaceStudioStrategy(
+  strategyId: string,
+  patch: MarketplaceStudioStrategyPatch
+) {
+  return apiFetch<{ strategy: StudioStrategyRow }>(
+    `/api/marketplace/studio/strategies/${strategyId}`,
+    { method: "PATCH", body: JSON.stringify(patch) }
+  );
+}
+
+export async function deleteMarketplaceStudioStrategy(strategyId: string) {
+  return apiFetch<{ ok: boolean; id: string }>(
+    `/api/marketplace/studio/strategies/${strategyId}`,
+    { method: "DELETE" }
+  );
+}
+
+export async function resubmitMarketplaceStudioStrategy(strategyId: string) {
+  return apiFetch<{ ok: boolean; strategy: StudioStrategyRow }>(
+    `/api/marketplace/studio/strategies/${strategyId}/resubmit`,
+    { method: "POST", body: JSON.stringify({}) }
   );
 }
 
@@ -719,7 +915,7 @@ export async function setTelegramNotifyEnabled(notifyEnabled: boolean) {
   );
 }
 
-// ─── TV Webhooks ────────────────────────────────────────────────────
+// ─── TradingView webhooks (API path: /api/tv-webhooks) ───────────────
 
 export type TvWebhookMode = "manual_trade" | "route_to_strategy";
 
@@ -730,6 +926,8 @@ export type TvWebhookRow = {
   mode: TvWebhookMode;
   strategyId: string | null;
   maxMarginUsdt: number;
+  defaultLeverage: number;
+  defaultRiskPct: number;
   createdAt: string;
   rotatedAt: string | null;
   lastDeliveryAt: string | null;
@@ -758,6 +956,8 @@ export async function createTvWebhook(body: {
   mode: TvWebhookMode;
   strategyId?: string | null;
   maxMarginUsdt?: number;
+  defaultLeverage?: number;
+  defaultRiskPct?: number;
 }) {
   return apiFetch<{
     webhook: TvWebhookRow;
@@ -775,6 +975,8 @@ export async function patchTvWebhook(
     mode: TvWebhookMode;
     strategyId: string | null;
     maxMarginUsdt: number;
+    defaultLeverage: number;
+    defaultRiskPct: number;
   }>
 ) {
   return apiFetch<{ ok: true }>(`/api/tv-webhooks/${id}`, {

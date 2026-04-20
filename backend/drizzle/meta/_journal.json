@@ -36,6 +36,20 @@
       "when": 1776533564755,
       "tag": "0004_telegram_and_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1776534000000,
+      "tag": "0005_admin_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776534100000,
+      "tag": "0006_tv_webhook_defaults",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ import {
   cancelOrder,
 } from "@/lib/mudrex";
 import { jsonFromMudrexError } from "@/lib/mudrexHttp";
+import { logTrade } from "@/lib/tradeLedger";
 import type { CreateOrderParams } from "@/types";
 
 export async function GET(req: NextRequest) {
@@ -57,6 +58,15 @@ export async function POST(req: NextRequest) {
     };
 
     const order = await createOrder(session.apiSecret, params);
+
+    // Best-effort ledger write for admin-dashboard volume aggregation.
+    void logTrade({
+      userId: session.user.id,
+      source: "manual",
+      order,
+      markPriceFallback: body.price ? parseFloat(body.price) : null,
+    });
+
     return NextResponse.json({ order });
   } catch (error) {
     const mudrex = jsonFromMudrexError(error);

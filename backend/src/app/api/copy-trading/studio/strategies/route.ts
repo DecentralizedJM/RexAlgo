@@ -6,6 +6,12 @@ import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { strategies, copyWebhookConfig } from "@/lib/schema";
 import { publicApiBase } from "@/lib/publicUrl";
+import {
+  STRATEGY_SLOT_LIMIT,
+  StrategySlotLimitError,
+  assertStrategySlotAvailable,
+  countStrategySlots,
+} from "@/lib/quotas";
 
 export async function GET() {
   const session = await getSession();
@@ -45,9 +51,12 @@ export async function GET() {
     };
   });
 
+  const used = await countStrategySlots(session.user.id, "copy_trading");
+
   return NextResponse.json({
     strategies: out,
     publicBaseUrl: base || null,
+    slots: { used, limit: STRATEGY_SLOT_LIMIT },
   });
 }
 
@@ -60,6 +69,23 @@ export async function POST(req: NextRequest) {
   if (blocked) return blocked;
 
   try {
+    try {
+      await assertStrategySlotAvailable(session.user.id, "copy_trading");
+    } catch (err) {
+      if (err instanceof StrategySlotLimitError) {
+        return NextResponse.json(
+          {
+            error: err.message,
+            code: err.code,
+            used: err.used,
+            limit: err.limit,
+          },
+          { status: 409 }
+        );
+      }
+      throw err;
+    }
+
     const body = await req.json();
 
     const id = uuidv4();
@@ -78,6 +104,9 @@ export async function POST(req: NextRequest) {
       riskLevel: (body.riskLevel || "medium") as "low" | "medium" | "high",
       timeframe: body.timeframe || "1h",
       isActive: true,
+      // New listings must be reviewed before they appear in public listings or
+      // accept webhook deliveries.
+      status: "pending" as const,
       totalPnl: 0,
       winRate: 0,
       totalTrades: 0,

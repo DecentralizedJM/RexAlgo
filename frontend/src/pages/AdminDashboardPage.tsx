@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
@@ -46,10 +46,44 @@ import {
   toggleAdminStrategy,
   deleteAdminStrategy,
   fetchAdminUsers,
+  fetchAdminUserDetail,
+  reviewAdminStrategy,
   type AdminStrategyRow,
+  type AdminUserRow,
+  type StrategyReviewStatus,
 } from "@/lib/api";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, Trash2, XCircle } from "lucide-react";
+
+/**
+ * Format a raw numeric-string notional (e.g. "12345.6789") as a compact
+ * admin-readable USDT amount. Falls back to "—" for null / non-numeric input.
+ */
+function formatUsdt(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return "—";
+  if (n === 0) return "0 USDT";
+  if (n >= 1000) return `${n.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT`;
+  if (n >= 1) return `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT`;
+  return `${n.toFixed(4)} USDT`;
+}
+
+function strategyStatusBadgeVariant(
+  status: StrategyReviewStatus
+): "default" | "destructive" | "secondary" {
+  if (status === "approved") return "default";
+  if (status === "rejected") return "destructive";
+  return "secondary";
+}
 
 export default function AdminDashboardPage() {
   const authQ = useRequireAdmin();
@@ -154,6 +188,7 @@ function MasterAccessTab() {
           <TableHeader>
             <TableRow>
               <TableHead>User</TableHead>
+              <TableHead>Contact</TableHead>
               <TableHead>Note</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Strategies</TableHead>
@@ -165,7 +200,7 @@ function MasterAccessTab() {
             {q.data?.requests.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="text-center text-sm text-muted-foreground"
                 >
                   No requests.
@@ -182,6 +217,13 @@ function MasterAccessTab() {
                     <div className="text-xs text-muted-foreground">
                       {r.userDisplayName}
                     </div>
+                  )}
+                </TableCell>
+                <TableCell className="text-xs font-mono whitespace-nowrap">
+                  {r.contactPhone?.trim() ? (
+                    r.contactPhone
+                  ) : (
+                    <span className="text-muted-foreground font-sans">—</span>
                   )}
                 </TableCell>
                 <TableCell className="max-w-sm whitespace-pre-wrap text-xs">
@@ -253,12 +295,17 @@ function StrategiesTab() {
   const [typeFilter, setTypeFilter] = useState<"all" | "algo" | "copy_trading">(
     "all"
   );
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | StrategyReviewStatus
+  >("pending");
   const [toDelete, setToDelete] = useState<AdminStrategyRow | null>(null);
   const [confirmText, setConfirmText] = useState("");
+  const [toReject, setToReject] = useState<AdminStrategyRow | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const q = useQuery({
-    queryKey: ["admin", "strategies", typeFilter],
-    queryFn: () => fetchAdminStrategies(typeFilter),
+    queryKey: ["admin", "strategies", typeFilter, statusFilter],
+    queryFn: () => fetchAdminStrategies(typeFilter, statusFilter),
     staleTime: 10_000,
   });
 
@@ -285,6 +332,25 @@ function StrategiesTab() {
       toast.error(err instanceof Error ? err.message : "Delete failed"),
   });
 
+  const reviewMut = useMutation({
+    mutationFn: (args: {
+      id: string;
+      action: "approve" | "reject";
+      reason?: string;
+    }) => reviewAdminStrategy(args.id, args.action, args.reason),
+    onSuccess: async (res) => {
+      toast.success(
+        res.status === "approved" ? "Strategy approved" : "Strategy rejected"
+      );
+      setToReject(null);
+      setRejectReason("");
+      await qc.invalidateQueries({ queryKey: ["admin", "strategies"] });
+      await qc.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Review failed"),
+  });
+
   const canConfirmDelete = useMemo(
     () =>
       Boolean(toDelete) && confirmText.trim() === (toDelete?.name ?? "").trim(),
@@ -302,22 +368,42 @@ function StrategiesTab() {
               subscriptions, webhooks, and signal history.
             </CardDescription>
           </div>
-          <div className="w-[180px]">
-            <Select
-              value={typeFilter}
-              onValueChange={(v) =>
-                setTypeFilter(v as "all" | "algo" | "copy_trading")
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All types</SelectItem>
-                <SelectItem value="algo">Algo</SelectItem>
-                <SelectItem value="copy_trading">Copy trading</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap gap-2">
+            <div className="w-[160px]">
+              <Select
+                value={statusFilter}
+                onValueChange={(v) =>
+                  setStatusFilter(v as "all" | StrategyReviewStatus)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-[180px]">
+              <Select
+                value={typeFilter}
+                onValueChange={(v) =>
+                  setTypeFilter(v as "all" | "algo" | "copy_trading")
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  <SelectItem value="algo">Algo</SelectItem>
+                  <SelectItem value="copy_trading">Copy trading</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -328,7 +414,8 @@ function StrategiesTab() {
                 <TableHead>Type</TableHead>
                 <TableHead>Symbol</TableHead>
                 <TableHead>Creator</TableHead>
-                <TableHead>Subscribers</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Subs</TableHead>
                 <TableHead>Webhook</TableHead>
                 <TableHead>Active</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -338,7 +425,7 @@ function StrategiesTab() {
               {q.data?.strategies.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center text-sm text-muted-foreground"
                   >
                     No strategies.
@@ -363,6 +450,21 @@ function StrategiesTab() {
                       </div>
                     )}
                   </TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <Badge variant={strategyStatusBadgeVariant(s.status)}>
+                        {s.status}
+                      </Badge>
+                      {s.status === "rejected" && s.rejectionReason?.trim() && (
+                        <div
+                          className="text-[11px] text-muted-foreground max-w-[220px] truncate"
+                          title={s.rejectionReason}
+                        >
+                          {s.rejectionReason}
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>{s.subscriberCount}</TableCell>
                   <TableCell>
                     <Badge variant={s.webhookEnabled ? "default" : "outline"}>
@@ -375,20 +477,48 @@ function StrategiesTab() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={toggleMut.isPending}
-                        onClick={() =>
-                          toggleMut.mutate({
-                            id: s.id,
-                            active: !s.isActive,
-                          })
-                        }
-                      >
-                        {s.isActive ? "Pause" : "Resume"}
-                      </Button>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {s.status === "pending" && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={reviewMut.isPending}
+                            onClick={() =>
+                              reviewMut.mutate({ id: s.id, action: "approve" })
+                            }
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setToReject(s);
+                              setRejectReason("");
+                            }}
+                          >
+                            <XCircle className="h-3.5 w-3.5 mr-1" />
+                            Reject
+                          </Button>
+                        </>
+                      )}
+                      {s.status === "approved" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={toggleMut.isPending}
+                          onClick={() =>
+                            toggleMut.mutate({
+                              id: s.id,
+                              active: !s.isActive,
+                            })
+                          }
+                        >
+                          {s.isActive ? "Pause" : "Resume"}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="destructive"
@@ -407,6 +537,68 @@ function StrategiesTab() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={Boolean(toReject)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setToReject(null);
+            setRejectReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject strategy?</DialogTitle>
+            <DialogDescription>
+              Rejecting{" "}
+              <span className="font-medium text-foreground">
+                {toReject?.name}
+              </span>{" "}
+              will disable its webhook and notify the creator. They can edit and
+              reapply from their studio.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reject-reason">Reason (shown to creator)</Label>
+            <Textarea
+              id="reject-reason"
+              rows={4}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Explain what needs to change before this strategy can be approved."
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setToReject(null);
+                setRejectReason("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={reviewMut.isPending}
+              onClick={() =>
+                toReject &&
+                reviewMut.mutate({
+                  id: toReject.id,
+                  action: "reject",
+                  reason: rejectReason.trim() || undefined,
+                })
+              }
+            >
+              {reviewMut.isPending && (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
+              )}
+              Reject strategy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(toDelete)}
@@ -473,65 +665,444 @@ function UsersTab() {
     queryFn: fetchAdminUsers,
     staleTime: 10_000,
   });
+  const [drawerUserId, setDrawerUserId] = useState<string | null>(null);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Users</CardTitle>
-        <CardDescription>
-          Read-only user directory with master-access state and strategy counts.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Email</TableHead>
-              <TableHead>Display name</TableHead>
-              <TableHead>Provider</TableHead>
-              <TableHead>Master access</TableHead>
-              <TableHead>Strategies</TableHead>
-              <TableHead>Joined</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {q.data?.users.length === 0 && (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Users</CardTitle>
+          <CardDescription>
+            Read-only directory. Click a row to drill into strategies, subscriptions,
+            TradingView webhooks, and RexAlgo-routed trading volume.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="text-center text-sm text-muted-foreground"
-                >
-                  No users.
-                </TableCell>
+                <TableHead>Email / name</TableHead>
+                <TableHead>Master</TableHead>
+                <TableHead>Telegram</TableHead>
+                <TableHead className="text-right">Volume (USDT)</TableHead>
+                <TableHead className="text-right">Strategies</TableHead>
+                <TableHead className="text-right">Subs</TableHead>
+                <TableHead className="text-right">TradingView</TableHead>
+                <TableHead>Joined</TableHead>
               </TableRow>
-            )}
-            {q.data?.users.map((u) => (
-              <TableRow key={u.id}>
-                <TableCell>
-                  {u.email ?? (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell>{u.displayName}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{u.authProvider}</Badge>
-                </TableCell>
-                <TableCell>
-                  {u.masterStatus ? (
-                    <Badge variant="secondary">{u.masterStatus}</Badge>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">none</span>
-                  )}
-                </TableCell>
-                <TableCell>{u.strategyCount}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {new Date(u.createdAt).toLocaleString()}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {q.data?.users.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className="text-center text-sm text-muted-foreground"
+                  >
+                    No users.
+                  </TableCell>
+                </TableRow>
+              )}
+              {q.data?.users.map((u) => (
+                <UserRow
+                  key={u.id}
+                  user={u}
+                  onOpen={() => setDrawerUserId(u.id)}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <UserDetailDrawer
+        userId={drawerUserId}
+        onClose={() => setDrawerUserId(null)}
+      />
+    </>
   );
+}
+
+function UserRow({ user, onOpen }: { user: AdminUserRow; onOpen: () => void }) {
+  return (
+    <TableRow
+      className="cursor-pointer hover:bg-secondary/40"
+      onClick={onOpen}
+    >
+      <TableCell>
+        <div className="font-medium">
+          {user.email ?? <span className="text-muted-foreground">—</span>}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {user.displayName}
+          <span className="mx-1">·</span>
+          <span className="text-[11px]">{user.authProvider}</span>
+        </div>
+      </TableCell>
+      <TableCell>
+        {user.masterStatus ? (
+          <Badge
+            variant={
+              user.masterStatus === "approved"
+                ? "default"
+                : user.masterStatus === "rejected"
+                ? "destructive"
+                : "secondary"
+            }
+          >
+            {user.masterStatus}
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">none</span>
+        )}
+      </TableCell>
+      <TableCell>
+        {user.telegramLinked ? (
+          <Badge variant="default">
+            {user.telegramUsername ? `@${user.telegramUsername}` : "linked"}
+          </Badge>
+        ) : (
+          <Badge variant="outline">off</Badge>
+        )}
+      </TableCell>
+      <TableCell className="text-right font-mono text-xs">
+        {formatUsdt(user.totalVolumeUsdt)}
+      </TableCell>
+      <TableCell className="text-right text-xs">
+        <span className="font-medium">{user.approvedStrategyCount}</span>
+        <span className="text-muted-foreground"> / {user.strategyCount}</span>
+      </TableCell>
+      <TableCell className="text-right">{user.subscriptionCount}</TableCell>
+      <TableCell className="text-right">{user.tvWebhookCount}</TableCell>
+      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+        {new Date(user.createdAt).toLocaleDateString()}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function UserDetailDrawer({
+  userId,
+  onClose,
+}: {
+  userId: string | null;
+  onClose: () => void;
+}) {
+  const q = useQuery({
+    queryKey: ["admin", "users", userId],
+    queryFn: () => fetchAdminUserDetail(userId as string),
+    enabled: Boolean(userId),
+    staleTime: 10_000,
+  });
+
+  return (
+    <Sheet
+      open={Boolean(userId)}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+        {!userId ? null : q.isLoading || !q.data ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <SheetHeader className="text-left">
+              <SheetTitle>
+                {q.data.user.email ?? q.data.user.displayName}
+              </SheetTitle>
+              <SheetDescription>
+                {q.data.user.displayName} · {q.data.user.authProvider} · Joined{" "}
+                {new Date(q.data.user.createdAt).toLocaleDateString()}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <InfoStat
+                label="Telegram"
+                value={
+                  q.data.user.telegramLinked
+                    ? q.data.user.telegramUsername
+                      ? `@${q.data.user.telegramUsername}`
+                      : "Linked"
+                    : "Not linked"
+                }
+              />
+              <InfoStat
+                label="Mudrex API"
+                value={q.data.user.hasMudrexKey ? "Connected" : "Missing"}
+              />
+              <InfoStat
+                label="Total volume"
+                value={formatUsdt(q.data.volume.totalUsdt)}
+              />
+              <InfoStat
+                label="Trades logged"
+                value={String(
+                  q.data.volume.countsBySource.manual +
+                    q.data.volume.countsBySource.copy +
+                    q.data.volume.countsBySource.tv
+                )}
+              />
+            </div>
+
+            <section>
+              <h3 className="text-sm font-semibold mb-2">Volume by source</h3>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                {(["manual", "copy", "tv"] as const).map((src) => (
+                  <div
+                    key={src}
+                    className="rounded-lg border border-border p-3"
+                  >
+                    <div className="uppercase tracking-wide text-[10px] text-muted-foreground">
+                      {src}
+                    </div>
+                    <div className="font-medium font-mono text-xs mt-1">
+                      {formatUsdt(q.data!.volume.bySource[src])}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {q.data!.volume.countsBySource[src]} trades
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <DrawerSection title={`Strategies (${q.data.strategies.length})`}>
+              {q.data.strategies.length === 0 ? (
+                <EmptyNote>No strategies created.</EmptyNote>
+              ) : (
+                <ul className="space-y-2">
+                  {q.data.strategies.map((s) => (
+                    <li
+                      key={s.id}
+                      className="rounded-lg border border-border p-3 text-sm"
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{s.name}</span>
+                        <Badge variant="outline" className="text-[10px]">
+                          {s.type}
+                        </Badge>
+                        <Badge
+                          variant={strategyStatusBadgeVariant(s.status)}
+                          className="text-[10px]"
+                        >
+                          {s.status}
+                        </Badge>
+                        {!s.isActive && (
+                          <Badge variant="outline" className="text-[10px]">
+                            paused
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {s.symbol} · {s.subscriberCount} subscribers ·{" "}
+                        {new Date(s.createdAt).toLocaleDateString()}
+                      </div>
+                      {s.rejectionReason && (
+                        <p className="text-xs text-loss mt-1">
+                          Rejected: {s.rejectionReason}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DrawerSection>
+
+            <DrawerSection
+              title={`Subscriptions (${q.data.subscriptions.length})`}
+            >
+              {q.data.subscriptions.length === 0 ? (
+                <EmptyNote>No subscriptions.</EmptyNote>
+              ) : (
+                <ul className="space-y-2">
+                  {q.data.subscriptions.map((s) => (
+                    <li
+                      key={s.id}
+                      className="rounded-lg border border-border p-3 text-sm"
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">
+                          {s.strategyName ?? s.strategyId}
+                        </span>
+                        {s.strategyType && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {s.strategyType}
+                          </Badge>
+                        )}
+                        {!s.isActive && (
+                          <Badge variant="outline" className="text-[10px]">
+                            inactive
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {s.strategySymbol ?? "—"} · margin {s.marginPerTrade} ·
+                        joined {new Date(s.createdAt).toLocaleDateString()}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DrawerSection>
+
+            <DrawerSection title={`TradingView webhooks (${q.data.tvWebhooks.length})`}>
+              {q.data.tvWebhooks.length === 0 ? (
+                <EmptyNote>No TradingView webhooks.</EmptyNote>
+              ) : (
+                <ul className="space-y-2">
+                  {q.data.tvWebhooks.map((t) => (
+                    <li
+                      key={t.id}
+                      className="rounded-lg border border-border p-3 text-sm"
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium">{t.name}</span>
+                        <Badge variant="outline" className="text-[10px]">
+                          {t.mode}
+                        </Badge>
+                        <Badge
+                          variant={t.enabled ? "default" : "outline"}
+                          className="text-[10px]"
+                        >
+                          {t.enabled ? "on" : "off"}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        max {t.maxMarginUsdt} USDT ·{" "}
+                        {t.lastDeliveryAt
+                          ? `last delivery ${new Date(t.lastDeliveryAt).toLocaleString()}`
+                          : "no deliveries yet"}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DrawerSection>
+
+            <DrawerSection title={`Recent trades (${q.data.recentTrades.length})`}>
+              {q.data.recentTrades.length === 0 ? (
+                <EmptyNote>No orders placed via RexAlgo yet.</EmptyNote>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-muted-foreground border-b border-border">
+                        <th className="py-1.5 pr-2">Time</th>
+                        <th className="py-1.5 pr-2">Symbol</th>
+                        <th className="py-1.5 pr-2">Side</th>
+                        <th className="py-1.5 pr-2">Src</th>
+                        <th className="py-1.5 pr-2 text-right">Qty</th>
+                        <th className="py-1.5 pr-2 text-right">Notional</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {q.data.recentTrades.map((t) => (
+                        <tr
+                          key={t.id}
+                          className="border-b border-border/50"
+                        >
+                          <td className="py-1.5 pr-2 whitespace-nowrap font-mono">
+                            {new Date(t.createdAt).toLocaleString()}
+                          </td>
+                          <td className="py-1.5 pr-2 font-mono">{t.symbol}</td>
+                          <td className="py-1.5 pr-2">{t.side}</td>
+                          <td className="py-1.5 pr-2">
+                            <Badge variant="outline" className="text-[10px]">
+                              {t.source}
+                            </Badge>
+                          </td>
+                          <td className="py-1.5 pr-2 font-mono text-right">
+                            {t.quantity}
+                          </td>
+                          <td className="py-1.5 pr-2 font-mono text-right">
+                            {formatUsdt(t.notionalUsdt)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </DrawerSection>
+
+            <DrawerSection title={`Master access history (${q.data.masterRequests.length})`}>
+              {q.data.masterRequests.length === 0 ? (
+                <EmptyNote>No master-access requests.</EmptyNote>
+              ) : (
+                <ul className="space-y-2">
+                  {q.data.masterRequests.map((m) => (
+                    <li
+                      key={m.id}
+                      className="rounded-lg border border-border p-3 text-sm"
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge
+                          variant={
+                            m.status === "approved"
+                              ? "default"
+                              : m.status === "rejected"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                          className="text-[10px]"
+                        >
+                          {m.status}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(m.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      {m.contactPhone && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Phone: {m.contactPhone}
+                        </div>
+                      )}
+                      {m.note && (
+                        <div className="text-xs text-foreground/80 mt-1 whitespace-pre-wrap">
+                          {m.note}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DrawerSection>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function InfoStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="text-sm font-medium mt-1 truncate">{value}</div>
+    </div>
+  );
+}
+
+function DrawerSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <h3 className="text-sm font-semibold mb-2">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function EmptyNote({ children }: { children: ReactNode }) {
+  return <p className="text-xs text-muted-foreground">{children}</p>;
 }

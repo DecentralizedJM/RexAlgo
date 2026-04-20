@@ -19,7 +19,12 @@ export async function GET(req: NextRequest) {
 
     const results = await query;
 
-    let filtered = results;
+    // Public listings only show admin-approved, owner-active rows. Pending and
+    // rejected strategies are surfaced exclusively via the studio endpoints
+    // (where the creator can see their own drafts regardless of status).
+    let filtered = results.filter(
+      (s) => s.status === "approved" && s.isActive
+    );
     if (type) {
       filtered = filtered.filter((s) => s.type === type);
     }

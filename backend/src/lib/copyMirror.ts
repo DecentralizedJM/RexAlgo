@@ -19,6 +19,7 @@ import {
   getAsset,
   setLeverage,
 } from "@/lib/mudrex";
+import { logTrade } from "@/lib/tradeLedger";
 
 export type CopySignalV1 = {
   idempotency_key: string;
@@ -107,7 +108,8 @@ async function mirrorOpen(
   strategy: StrategyRow,
   signal: CopySignalV1,
   apiSecret: string,
-  marginPerTrade: string
+  marginPerTrade: string,
+  userId: string
 ): Promise<{ ok: true; orderId: string } | { ok: false; detail: string }> {
   const margin = parseFloat(marginPerTrade);
   const lev = parseFloat(strategy.leverage || "1");
@@ -162,6 +164,13 @@ async function mirrorOpen(
       },
       "background"
     );
+    void logTrade({
+      userId,
+      source: "copy",
+      order,
+      strategyId: strategy.id,
+      markPriceFallback: mark,
+    });
     return { ok: true, orderId: order.order_id };
   } catch (e) {
     return {
@@ -261,7 +270,7 @@ export async function executeMirror(
 
     const result =
       signal.action === "open"
-        ? await mirrorOpen(strategy, signal, apiSecret, sub.marginPerTrade)
+        ? await mirrorOpen(strategy, signal, apiSecret, sub.marginPerTrade, sub.userId)
         : await mirrorClose(signal, apiSecret);
 
     if (result.ok) {

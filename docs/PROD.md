@@ -3,7 +3,7 @@
 Companion to [`DEPLOY.md`](./DEPLOY.md). The deploy doc covers topology; this
 one covers everything you need to run RexAlgo at **1k–10k concurrent users**
 with the stack as it stands today (Postgres, admin dashboard, Master Studio
-lock, TV webhooks, Telegram login/notifications).
+lock, TradingView webhooks, Telegram login/notifications).
 
 If you're looking for the "where does the DB live" / "who is an admin" answer,
 this is the file.
@@ -28,7 +28,7 @@ with a clear error if any required one is missing.
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `PUBLIC_API_URL` | `https://api.rexalgo.xyz` | Canonical base for **all** webhook URLs shown in the UI (copy-trade + TV). If unset we fall back to legacy `PUBLIC_APP_URL` / `NEXT_PUBLIC_APP_URL`. Prefer the dedicated API hostname — it survives frontend-host changes. |
+| `PUBLIC_API_URL` | `https://api.rexalgo.xyz` | Canonical base for **all** webhook URLs shown in the UI (copy-trade + TradingView). If unset we fall back to legacy `PUBLIC_APP_URL` / `NEXT_PUBLIC_APP_URL`. Prefer the dedicated API hostname — it survives frontend-host changes. |
 | `ADMIN_EMAILS` | `jm@rexalgo.xyz,admin@rexalgo.xyz` | Comma-separated allow-list. Used by `/api/admin/*` and to surface the Admin button in the navbar. Case-insensitive match on the Google email. |
 | `PGPOOL_MAX` | `10` | Per-process Postgres pool size. Keep `PGPOOL_MAX * instance_count ≤ db.max_connections * 0.7`. |
 | `PGSSLMODE` | `disable` | Force SSL off; handy for private-network Postgres. Any other value = SSL with `rejectUnauthorized: false`. |
@@ -137,14 +137,14 @@ and queues a Telegram notification.
 
 ---
 
-## 5. Webhooks (copy + TV)
+## 5. Webhooks (copy + TradingView)
 
 ### URL shape
 
 | Kind | Shape |
 |------|-------|
 | Copy-trade | `{PUBLIC_API_URL}/api/webhooks/copy-trading/{strategyId}` |
-| TV | `{PUBLIC_API_URL}/api/webhooks/tv/{webhookId}` |
+| TradingView | `{PUBLIC_API_URL}/api/webhooks/tv/{webhookId}` |
 
 Always prefer `PUBLIC_API_URL` over `PUBLIC_APP_URL` — the studio UI shows
 whatever `publicApiBase()` returns, so your users copy the right host into
@@ -162,32 +162,33 @@ Secrets are prefixed `whsec_` and stored AES-GCM-encrypted with `ENCRYPTION_KEY`
 ### Rate limiting
 
 `backend/src/lib/copyWebhookRateLimit.ts` is an **in-memory fixed window** —
-120 req/min per strategy (or `tv:<id>` for TV). **TODO (scaling):** replace
+120 req/min per strategy (or `tv:<id>` for TradingView webhooks). **TODO (scaling):** replace
 with a Redis-backed bucket once you horizontally scale past one API instance,
 or abusive clients will get `120 * N` through collectively.
 
 ### Idempotency
 
 - Copy-trade: unique `(strategy_id, idempotency_key)` on `copy_signal_events`.
-- TV: unique `(webhook_id, idempotency_key)` on `tv_webhook_events`.
+- TradingView: unique `(webhook_id, idempotency_key)` on `tv_webhook_events`.
 
-Duplicates return `200 { ok: true, duplicate: true }` — TV's at-least-once
+Duplicates return `200 { ok: true, duplicate: true }` — TradingView's at-least-once
 retries are harmless.
 
-### TV alert adapter
+### TradingView alert adapter
 
 `backend/src/lib/tvAlert.ts` accepts either:
 
 1. Our native copy-signal envelope (same schema as the copy-trade webhook), or
-2. A trader-friendly `{ ticker, action, qty, orderType, price, id }` template.
+2. A simple `{ action, symbol, leverage?, sl?, tp?, qty?, risk_pct? }` template for manual trades.
 
 `action` accepts `buy`, `sell`, `long`, `short`, `close`, `exit`,
-`close_long`, `close_short`. `qty: "25 USDT"` is clamped to
+`close_long`, `close_short`. Optional `id` / `idempotency_key` in the JSON; if
+omitted, dedupe uses a stable hash of the raw body. `qty: "25 USDT"` is clamped to
 `tv_webhooks.max_margin_usdt`.
 
 TradingView cannot attach custom HTTP headers, so users need a tiny forwarder
 (Cloudflare Worker / Lambda / VM) that HMAC-signs the body before calling the
-webhook. We document this on the TV Webhooks page.
+webhook. We document this on the TradingView Webhooks page.
 
 ---
 

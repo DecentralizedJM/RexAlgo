@@ -18,7 +18,7 @@ When you add a new Mudrex endpoint:
 2. If the new endpoint belongs to the Enhanced tier, add its method + path
    regex to `ENHANCED_RULES` in `src/lib/mudrexRateLimit.ts`. Anything not
    listed there is classified as Standard automatically.
-3. If the call is invoked from a background path (copy-mirror loop, TV
+3. If the call is invoked from a background path (copy-mirror loop, TradingView
    webhook, pagination, cron), plumb `context: "background"` through so the
    limiter uses the longer wait budget (`MUDREX_RL_MAX_WAIT_BACKGROUND_MS`)
    and users never block on upstream bursts.

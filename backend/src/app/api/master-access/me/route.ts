@@ -33,6 +33,7 @@ export async function GET() {
           id: latest.id,
           status: latest.status,
           note: latest.note,
+          contactPhone: latest.contactPhone ?? "",
           reviewedBy: latest.reviewedBy,
           reviewedAt: latest.reviewedAt?.toISOString() ?? null,
           createdAt: latest.createdAt.toISOString(),

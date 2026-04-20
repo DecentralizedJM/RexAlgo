@@ -38,6 +38,8 @@ function toRow(
     mode: w.mode,
     strategyId: w.strategyId,
     maxMarginUsdt: w.maxMarginUsdt,
+    defaultLeverage: w.defaultLeverage ?? 5,
+    defaultRiskPct: w.defaultRiskPct ?? 2,
     createdAt: w.createdAt.toISOString(),
     rotatedAt: w.rotatedAt?.toISOString() ?? null,
     lastDeliveryAt: w.lastDeliveryAt?.toISOString() ?? null,
@@ -76,6 +78,8 @@ export async function POST(req: NextRequest) {
     mode?: string;
     strategyId?: string | null;
     maxMarginUsdt?: number;
+    defaultLeverage?: number;
+    defaultRiskPct?: number;
   };
   try {
     body = await req.json();
@@ -128,6 +132,22 @@ export async function POST(req: NextRequest) {
     maxMarginUsdt = Math.min(m, MAX_MARGIN_CAP);
   }
 
+  let defaultLeverage = 5;
+  if (
+    typeof body.defaultLeverage === "number" &&
+    Number.isFinite(body.defaultLeverage)
+  ) {
+    defaultLeverage = Math.min(100, Math.max(1, Math.round(body.defaultLeverage)));
+  }
+
+  let defaultRiskPct = 2;
+  if (
+    typeof body.defaultRiskPct === "number" &&
+    Number.isFinite(body.defaultRiskPct)
+  ) {
+    defaultRiskPct = Math.min(100, Math.max(0, body.defaultRiskPct));
+  }
+
   const plain = newWebhookSecret();
   const id = uuidv4();
 
@@ -140,6 +160,8 @@ export async function POST(req: NextRequest) {
     mode,
     strategyId,
     maxMarginUsdt,
+    defaultLeverage,
+    defaultRiskPct,
   });
 
   const [created] = await db
