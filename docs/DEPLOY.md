@@ -139,7 +139,12 @@ The flow is fully implemented (see [PROD.md § Telegram](./PROD.md#6-telegram));
    - `TELEGRAM_BOT_TOKEN=<token from BotFather>`
    - `TELEGRAM_BOT_USERNAME=<bot username, no @>`
 4. **Redeploy the API** so the new env is picked up. `GET https://rexalgo.xyz/api/auth/telegram/config` should return `{ "enabled": true, "botUsername": "…" }`.
-5. **Smoke test**
+   Fastest check — run from the repo:
+   ```bash
+   bash scripts/verify-telegram.sh                       # hits rexalgo.xyz
+   TELEGRAM_BOT_TOKEN=… bash scripts/verify-telegram.sh  # also calls getMe to validate the token
+   ```
+5. **Smoke test** (the script prints this same checklist)
    - **Link from settings**: sign in, open `https://rexalgo.xyz/settings`, the Telegram card should show the Login Widget. Linking should refetch `/api/auth/me` and show `Linked as @…`.
    - **Standalone login**: in a private window, `https://rexalgo.xyz/auth` should show the Telegram button. Completing it must sign you in (creates a Telegram-backed user on first use).
    - **DM**: trigger an event that emits a notification (e.g. approving a master-access request) and confirm the outbox worker delivers a DM within ~5s. The user must have **started the bot** at least once (Telegram won't accept DMs otherwise).
