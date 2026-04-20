@@ -120,6 +120,30 @@ The **web** image defaults to `API_UPSTREAM=http://api:3000` (Compose service na
 | `API_UPSTREAM` | Web (nginx) | Full URL of Next API for `proxy_pass` |
 | `NODE_ENV=production` | API | `Secure` cookies |
 | `REXALGO_OHLC_API_BASE` | API (optional) | Internal base URL for historical candle fetches used by `POST /api/strategies/[id]/backtest` (default built-in). Operators only — not shown in product UI. |
+| `TELEGRAM_BOT_TOKEN` | API (optional) | Enables Telegram Login Widget on `/auth` and `/settings` and DM notifications. Both `TELEGRAM_BOT_*` vars must be set for the widget to render. |
+| `TELEGRAM_BOT_USERNAME` | API (optional) | Bot username from BotFather, no leading `@`. Served by `GET /api/auth/telegram/config` to the SPA so the widget can mount. |
+
+---
+
+## Telegram login + notifications
+
+The flow is fully implemented (see [PROD.md § Telegram](./PROD.md#6-telegram)); enabling it is an operator task:
+
+1. **Create the bot in BotFather**
+   - Open a chat with [`@BotFather`](https://t.me/BotFather) on Telegram.
+   - Run `/newbot` (or pick an existing one) and record the **bot token** and **bot username**.
+2. **Attach the production domain to the bot** (required by Telegram for the Login Widget)
+   - Still in BotFather: `/setdomain` → pick the bot → send the browser host users actually visit, e.g. `rexalgo.xyz`.
+   - Do **not** use the Railway API host here. The widget verifies the hostname that loaded the page, which on this deployment is the Vercel / custom domain, not the API.
+3. **Set env vars on the Next API service** (Railway) alongside `JWT_SECRET` / `ENCRYPTION_KEY`:
+   - `TELEGRAM_BOT_TOKEN=<token from BotFather>`
+   - `TELEGRAM_BOT_USERNAME=<bot username, no @>`
+4. **Redeploy the API** so the new env is picked up. `GET https://rexalgo.xyz/api/auth/telegram/config` should return `{ "enabled": true, "botUsername": "…" }`.
+5. **Smoke test**
+   - **Link from settings**: sign in, open `https://rexalgo.xyz/settings`, the Telegram card should show the Login Widget. Linking should refetch `/api/auth/me` and show `Linked as @…`.
+   - **Standalone login**: in a private window, `https://rexalgo.xyz/auth` should show the Telegram button. Completing it must sign you in (creates a Telegram-backed user on first use).
+   - **DM**: trigger an event that emits a notification (e.g. approving a master-access request) and confirm the outbox worker delivers a DM within ~5s. The user must have **started the bot** at least once (Telegram won't accept DMs otherwise).
+6. **Rotating the bot token** (if ever needed): see [PROD.md § Secret rotation](./PROD.md#8-secret-rotation-runbook). Existing `users.telegram_id` rows stay valid.
 
 ---
 
