@@ -81,7 +81,7 @@ async function runManualTrade(
 
   if (intent.action === "close") {
     try {
-      const open = await listOpenPositions(apiSecret);
+      const open = await listOpenPositions(apiSecret, "background");
       const matching = open.filter(
         (p) => p.symbol === intent.symbol && p.side === intent.side
       );
@@ -89,7 +89,7 @@ async function runManualTrade(
         return { ok: false, detail: "No open position for symbol/side" };
       }
       const last = matching[matching.length - 1];
-      const ok = await closePosition(apiSecret, last.position_id);
+      const ok = await closePosition(apiSecret, last.position_id, "background");
       if (!ok) return { ok: false, detail: "closePosition returned false" };
       return { ok: true, orderId: last.position_id };
     } catch (e) {
@@ -102,7 +102,7 @@ async function runManualTrade(
 
   let asset;
   try {
-    asset = await getAsset(apiSecret, intent.symbol);
+    asset = await getAsset(apiSecret, intent.symbol, "background");
   } catch (e) {
     return {
       ok: false,
@@ -127,20 +127,30 @@ async function runManualTrade(
   }
 
   try {
-    await setLeverage(apiSecret, intent.symbol, FALLBACK_LEVERAGE, "ISOLATED");
+    await setLeverage(
+      apiSecret,
+      intent.symbol,
+      FALLBACK_LEVERAGE,
+      "ISOLATED",
+      "background"
+    );
   } catch {
     /* best-effort */
   }
 
   try {
-    const order = await createOrder(apiSecret, {
-      symbol: intent.symbol,
-      side: intent.side,
-      quantity: String(qty),
-      leverage: FALLBACK_LEVERAGE,
-      triggerType: intent.trigger_type,
-      price: intent.trigger_type === "LIMIT" ? intent.price : undefined,
-    });
+    const order = await createOrder(
+      apiSecret,
+      {
+        symbol: intent.symbol,
+        side: intent.side,
+        quantity: String(qty),
+        leverage: FALLBACK_LEVERAGE,
+        triggerType: intent.trigger_type,
+        price: intent.trigger_type === "LIMIT" ? intent.price : undefined,
+      },
+      "background"
+    );
     return { ok: true, orderId: order.order_id };
   } catch (e) {
     return {

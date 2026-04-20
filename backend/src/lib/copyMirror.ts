@@ -120,7 +120,7 @@ async function mirrorOpen(
 
   let asset;
   try {
-    asset = await getAsset(apiSecret, signal.symbol);
+    asset = await getAsset(apiSecret, signal.symbol, "background");
   } catch (e) {
     return {
       ok: false,
@@ -144,20 +144,24 @@ async function mirrorOpen(
   }
 
   try {
-    await setLeverage(apiSecret, signal.symbol, String(lev), "ISOLATED");
+    await setLeverage(apiSecret, signal.symbol, String(lev), "ISOLATED", "background");
   } catch {
     /* best-effort; exchange may already be set */
   }
 
   try {
-    const order = await createOrder(apiSecret, {
-      symbol: signal.symbol,
-      side: signal.side,
-      quantity: String(qty),
-      leverage: String(lev),
-      triggerType: signal.trigger_type,
-      price: signal.trigger_type === "LIMIT" ? signal.price : undefined,
-    });
+    const order = await createOrder(
+      apiSecret,
+      {
+        symbol: signal.symbol,
+        side: signal.side,
+        quantity: String(qty),
+        leverage: String(lev),
+        triggerType: signal.trigger_type,
+        price: signal.trigger_type === "LIMIT" ? signal.price : undefined,
+      },
+      "background"
+    );
     return { ok: true, orderId: order.order_id };
   } catch (e) {
     return {
@@ -172,7 +176,7 @@ async function mirrorClose(
   apiSecret: string
 ): Promise<{ ok: true; orderId: string } | { ok: false; detail: string }> {
   try {
-    const open = await listOpenPositions(apiSecret);
+    const open = await listOpenPositions(apiSecret, "background");
     const matching = open.filter(
       (p) => p.symbol === signal.symbol && p.side === signal.side
     );
@@ -180,7 +184,7 @@ async function mirrorClose(
       return { ok: false, detail: "No open position for symbol/side" };
     }
     const last = matching[matching.length - 1];
-    const ok = await closePosition(apiSecret, last.position_id);
+    const ok = await closePosition(apiSecret, last.position_id, "background");
     if (!ok) {
       return { ok: false, detail: "closePosition returned false" };
     }

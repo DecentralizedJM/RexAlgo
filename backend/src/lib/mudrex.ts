@@ -13,6 +13,13 @@ import type {
   MudrexLeverage,
   CreateOrderParams,
 } from "@/types";
+import {
+  classifyTier,
+  defaultMaxWaitMs,
+  getMudrexRateLimiter,
+  MudrexRateLimitExceededError,
+  type MudrexRateLimitContext,
+} from "@/lib/mudrexRateLimit";
 
 const BASE_URL = "https://trade.mudrex.com/fapi/v1";
 
@@ -34,26 +41,65 @@ export class MudrexAPIError extends Error {
   }
 }
 
+/** Options for `mudrexFetch`. `context` selects the rate-limit wait budget. */
+export type MudrexFetchOptions = RequestInit & {
+  /**
+   * `interactive` (default) — user is actively waiting, fail fast after a short
+   * wait. `background` — copy-mirror / webhook / pagination, wait longer so
+   * nothing is dropped.
+   */
+  context?: MudrexRateLimitContext;
+};
+
 async function mudrexFetch(
   endpoint: string,
   apiSecret: string,
-  options: RequestInit = {}
+  options: MudrexFetchOptions = {}
 ): Promise<unknown> {
+  const { context = "interactive", ...init } = options;
   const url = `${BASE_URL}${endpoint}`;
+  const method = (init.method ?? "GET").toUpperCase();
+  const tier = classifyTier(method, endpoint);
+  const limiter = getMudrexRateLimiter();
+  const maxWaitMs = defaultMaxWaitMs(context);
 
   for (let attempt = 0; attempt < MUDREX_RETRYABLE_ATTEMPTS; attempt++) {
+    // Acquire a token before every attempt — failed attempts still count against
+    // Mudrex's per-key budget, so we must not reuse the previous acquisition.
+    try {
+      await limiter.acquire(apiSecret, tier, { maxWaitMs });
+    } catch (err) {
+      if (err instanceof MudrexRateLimitExceededError) {
+        throw new MudrexAPIError(
+          "Client-side Mudrex rate limit reached; try again shortly",
+          429,
+          {
+            success: false,
+            message: "client_rate_limit",
+            retry_after_ms: err.retryAfterMs,
+          }
+        );
+      }
+      throw err;
+    }
+
     const res = await fetch(url, {
-      ...options,
+      ...init,
       headers: {
         "X-Authentication": apiSecret,
         "Content-Type": "application/json",
         Accept: "application/json",
-        ...options.headers,
+        ...init.headers,
       },
     });
 
     const retryable = res.status === 429 || res.status === 503;
     if (retryable && attempt < MUDREX_RETRYABLE_ATTEMPTS - 1) {
+      // Mudrex pushed back — penalise the local bucket so subsequent callers on
+      // the same key slow down, then back off.
+      if (res.status === 429) {
+        limiter.penalise(apiSecret, tier, 1);
+      }
       const ra = res.headers.get("retry-after");
       let delayMs = 500 * 2 ** attempt;
       if (ra) {
@@ -499,25 +545,46 @@ export async function listAllAssets(
   let offset = 0;
   const limit = 100;
 
+  // Pagination runs as a background task — pacing is now handled by the
+  // client-side rate limiter (`mudrexRateLimit.ts`), so the manual sleep is
+  // no longer needed.
   while (true) {
-    const batch = await listAssets(apiSecret, offset, limit);
+    const batch = await listAssetsBackground(apiSecret, offset, limit);
     if (batch.length === 0) break;
     allAssets.push(...batch);
     if (batch.length < limit) break;
     offset += limit;
-    await sleep(80);
   }
 
   return allAssets;
 }
 
+async function listAssetsBackground(
+  apiSecret: string,
+  offset: number,
+  limit: number
+): Promise<MudrexAsset[]> {
+  const res = (await mudrexFetch(
+    `/futures?offset=${offset}&limit=${limit}`,
+    apiSecret,
+    { context: "background" }
+  )) as { data?: MudrexAsset[] | { items?: MudrexAsset[] } };
+
+  const data = res.data;
+  if (Array.isArray(data)) return data;
+  if (data && "items" in data) return data.items ?? [];
+  return [];
+}
+
 export async function getAsset(
   apiSecret: string,
-  symbol: string
+  symbol: string,
+  context: MudrexRateLimitContext = "interactive"
 ): Promise<MudrexAsset> {
   const res = (await mudrexFetch(
     `/futures/${symbol}?is_symbol=true`,
-    apiSecret
+    apiSecret,
+    { context }
   )) as { data?: MudrexAsset };
   if (!res.data) throw new MudrexAPIError("Asset not found", 404);
   return res.data;
@@ -542,7 +609,16 @@ export async function getLeverage(
         margin_type: "ISOLATED",
       }
     );
-  } catch {
+  } catch (e) {
+    // Surface rate-limit / availability errors to callers so the API route can
+    // return a proper 429/503. Only swallow "soft" errors (asset not indexed
+    // yet, 404, transient network) with a safe default.
+    if (
+      e instanceof MudrexAPIError &&
+      (e.statusCode === 429 || e.statusCode === 503 || e.statusCode === 401)
+    ) {
+      throw e;
+    }
     return {
       asset_id: symbol,
       symbol,
@@ -556,7 +632,8 @@ export async function setLeverage(
   apiSecret: string,
   symbol: string,
   leverage: string,
-  marginType = "ISOLATED"
+  marginType = "ISOLATED",
+  context: MudrexRateLimitContext = "interactive"
 ): Promise<MudrexLeverage> {
   const res = (await mudrexFetch(
     `/futures/${symbol}/leverage?is_symbol=true`,
@@ -564,6 +641,7 @@ export async function setLeverage(
     {
       method: "POST",
       body: JSON.stringify({ margin_type: marginType, leverage }),
+      context,
     }
   )) as { data?: MudrexLeverage };
   return (
@@ -575,7 +653,8 @@ export async function setLeverage(
 
 export async function createOrder(
   apiSecret: string,
-  params: CreateOrderParams
+  params: CreateOrderParams,
+  context: MudrexRateLimitContext = "interactive"
 ): Promise<MudrexOrder> {
   const body: Record<string, unknown> = {
     leverage: parseFloat(params.leverage),
@@ -604,7 +683,7 @@ export async function createOrder(
   const res = (await mudrexFetch(
     `/futures/${params.symbol}/order?is_symbol=true`,
     apiSecret,
-    { method: "POST", body: JSON.stringify(body) }
+    { method: "POST", body: JSON.stringify(body), context }
   )) as { data?: MudrexOrder };
 
   if (!res.data) throw new MudrexAPIError("Failed to create order", 500);
@@ -651,9 +730,12 @@ export async function cancelOrder(
 // ─── Positions ───────────────────────────────────────────────────────
 
 export async function listOpenPositions(
-  apiSecret: string
+  apiSecret: string,
+  context: MudrexRateLimitContext = "interactive"
 ): Promise<MudrexPosition[]> {
-  const res = (await mudrexFetch("/futures/positions", apiSecret)) as {
+  const res = (await mudrexFetch("/futures/positions", apiSecret, {
+    context,
+  })) as {
     data?: MudrexPosition[] | { items?: MudrexPosition[] } | null;
   };
   const data = res.data;
@@ -663,21 +745,126 @@ export async function listOpenPositions(
 
 export async function closePosition(
   apiSecret: string,
-  positionId: string
+  positionId: string,
+  context: MudrexRateLimitContext = "interactive"
 ): Promise<boolean> {
   const res = (await mudrexFetch(
     `/futures/positions/${positionId}/close`,
     apiSecret,
-    { method: "POST" }
+    { method: "POST", context }
   )) as { success?: boolean };
   return res.success ?? false;
+}
+
+/**
+ * Close a fraction of a position (Enhanced tier).
+ *
+ * @param quantity Quantity of the base asset to close. Must be ≤ position size.
+ */
+export async function closePositionPartial(
+  apiSecret: string,
+  positionId: string,
+  quantity: string,
+  context: MudrexRateLimitContext = "interactive"
+): Promise<boolean> {
+  const res = (await mudrexFetch(
+    `/futures/positions/${positionId}/close/partial`,
+    apiSecret,
+    {
+      method: "POST",
+      body: JSON.stringify({ quantity: parseFloat(quantity) }),
+      context,
+    }
+  )) as { success?: boolean };
+  return res.success ?? false;
+}
+
+/**
+ * Reverse an open position (closes current, opens equivalent-size opposite side).
+ * Enhanced tier.
+ */
+export async function reversePosition(
+  apiSecret: string,
+  positionId: string,
+  context: MudrexRateLimitContext = "interactive"
+): Promise<boolean> {
+  const res = (await mudrexFetch(
+    `/futures/positions/${positionId}/reverse`,
+    apiSecret,
+    { method: "POST", context }
+  )) as { success?: boolean };
+  return res.success ?? false;
+}
+
+/**
+ * Add or reduce isolated margin on an open position (Enhanced tier).
+ *
+ * @param margin Positive value adds margin, negative value reduces margin.
+ *               See Mudrex changelog v1.0.1.
+ * @returns Mudrex response payload (`initial_margin`, `liquidation_price`).
+ */
+export async function addPositionMargin(
+  apiSecret: string,
+  positionId: string,
+  margin: number,
+  context: MudrexRateLimitContext = "interactive"
+): Promise<Record<string, unknown>> {
+  const res = (await mudrexFetch(
+    `/futures/positions/${positionId}/add-margin`,
+    apiSecret,
+    {
+      method: "POST",
+      body: JSON.stringify({ margin }),
+      context,
+    }
+  )) as Record<string, unknown>;
+  return res;
+}
+
+/**
+ * Estimated liquidation price, optionally simulating a hypothetical margin change.
+ *
+ * @param extMargin Positive = simulate adding margin, negative = reducing, 0 or
+ *                  undefined returns current liquidation price.
+ */
+export async function getLiquidationPrice(
+  apiSecret: string,
+  positionId: string,
+  extMargin?: number,
+  context: MudrexRateLimitContext = "interactive"
+): Promise<string> {
+  const qs =
+    extMargin !== undefined && Number.isFinite(extMargin)
+      ? `?ext_margin=${extMargin}`
+      : "";
+  const res = (await mudrexFetch(
+    `/futures/positions/${positionId}/liq-price${qs}`,
+    apiSecret,
+    { context }
+  )) as { data?: unknown };
+
+  const raw = res.data;
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "number") return String(raw);
+  const rec = asRecord(raw);
+  if (rec) {
+    const v = pickOptionalStr(
+      rec,
+      "liquidation_price",
+      "liquidationPrice",
+      "price"
+    );
+    if (v) return v;
+  }
+  return "0";
 }
 
 export async function setPositionRisk(
   apiSecret: string,
   positionId: string,
   stoplosPrice?: string,
-  takeprofitPrice?: string
+  takeprofitPrice?: string,
+  context: MudrexRateLimitContext = "interactive"
 ): Promise<boolean> {
   const body: Record<string, unknown> = { order_source: "API" };
   if (stoplosPrice) {
@@ -692,7 +879,37 @@ export async function setPositionRisk(
   const res = (await mudrexFetch(
     `/futures/positions/${positionId}/riskorder`,
     apiSecret,
-    { method: "POST", body: JSON.stringify(body) }
+    { method: "POST", body: JSON.stringify(body), context }
+  )) as { success?: boolean };
+  return res.success ?? false;
+}
+
+/**
+ * Amend an existing SL/TP on an open position (Enhanced tier, PATCH).
+ * Per Mudrex v1.0.1 changelog the following request fields are ignored if sent:
+ *   user_id, order_id, exchange_order_id, id.
+ */
+export async function amendPositionRisk(
+  apiSecret: string,
+  positionId: string,
+  stoplosPrice?: string,
+  takeprofitPrice?: string,
+  context: MudrexRateLimitContext = "interactive"
+): Promise<boolean> {
+  const body: Record<string, unknown> = { order_source: "API" };
+  if (stoplosPrice !== undefined) {
+    body.stoploss_price = stoplosPrice;
+    body.is_stoploss = true;
+  }
+  if (takeprofitPrice !== undefined) {
+    body.takeprofit_price = takeprofitPrice;
+    body.is_takeprofit = true;
+  }
+
+  const res = (await mudrexFetch(
+    `/futures/positions/${positionId}/riskorder`,
+    apiSecret,
+    { method: "PATCH", body: JSON.stringify(body), context }
   )) as { success?: boolean };
   return res.success ?? false;
 }

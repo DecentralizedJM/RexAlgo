@@ -3,8 +3,6 @@ import { requireMudrexSession } from "@/lib/auth";
 import { getSpotBalance, getFuturesBalance, transferFunds } from "@/lib/mudrex";
 import { jsonFromMudrexError } from "@/lib/mudrexHttp";
 
-const STAGGER_MS = 150;
-
 export async function GET(req: NextRequest) {
   const result = await requireMudrexSession();
   if ("error" in result) return result.response;
@@ -20,9 +18,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ futures });
     }
 
-    // Full wallet: sequential calls reduce burst traffic vs Promise.all (helps Mudrex 429 limits).
+    // Sequential (spot then futures) — pacing across the Standard per-second
+    // cap is handled by the client-side rate limiter (`mudrexRateLimit.ts`).
     const spot = await getSpotBalance(session.apiSecret);
-    await new Promise((r) => setTimeout(r, STAGGER_MS));
     const futures = await getFuturesBalance(session.apiSecret);
 
     return NextResponse.json({ spot, futures });
