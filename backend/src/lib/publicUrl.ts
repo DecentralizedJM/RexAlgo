@@ -1,5 +1,20 @@
 import type { NextRequest } from "next/server";
 
+/** SPA origin for OAuth redirects when `PUBLIC_APP_URL` points at the API host. */
+function parseExplicitBrowserOrigin(): string | null {
+  const raw =
+    process.env.REXALGO_PUBLIC_BROWSER_ORIGIN?.trim().replace(/\/$/, "") ||
+    process.env.PUBLIC_BROWSER_ORIGIN?.trim().replace(/\/$/, "") ||
+    "";
+  if (!raw) return null;
+  try {
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    return new URL(withScheme).origin;
+  } catch {
+    return null;
+  }
+}
+
 function parsePublicAppUrlOrigin(): string | null {
   const raw = process.env.PUBLIC_APP_URL?.trim().replace(/\/$/, "") ?? "";
   if (!raw) return null;
@@ -26,8 +41,14 @@ function looksLikeRailwayInternalHost(host: string): boolean {
  * If `X-Forwarded-Host` is a `*.railway.app` hostname (mis-set proxy), we
  * prefer `PUBLIC_APP_URL` when configured so users are not redirected to the
  * raw Railway URL.
+ *
+ * **`REXALGO_PUBLIC_BROWSER_ORIGIN`** (or `PUBLIC_BROWSER_ORIGIN`) wins first
+ * when set — use when `PUBLIC_APP_URL` must stay as the API base for webhooks.
  */
 export function browserPublicOriginFromRequest(req: NextRequest): string {
+  const explicit = parseExplicitBrowserOrigin();
+  if (explicit) return explicit;
+
   const xfHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const xfProto =
     req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";

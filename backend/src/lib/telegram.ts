@@ -52,10 +52,15 @@ export function verifyTelegramLogin(
   }
   const hash = payload.hash;
 
+  // Telegram omits optional fields (e.g. last_name, username) from the signed
+  // payload when empty. If the query string still contains `last_name=`, the
+  // data-check-string must not include those keys or the HMAC will not match.
   const entries: [string, string][] = [];
   for (const [k, v] of Object.entries(payload)) {
     if (k === "hash" || v === undefined || v === null) continue;
-    entries.push([k, String(v)]);
+    const sv = String(v);
+    if (sv === "") continue;
+    entries.push([k, sv]);
   }
   entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join("\n");

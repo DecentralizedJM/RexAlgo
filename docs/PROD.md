@@ -40,6 +40,7 @@ with a clear error if any required one is missing.
 | `TELEGRAM_BOT_TOKEN` | from `@BotFather` | Used for HMAC-verifying the Login Widget and sending DMs. |
 | `TELEGRAM_BOT_USERNAME` | `RexAlgoBot` | Used by the frontend to mount the Login Widget. Both vars must be set for the button to render. |
 | `PUBLIC_APP_URL` | `https://rexalgo.xyz` | **SPA origin** (no trailing slash). When the API runs on Railway behind a CDN/proxy, OAuth redirects use `X-Forwarded-Host` first; if that header is absent, this value must be the site users open in the browser — otherwise `Location` after Telegram login can target the wrong host. |
+| `REXALGO_PUBLIC_BROWSER_ORIGIN` | `https://rexalgo.xyz` | Optional override **first** for Telegram OAuth `Location` when `PUBLIC_APP_URL` is intentionally the **API** host (webhooks). Alias: `PUBLIC_BROWSER_ORIGIN`. |
 
 If either is missing, the Telegram Login button silently disappears and the
 notifications worker is a no-op.

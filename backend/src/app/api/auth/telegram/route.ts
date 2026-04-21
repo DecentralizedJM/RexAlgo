@@ -293,7 +293,13 @@ export async function GET(req: NextRequest) {
     });
     const errUrl = new URL(errPath, redirectOrigin);
     errUrl.searchParams.set("telegram_error", result.message);
-    return NextResponse.redirect(errUrl);
+    const errRes = NextResponse.redirect(errUrl);
+    errRes.headers.set("X-RexAlgo-Telegram-OAuth", "error");
+    errRes.headers.set(
+      "X-RexAlgo-Telegram-Reason",
+      result.message.replace(/[^\x20-\x7E]/g, "?").slice(0, 180)
+    );
+    return errRes;
   }
 
   if (result.mode === "linked") {
@@ -304,7 +310,9 @@ export async function GET(req: NextRequest) {
       outcome: "linked",
       locationPath: okUrl.pathname,
     });
-    return NextResponse.redirect(okUrl);
+    const linkedRes = NextResponse.redirect(okUrl);
+    linkedRes.headers.set("X-RexAlgo-Telegram-OAuth", "linked");
+    return linkedRes;
   }
 
   const okUrl = new URL(returnTo, redirectOrigin);
@@ -314,6 +322,7 @@ export async function GET(req: NextRequest) {
     locationPath: okUrl.pathname,
   });
   const res = NextResponse.redirect(okUrl);
+  res.headers.set("X-RexAlgo-Telegram-OAuth", "session");
   clearAllSessionCookies(res);
   res.cookies.set(COOKIE_NAME, result.token, sessionCookieOptions());
   return res;

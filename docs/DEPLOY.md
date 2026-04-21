@@ -139,6 +139,7 @@ The flow is fully implemented (see [PROD.md § Telegram](./PROD.md#6-telegram));
    - `TELEGRAM_BOT_TOKEN=<token from BotFather>`
    - `TELEGRAM_BOT_USERNAME=<bot username, no @>`
    - **`PUBLIC_APP_URL=https://rexalgo.xyz`** (or your real site origin, no trailing slash) if the API does not receive `X-Forwarded-Host` from the proxy. Otherwise OAuth `Location` headers can point at the Railway hostname and the flow appears “stuck”.
+   - If `PUBLIC_APP_URL` **must** stay as your API base for webhooks, set **`REXALGO_PUBLIC_BROWSER_ORIGIN=https://rexalgo.xyz`** (SPA only) so Telegram redirects still use the site origin.
 4. **Redeploy the API** so the new env is picked up. `GET https://rexalgo.xyz/api/auth/telegram/config` should return `{ "enabled": true, "botUsername": "…" }`.
    Fastest check — run from the repo:
    ```bash
