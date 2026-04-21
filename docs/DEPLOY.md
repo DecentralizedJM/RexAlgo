@@ -148,7 +148,11 @@ The flow is fully implemented (see [PROD.md § Telegram](./PROD.md#6-telegram));
    - **Link from settings**: sign in, open `https://rexalgo.xyz/settings`, the Telegram card should show the Login Widget. Linking should refetch `/api/auth/me` and show `Linked as @…`.
    - **Standalone login**: in a private window, `https://rexalgo.xyz/auth` should show the Telegram button. Completing it must sign you in (creates a Telegram-backed user on first use).
    - **DM**: trigger an event that emits a notification (e.g. approving a master-access request) and confirm the outbox worker delivers a DM within ~5s. The user must have **started the bot** at least once (Telegram won't accept DMs otherwise).
-6. **Rotating the bot token** (if ever needed): see [PROD.md § Secret rotation](./PROD.md#8-secret-rotation-runbook). Existing `users.telegram_id` rows stay valid.
+6. **Debugging a stuck widget** (after confirming in the Telegram app)
+   - **API (Railway logs):** every OAuth attempt prints one JSON line per step prefixed with `[rexalgo:telegram]`. After confirmation you should see `get_enter` → `oauth_in` → `oauth_verify_ok` (or `oauth_verify_failed` with `reason`) → `get_redirect`. If **`get_enter` never appears**, the redirect never reached your API (old frontend bundle, wrong domain, or Telegram still inside the iframe step only).
+   - **Optional:** set `REXALGO_TELEGRAM_TRACE=1` on the API to also log Telegram `telegramUserId` and `auth_date` after a successful hash check (disable when finished).
+   - **Browser:** open `https://rexalgo.xyz/auth?telegram_debug=1` (or `localStorage.setItem("rexalgoDebugTelegram","1")` then reload). The console logs the exact `data-auth-url`. In **Network**, watch for `GET /api/auth/telegram?...` after you tap confirm in Telegram.
+7. **Rotating the bot token** (if ever needed): see [PROD.md § Secret rotation](./PROD.md#8-secret-rotation-runbook). Existing `users.telegram_id` rows stay valid.
 
 ---
 

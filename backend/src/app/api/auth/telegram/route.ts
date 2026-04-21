@@ -30,6 +30,10 @@ import {
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { verifyTelegramLogin } from "@/lib/telegram";
+import {
+  logTelegramOauth,
+  telegramOauthTraceEnabled,
+} from "@/lib/telegramOauthLog";
 
 type TelegramJsonUser = {
   id: string;
@@ -44,6 +48,23 @@ type RunTelegramAuthResult =
   | { ok: false; status: number; message: string }
   | { ok: true; mode: "linked"; user: TelegramJsonUser }
   | { ok: true; mode: "session"; token: string; user: TelegramJsonUser };
+
+type TelegramOauthCtx = {
+  method: "GET" | "POST";
+  host?: string | null;
+  forwardedHost?: string | null;
+};
+
+function telegramOauthCtx(
+  req: NextRequest,
+  method: "GET" | "POST"
+): TelegramOauthCtx {
+  return {
+    method,
+    host: req.headers.get("host"),
+    forwardedHost: req.headers.get("x-forwarded-host"),
+  };
+}
 
 function sanitizeReturnPath(raw: string | null, fallback: string): string {
   if (raw == null || raw === "") return fallback;
@@ -60,11 +81,40 @@ function sanitizeReturnPath(raw: string | null, fallback: string): string {
 }
 
 async function runTelegramWidgetAuth(
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  ctx: TelegramOauthCtx
 ): Promise<RunTelegramAuthResult> {
+  const keys = Object.keys(body).sort();
+  logTelegramOauth("oauth_in", {
+    method: ctx.method,
+    host: ctx.host ?? "",
+    xForwardedHost: ctx.forwardedHost ?? "",
+    keyCount: keys.length,
+    keys: keys.join(","),
+    hasHash: Boolean(typeof body.hash === "string" && body.hash.length > 0),
+    hashLen:
+      typeof body.hash === "string" ? Math.min(body.hash.length, 999) : 0,
+    hasId: body.id != null && String(body.id).length > 0,
+    hasAuthDate: body.auth_date != null && String(body.auth_date).length > 0,
+  });
+
   const verified = verifyTelegramLogin(body);
   if (!verified.ok) {
+    logTelegramOauth("oauth_verify_failed", {
+      method: ctx.method,
+      reason: verified.reason,
+    });
     return { ok: false, status: 400, message: verified.reason };
+  }
+
+  if (telegramOauthTraceEnabled()) {
+    logTelegramOauth("oauth_verify_ok_trace", {
+      method: ctx.method,
+      telegramUserId: verified.data.id,
+      authDate: verified.data.auth_date,
+    });
+  } else {
+    logTelegramOauth("oauth_verify_ok", { method: ctx.method });
   }
 
   const tg = verified.data;
@@ -83,6 +133,7 @@ async function runTelegramWidgetAuth(
       .from(users)
       .where(and(eq(users.telegramId, tgId), ne(users.id, session.user.id)));
     if (conflict.length > 0) {
+      logTelegramOauth("oauth_conflict", { method: ctx.method, status: 409 });
       return {
         ok: false,
         status: 409,
@@ -98,6 +149,10 @@ async function runTelegramWidgetAuth(
       })
       .where(eq(users.id, session.user.id));
 
+    logTelegramOauth("oauth_done", {
+      method: ctx.method,
+      outcome: "linked",
+    });
     return {
       ok: true,
       mode: "linked",
@@ -152,6 +207,11 @@ async function runTelegramWidgetAuth(
 
   const token = await createSession(userId, displayName, encryptedKey, email);
 
+  logTelegramOauth("oauth_done", {
+    method: ctx.method,
+    outcome: "session",
+    existingTelegramUser: Boolean(existing),
+  });
   return {
     ok: true,
     mode: "session",
@@ -180,6 +240,18 @@ function sessionCookieOptions() {
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.clone();
   const returnRaw = url.searchParams.get("return");
+  const paramCountBefore = url.searchParams.size;
+  logTelegramOauth("get_enter", {
+    method: "GET",
+    host: req.headers.get("host") ?? "",
+    xForwardedHost: req.headers.get("x-forwarded-host") ?? "",
+    xForwardedProto: req.headers.get("x-forwarded-proto") ?? "",
+    nextOrigin: req.nextUrl.origin,
+    paramCountBefore: paramCountBefore,
+    hasReturnParam: returnRaw != null && returnRaw.length > 0,
+    returnLen: returnRaw?.length ?? 0,
+  });
+
   url.searchParams.delete("return");
 
   const payload: Record<string, unknown> = {};
@@ -188,6 +260,9 @@ export async function GET(req: NextRequest) {
   });
 
   if (Object.keys(payload).length === 0) {
+    logTelegramOauth("get_no_telegram_params", {
+      host: req.headers.get("host") ?? "",
+    });
     return NextResponse.json(
       { error: "Expected Telegram login query parameters" },
       { status: 400 }
@@ -196,13 +271,24 @@ export async function GET(req: NextRequest) {
 
   const origin = req.nextUrl.origin;
   const returnTo = sanitizeReturnPath(returnRaw, "/dashboard");
-  const result = await runTelegramWidgetAuth(payload);
+  logTelegramOauth("get_return_sanitized", {
+    returnPathLen: returnTo.length,
+    returnStartsWithSettings: returnTo === "/settings" || returnTo.startsWith("/settings?") ? 1 : 0,
+  });
+
+  const result = await runTelegramWidgetAuth(payload, telegramOauthCtx(req, "GET"));
 
   if (!result.ok) {
     const errPath =
       returnTo === "/settings" || returnTo.startsWith("/settings?")
         ? "/settings"
         : "/auth";
+    logTelegramOauth("get_redirect", {
+      kind: "error",
+      status: result.status,
+      errPath,
+      reasonSnippet: result.message.slice(0, 160),
+    });
     const errUrl = new URL(errPath, origin);
     errUrl.searchParams.set("telegram_error", result.message);
     return NextResponse.redirect(errUrl);
@@ -211,10 +297,20 @@ export async function GET(req: NextRequest) {
   if (result.mode === "linked") {
     const okUrl = new URL(returnTo, origin);
     okUrl.searchParams.set("telegram_linked", "1");
+    logTelegramOauth("get_redirect", {
+      kind: "ok",
+      outcome: "linked",
+      locationPath: okUrl.pathname,
+    });
     return NextResponse.redirect(okUrl);
   }
 
   const okUrl = new URL(returnTo, origin);
+  logTelegramOauth("get_redirect", {
+    kind: "ok",
+    outcome: "session",
+    locationPath: okUrl.pathname,
+  });
   const res = NextResponse.redirect(okUrl);
   clearAllSessionCookies(res);
   res.cookies.set(COOKIE_NAME, result.token, sessionCookieOptions());
@@ -226,10 +322,11 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
+    logTelegramOauth("post_invalid_json", { host: req.headers.get("host") ?? "" });
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const result = await runTelegramWidgetAuth(body);
+  const result = await runTelegramWidgetAuth(body, telegramOauthCtx(req, "POST"));
   if (!result.ok) {
     return NextResponse.json({ error: result.message }, { status: result.status });
   }
