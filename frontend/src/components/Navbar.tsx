@@ -105,9 +105,14 @@ export default function Navbar() {
     try {
       await logout();
     } catch {
-      /* ignore */
+      toast.error("Sign out failed. Check your connection and try again.");
+      return;
     }
-    await queryClient.invalidateQueries({ queryKey: ["session"] });
+    queryClient.setQueryData(["session", "me"], {
+      user: null,
+      sessionExpiresAt: null,
+    });
+    await queryClient.invalidateQueries({ queryKey: ["session", "me"] });
     navigate("/");
     setMobileOpen(false);
   }

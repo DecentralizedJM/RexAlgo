@@ -111,6 +111,23 @@ function sessionCookieClearOptions(path: string): {
   };
 }
 
+/** Max-age=0 without `Domain` — clears host-only cookies from before Domain was set. */
+function sessionCookieClearHostOnlyOptions(path: string): {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: "lax";
+  maxAge: number;
+  path: string;
+} {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+    path,
+  };
+}
+
 export function encryptApiSecret(apiSecret: string): string {
   const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
   const iv = crypto.randomBytes(16);
@@ -257,11 +274,20 @@ export async function requireMudrexSession(): Promise<
  * `rexalgo_session` cookie is present for the same domain, the server may read a
  * different one than the browser UI expects. To avoid "sticky" or cross-user sessions,
  * always call this before setting a new cookie and from logout handlers.
+ *
+ * When `Domain=.rexalgo.xyz` (or similar) is used, also emit host-only clears
+ * (`Set-Cookie` without `Domain`) so cookies created **before** Domain was
+ * deployed are removed — otherwise logout appears broken while an old cookie
+ * keeps the session alive.
  */
 export function clearAllSessionCookies(response: NextResponse) {
   const paths = new Set<string>(["/", SESSION_COOKIE_PATH, "/api"]);
+  const domain = sessionCookieDomainFromEnv();
   for (const path of paths) {
     response.cookies.set(COOKIE_NAME, "", sessionCookieClearOptions(path));
+    if (domain) {
+      response.cookies.set(COOKIE_NAME, "", sessionCookieClearHostOnlyOptions(path));
+    }
   }
 }
 
