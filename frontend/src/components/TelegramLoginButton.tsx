@@ -38,6 +38,13 @@ export function TelegramLoginButton({
   const cfg = useQuery({ queryKey: ["telegram-config"], queryFn: fetchTelegramConfig });
   const hostRef = useRef<HTMLDivElement>(null);
   const callbackId = useId().replace(/[^a-zA-Z0-9]/g, "");
+  /** Parents often pass inline handlers; if those are effect deps the widget is torn down mid-login. */
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onErrorRef.current = onError;
+  }, [onSuccess, onError]);
 
   useEffect(() => {
     const cb = `onTelegramAuth_${callbackId}`;
@@ -51,9 +58,11 @@ export function TelegramLoginButton({
     ) => {
       try {
         const res = await loginOrLinkWithTelegram(user);
-        onSuccess?.(res.linked);
+        onSuccessRef.current?.(res.linked);
       } catch (e) {
-        onError?.(e instanceof Error ? e.message : "Telegram auth failed");
+        onErrorRef.current?.(
+          e instanceof Error ? e.message : "Telegram auth failed"
+        );
       }
     };
 
@@ -76,7 +85,7 @@ export function TelegramLoginButton({
         (window as unknown as Record<string, unknown>)[cb] = undefined;
       }
     };
-  }, [cfg.data?.enabled, cfg.data?.botUsername, callbackId, onSuccess, onError]);
+  }, [cfg.data?.enabled, cfg.data?.botUsername, callbackId]);
 
   if (cfg.isLoading) return null;
   if (!cfg.data?.enabled) {
