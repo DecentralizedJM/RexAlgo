@@ -69,7 +69,6 @@ export function TelegramLoginButton({
     script.setAttribute("data-telegram-login", cfg.data.botUsername);
     script.setAttribute("data-size", "large");
     script.setAttribute("data-radius", "8");
-    script.setAttribute("data-request-access", "write");
     script.setAttribute("data-userpic", "false");
     script.setAttribute("data-auth-url", authUrl);
     host.appendChild(script);

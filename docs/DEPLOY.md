@@ -115,7 +115,7 @@ The **web** image defaults to `API_UPSTREAM=http://api:3000` (Compose service na
 |----------|--------|---------|
 | `JWT_SECRET` | API | Session JWT signing |
 | `ENCRYPTION_KEY` | API | Encrypt Mudrex + webhook secrets at rest |
-| `PUBLIC_APP_URL` | API | Full webhook URLs in studio UIs (no trailing slash) |
+| `PUBLIC_APP_URL` | API | Full webhook URLs in studio UIs (no trailing slash). **Vercel UI + Railway API:** set to your SPA origin (e.g. `https://rexalgo.xyz`) so Telegram OAuth redirects return to the same host the browser uses (fallback when `X-Forwarded-Host` is missing). |
 | `REXALGO_DB_PATH` | API | SQLite path; use `/data/rexalgo.db` + volume on Railway |
 | `API_UPSTREAM` | Web (nginx) | Full URL of Next API for `proxy_pass` |
 | `NODE_ENV=production` | API | `Secure` cookies |
@@ -135,9 +135,10 @@ The flow is fully implemented (see [PROD.md § Telegram](./PROD.md#6-telegram));
 2. **Attach the production domain to the bot** (required by Telegram for the Login Widget)
    - Still in BotFather: `/setdomain` → pick the bot → send the browser host users actually visit, e.g. `rexalgo.xyz`.
    - Do **not** use the Railway API host here. The widget verifies the hostname that loaded the page, which on this deployment is the Vercel / custom domain, not the API.
-3. **Set env vars on the Next API service** (Railway) alongside `JWT_SECRET` / `ENCRYPTION_KEY`:
+3. **Set env vars on the Next API service** (Railway only — not on Vercel) alongside `JWT_SECRET` / `ENCRYPTION_KEY`:
    - `TELEGRAM_BOT_TOKEN=<token from BotFather>`
    - `TELEGRAM_BOT_USERNAME=<bot username, no @>`
+   - **`PUBLIC_APP_URL=https://rexalgo.xyz`** (or your real site origin, no trailing slash) if the API does not receive `X-Forwarded-Host` from the proxy. Otherwise OAuth `Location` headers can point at the Railway hostname and the flow appears “stuck”.
 4. **Redeploy the API** so the new env is picked up. `GET https://rexalgo.xyz/api/auth/telegram/config` should return `{ "enabled": true, "botUsername": "…" }`.
    Fastest check — run from the repo:
    ```bash
@@ -149,8 +150,8 @@ The flow is fully implemented (see [PROD.md § Telegram](./PROD.md#6-telegram));
    - **Standalone login**: in a private window, `https://rexalgo.xyz/auth` should show the Telegram button. Completing it must sign you in (creates a Telegram-backed user on first use).
    - **DM**: trigger an event that emits a notification (e.g. approving a master-access request) and confirm the outbox worker delivers a DM within ~5s. The user must have **started the bot** at least once (Telegram won't accept DMs otherwise).
 6. **Debugging a stuck widget** (after confirming in the Telegram app)
-   - **API (Railway logs):** every OAuth attempt prints one JSON line per step prefixed with `[rexalgo:telegram]`. After confirmation you should see `get_enter` → `oauth_in` → `oauth_verify_ok` (or `oauth_verify_failed` with `reason`) → `get_redirect`. If **`get_enter` never appears**, the redirect never reached your API (old frontend bundle, wrong domain, or Telegram still inside the iframe step only).
-   - **Optional:** set `REXALGO_TELEGRAM_TRACE=1` on the API to also log Telegram `telegramUserId` and `auth_date` after a successful hash check (disable when finished).
+   - **API (Railway logs only in production):** JSON lines prefixed with `[rexalgo:telegram]` are emitted when `RAILWAY_ENVIRONMENT` is set (Railway’s default). Local `NODE_ENV=development` always logs. Set **`REXALGO_TELEGRAM_TRACE=1` on Railway** if you need logs on another host or extra fields. After confirmation you should see `get_enter` (check **`redirectOrigin`** vs **`nextOrigin`** — they should match your public site) → `oauth_in` → `oauth_verify_ok` (or `oauth_verify_failed` with `reason`) → `get_redirect`. If **`get_enter` never appears**, the browser never hit your API.
+   - **Optional:** keep `REXALGO_TELEGRAM_TRACE=1` on Railway only to also log Telegram `telegramUserId` and `auth_date` after a successful hash check (disable when finished).
    - **Browser:** open `https://rexalgo.xyz/auth?telegram_debug=1` (or `localStorage.setItem("rexalgoDebugTelegram","1")` then reload). The console logs the exact `data-auth-url`. In **Network**, watch for `GET /api/auth/telegram?...` after you tap confirm in Telegram.
 7. **Rotating the bot token** (if ever needed): see [PROD.md § Secret rotation](./PROD.md#8-secret-rotation-runbook). Existing `users.telegram_id` rows stay valid.
 

@@ -29,6 +29,7 @@ import {
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
+import { browserPublicOriginFromRequest } from "@/lib/publicUrl";
 import { verifyTelegramLogin } from "@/lib/telegram";
 import {
   logTelegramOauth,
@@ -241,12 +242,14 @@ export async function GET(req: NextRequest) {
   const url = req.nextUrl.clone();
   const returnRaw = url.searchParams.get("return");
   const paramCountBefore = url.searchParams.size;
+  const redirectOrigin = browserPublicOriginFromRequest(req);
   logTelegramOauth("get_enter", {
     method: "GET",
     host: req.headers.get("host") ?? "",
     xForwardedHost: req.headers.get("x-forwarded-host") ?? "",
     xForwardedProto: req.headers.get("x-forwarded-proto") ?? "",
     nextOrigin: req.nextUrl.origin,
+    redirectOrigin,
     paramCountBefore: paramCountBefore,
     hasReturnParam: returnRaw != null && returnRaw.length > 0,
     returnLen: returnRaw?.length ?? 0,
@@ -269,7 +272,6 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const origin = req.nextUrl.origin;
   const returnTo = sanitizeReturnPath(returnRaw, "/dashboard");
   logTelegramOauth("get_return_sanitized", {
     returnPathLen: returnTo.length,
@@ -289,13 +291,13 @@ export async function GET(req: NextRequest) {
       errPath,
       reasonSnippet: result.message.slice(0, 160),
     });
-    const errUrl = new URL(errPath, origin);
+    const errUrl = new URL(errPath, redirectOrigin);
     errUrl.searchParams.set("telegram_error", result.message);
     return NextResponse.redirect(errUrl);
   }
 
   if (result.mode === "linked") {
-    const okUrl = new URL(returnTo, origin);
+    const okUrl = new URL(returnTo, redirectOrigin);
     okUrl.searchParams.set("telegram_linked", "1");
     logTelegramOauth("get_redirect", {
       kind: "ok",
@@ -305,7 +307,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(okUrl);
   }
 
-  const okUrl = new URL(returnTo, origin);
+  const okUrl = new URL(returnTo, redirectOrigin);
   logTelegramOauth("get_redirect", {
     kind: "ok",
     outcome: "session",
