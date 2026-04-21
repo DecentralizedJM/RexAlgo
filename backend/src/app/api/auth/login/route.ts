@@ -4,9 +4,8 @@ import {
   encryptApiSecret,
   createSession,
   COOKIE_NAME,
-  SESSION_COOKIE_PATH,
   clearAllSessionCookies,
-  getSessionMaxAgeSeconds,
+  sessionCookieWriteOptions,
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
@@ -67,13 +66,7 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({ success: true, user: { id: userId, displayName: userName } });
     clearAllSessionCookies(response);
-    response.cookies.set(COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: getSessionMaxAgeSeconds(),
-      path: SESSION_COOKIE_PATH,
-    });
+    response.cookies.set(COOKIE_NAME, token, sessionCookieWriteOptions());
 
     return response;
   } catch (error) {

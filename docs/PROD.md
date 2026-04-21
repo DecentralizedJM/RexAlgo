@@ -53,6 +53,7 @@ notifications worker is a no-op.
 |----------|---------|---------|
 | `REXALGO_SESSION_MAX_AGE_DAYS` | `90` | Capped at 90 (Mudrex key lifetime). |
 | `REXALGO_SESSION_COOKIE_PATH` | `/api` | Avoid using `/` so other apps on the same host don't see the session cookie. |
+| `REXALGO_SESSION_COOKIE_DOMAIN` | `.rexalgo.xyz` | Optional. If unset and `PUBLIC_APP_URL` is your SPA origin, the API sets `Domain` on `rexalgo_session` so the cookie is stored for that host when responses are proxied (e.g. Vercel → Railway). |
 
 ### Internal knobs
 

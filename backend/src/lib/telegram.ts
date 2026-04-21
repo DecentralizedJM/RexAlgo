@@ -27,7 +27,7 @@ export type TelegramLoginPayload = {
 const MAX_AUTH_AGE_SEC = 60 * 60 * 24; // 24h
 
 function botToken(): string {
-  return process.env.TELEGRAM_BOT_TOKEN ?? "";
+  return (process.env.TELEGRAM_BOT_TOKEN ?? "").trim();
 }
 
 export function telegramBotConfigured(): boolean {
@@ -35,7 +35,7 @@ export function telegramBotConfigured(): boolean {
 }
 
 export function telegramBotUsername(): string {
-  return process.env.TELEGRAM_BOT_USERNAME ?? "";
+  return (process.env.TELEGRAM_BOT_USERNAME ?? "").trim();
 }
 
 export function verifyTelegramLogin(

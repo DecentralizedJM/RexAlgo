@@ -3,9 +3,8 @@ import { v4 as uuidv4 } from "uuid";
 import {
   createSession,
   COOKIE_NAME,
-  SESSION_COOKIE_PATH,
   clearAllSessionCookies,
-  getSessionMaxAgeSeconds,
+  sessionCookieWriteOptions,
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
@@ -102,13 +101,7 @@ export async function POST(req: NextRequest) {
     });
     // Ensure any stale cookies on older paths are blown away before setting the new session.
     clearAllSessionCookies(response);
-    response.cookies.set(COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: getSessionMaxAgeSeconds(),
-      path: SESSION_COOKIE_PATH,
-    });
+    response.cookies.set(COOKIE_NAME, token, sessionCookieWriteOptions());
 
     return response;
   } catch (error) {

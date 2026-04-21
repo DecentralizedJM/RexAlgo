@@ -42,6 +42,75 @@ export function getSessionMaxAgeSeconds(): number {
 export const SESSION_COOKIE_PATH =
   process.env.REXALGO_SESSION_COOKIE_PATH || "/api";
 
+/**
+ * `Domain` for `Set-Cookie` when the API is behind a reverse proxy (e.g. Vercel
+ * → Railway). Without this, the cookie can be scoped to the upstream host so the
+ * browser on your public domain never stores `rexalgo_session` for `/api/*`.
+ *
+ * Set `REXALGO_SESSION_COOKIE_DOMAIN` (with or without leading `.`), or we derive
+ * from `PUBLIC_APP_URL` when it is your SPA origin (skipped for localhost).
+ */
+export function sessionCookieDomainFromEnv(): string | undefined {
+  const raw = process.env.REXALGO_SESSION_COOKIE_DOMAIN?.trim();
+  if (raw) {
+    const host = raw.replace(/^\./, "");
+    if (!host || host === "localhost" || host.startsWith("127.")) return undefined;
+    return `.${host}`;
+  }
+  const app = process.env.PUBLIC_APP_URL?.trim();
+  if (!app) return undefined;
+  try {
+    const hostname = new URL(
+      /^https?:\/\//i.test(app) ? app : `https://${app}`
+    ).hostname;
+    if (!hostname || hostname === "localhost" || hostname.startsWith("127.")) {
+      return undefined;
+    }
+    return `.${hostname.replace(/^\./, "")}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Standard options for setting the session JWT cookie on API responses. */
+export function sessionCookieWriteOptions(): {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: "lax";
+  maxAge: number;
+  path: string;
+  domain?: string;
+} {
+  const domain = sessionCookieDomainFromEnv();
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: getSessionMaxAgeSeconds(),
+    path: SESSION_COOKIE_PATH,
+    ...(domain ? { domain } : {}),
+  };
+}
+
+function sessionCookieClearOptions(path: string): {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: "lax";
+  maxAge: number;
+  path: string;
+  domain?: string;
+} {
+  const domain = sessionCookieDomainFromEnv();
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+    path,
+    ...(domain ? { domain } : {}),
+  };
+}
+
 export function encryptApiSecret(apiSecret: string): string {
   const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
   const iv = crypto.randomBytes(16);
@@ -192,13 +261,7 @@ export async function requireMudrexSession(): Promise<
 export function clearAllSessionCookies(response: NextResponse) {
   const paths = new Set<string>(["/", SESSION_COOKIE_PATH, "/api"]);
   for (const path of paths) {
-    response.cookies.set(COOKIE_NAME, "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0,
-      path,
-    });
+    response.cookies.set(COOKIE_NAME, "", sessionCookieClearOptions(path));
   }
 }
 

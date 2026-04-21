@@ -122,6 +122,7 @@ The **web** image defaults to `API_UPSTREAM=http://api:3000` (Compose service na
 | `REXALGO_OHLC_API_BASE` | API (optional) | Internal base URL for historical candle fetches used by `POST /api/strategies/[id]/backtest` (default built-in). Operators only — not shown in product UI. |
 | `TELEGRAM_BOT_TOKEN` | API (optional) | Enables Telegram Login Widget on `/auth` and `/settings` and DM notifications. Both `TELEGRAM_BOT_*` vars must be set for the widget to render. |
 | `TELEGRAM_BOT_USERNAME` | API (optional) | Bot username from BotFather, no leading `@`. Served by `GET /api/auth/telegram/config` to the SPA so the widget can mount. |
+| `REXALGO_SESSION_COOKIE_DOMAIN` | API (optional) | Override cookie `Domain` (e.g. `.rexalgo.xyz`). If unset, `PUBLIC_APP_URL`’s hostname is used so sessions survive **Vercel → Railway** proxying. |
 
 ---
 

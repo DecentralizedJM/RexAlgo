@@ -21,11 +21,11 @@ import { v4 as uuidv4 } from "uuid";
 import { and, eq, ne } from "drizzle-orm";
 import {
   COOKIE_NAME,
-  SESSION_COOKIE_PATH,
   clearAllSessionCookies,
   createSession,
   getSession,
-  getSessionMaxAgeSeconds,
+  sessionCookieDomainFromEnv,
+  sessionCookieWriteOptions,
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
@@ -228,14 +228,15 @@ async function runTelegramWidgetAuth(
   };
 }
 
-function sessionCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
-    maxAge: getSessionMaxAgeSeconds(),
-    path: SESSION_COOKIE_PATH,
-  };
+/** OAuth redirects must never be cached at the edge (wrong user / stale Set-Cookie). */
+function withTelegramOauthNoStore(res: NextResponse): NextResponse {
+  res.headers.set(
+    "Cache-Control",
+    "private, no-store, no-cache, must-revalidate, max-age=0"
+  );
+  res.headers.set("CDN-Cache-Control", "no-store");
+  res.headers.set("Vercel-CDN-Cache-Control", "no-store");
+  return res;
 }
 
 export async function GET(req: NextRequest) {
@@ -250,6 +251,7 @@ export async function GET(req: NextRequest) {
     xForwardedProto: req.headers.get("x-forwarded-proto") ?? "",
     nextOrigin: req.nextUrl.origin,
     redirectOrigin,
+    sessionCookieDomain: sessionCookieDomainFromEnv() ?? "",
     paramCountBefore: paramCountBefore,
     hasReturnParam: returnRaw != null && returnRaw.length > 0,
     returnLen: returnRaw?.length ?? 0,
@@ -266,9 +268,11 @@ export async function GET(req: NextRequest) {
     logTelegramOauth("get_no_telegram_params", {
       host: req.headers.get("host") ?? "",
     });
-    return NextResponse.json(
-      { error: "Expected Telegram login query parameters" },
-      { status: 400 }
+    return withTelegramOauthNoStore(
+      NextResponse.json(
+        { error: "Expected Telegram login query parameters" },
+        { status: 400 }
+      )
     );
   }
 
@@ -299,7 +303,7 @@ export async function GET(req: NextRequest) {
       "X-RexAlgo-Telegram-Reason",
       result.message.replace(/[^\x20-\x7E]/g, "?").slice(0, 180)
     );
-    return errRes;
+    return withTelegramOauthNoStore(errRes);
   }
 
   if (result.mode === "linked") {
@@ -312,7 +316,7 @@ export async function GET(req: NextRequest) {
     });
     const linkedRes = NextResponse.redirect(okUrl);
     linkedRes.headers.set("X-RexAlgo-Telegram-OAuth", "linked");
-    return linkedRes;
+    return withTelegramOauthNoStore(linkedRes);
   }
 
   const okUrl = new URL(returnTo, redirectOrigin);
@@ -324,8 +328,8 @@ export async function GET(req: NextRequest) {
   const res = NextResponse.redirect(okUrl);
   res.headers.set("X-RexAlgo-Telegram-OAuth", "session");
   clearAllSessionCookies(res);
-  res.cookies.set(COOKIE_NAME, result.token, sessionCookieOptions());
-  return res;
+  res.cookies.set(COOKIE_NAME, result.token, sessionCookieWriteOptions());
+  return withTelegramOauthNoStore(res);
 }
 
 export async function POST(req: NextRequest) {
@@ -339,15 +343,19 @@ export async function POST(req: NextRequest) {
 
   const result = await runTelegramWidgetAuth(body, telegramOauthCtx(req, "POST"));
   if (!result.ok) {
-    return NextResponse.json({ error: result.message }, { status: result.status });
+    return withTelegramOauthNoStore(
+      NextResponse.json({ error: result.message }, { status: result.status })
+    );
   }
 
   if (result.mode === "linked") {
-    return NextResponse.json({
-      success: true,
-      linked: true,
-      user: result.user,
-    });
+    return withTelegramOauthNoStore(
+      NextResponse.json({
+        success: true,
+        linked: true,
+        user: result.user,
+      })
+    );
   }
 
   const response = NextResponse.json({
@@ -356,8 +364,8 @@ export async function POST(req: NextRequest) {
     user: result.user,
   });
   clearAllSessionCookies(response);
-  response.cookies.set(COOKIE_NAME, result.token, sessionCookieOptions());
-  return response;
+  response.cookies.set(COOKIE_NAME, result.token, sessionCookieWriteOptions());
+  return withTelegramOauthNoStore(response);
 }
 
 export async function DELETE() {
