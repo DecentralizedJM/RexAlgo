@@ -1,70 +1,44 @@
 /**
- * Embed the official Telegram Login Widget and forward its callback payload to
- * our `/api/auth/telegram` route.
+ * Embed the official Telegram Login Widget and complete auth via **redirect**
+ * (`data-auth-url`), not the JS callback. Telegram's phone-confirm step often
+ * fails to invoke `data-onauth` from the iframe across browsers; redirect is
+ * the supported alternative (same behaviour as choosing "Redirect to URL" in
+ * BotFather widget builder).
  *
- * The widget is loaded as a `<script async>` injected into a host `<div>`; we
- * expose a global callback on `window` and unmount it on cleanup so we don't
- * leak between route changes. Telegram's widget cannot be rendered twice on the
- * same page with the same callback name, so we suffix the callback with a
- * monotonic id.
+ * The widget is loaded as a `<script async>` injected into a host `<div>`.
  *
  * Disabled mode: when the backend's `/api/auth/telegram/config` reports
  * `enabled: false` (e.g. local dev without `TELEGRAM_BOT_USERNAME`), this
  * component renders nothing so the auth page stays clean.
  */
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  fetchTelegramConfig,
-  loginOrLinkWithTelegram,
-  type TelegramWidgetPayload,
-} from "@/lib/api";
-
-declare global {
-  interface Window {
-    [key: string]: unknown;
-  }
-}
+import { fetchTelegramConfig } from "@/lib/api";
 
 export function TelegramLoginButton({
   mode = "login",
-  onSuccess,
-  onError,
+  /** Path only (e.g. `/dashboard`). Telegram redirects back here after login. */
+  afterAuthReturnPath,
 }: {
   mode?: "login" | "link";
-  onSuccess?: (linked: boolean) => void;
-  onError?: (msg: string) => void;
+  afterAuthReturnPath?: string;
 }) {
-  const cfg = useQuery({ queryKey: ["telegram-config"], queryFn: fetchTelegramConfig });
+  const cfg = useQuery({
+    queryKey: ["telegram-config"],
+    queryFn: fetchTelegramConfig,
+    staleTime: 5 * 60_000,
+  });
   const hostRef = useRef<HTMLDivElement>(null);
-  const callbackId = useId().replace(/[^a-zA-Z0-9]/g, "");
-  /** Parents often pass inline handlers; if those are effect deps the widget is torn down mid-login. */
-  const onSuccessRef = useRef(onSuccess);
-  const onErrorRef = useRef(onError);
-  useEffect(() => {
-    onSuccessRef.current = onSuccess;
-    onErrorRef.current = onError;
-  }, [onSuccess, onError]);
 
   useEffect(() => {
-    const cb = `onTelegramAuth_${callbackId}`;
     const host = hostRef.current;
     if (!cfg.data?.enabled || !cfg.data.botUsername || !host) return;
 
-    host.innerHTML = "";
+    const returnPath =
+      afterAuthReturnPath ?? (mode === "link" ? "/settings" : "/dashboard");
+    const authUrl = `${window.location.origin}/api/auth/telegram?return=${encodeURIComponent(returnPath)}`;
 
-    (window as unknown as Record<string, unknown>)[cb] = async (
-      user: TelegramWidgetPayload
-    ) => {
-      try {
-        const res = await loginOrLinkWithTelegram(user);
-        onSuccessRef.current?.(res.linked);
-      } catch (e) {
-        onErrorRef.current?.(
-          e instanceof Error ? e.message : "Telegram auth failed"
-        );
-      }
-    };
+    host.innerHTML = "";
 
     const script = document.createElement("script");
     script.async = true;
@@ -74,18 +48,13 @@ export function TelegramLoginButton({
     script.setAttribute("data-radius", "8");
     script.setAttribute("data-request-access", "write");
     script.setAttribute("data-userpic", "false");
-    script.setAttribute("data-onauth", `${cb}(user)`);
+    script.setAttribute("data-auth-url", authUrl);
     host.appendChild(script);
 
     return () => {
       host.innerHTML = "";
-      try {
-        delete (window as unknown as Record<string, unknown>)[cb];
-      } catch {
-        (window as unknown as Record<string, unknown>)[cb] = undefined;
-      }
     };
-  }, [cfg.data?.enabled, cfg.data?.botUsername, callbackId]);
+  }, [cfg.data?.enabled, cfg.data?.botUsername, mode, afterAuthReturnPath]);
 
   if (cfg.isLoading) return null;
   if (!cfg.data?.enabled) {

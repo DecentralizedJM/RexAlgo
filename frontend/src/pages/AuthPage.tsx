@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
@@ -18,6 +18,17 @@ export default function AuthPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const from = (location.state as { from?: string } | null)?.from || "/dashboard";
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const err = searchParams.get("telegram_error");
+    if (!err) return;
+    setState("error");
+    setMessage(err);
+    const next = new URLSearchParams(searchParams);
+    next.delete("telegram_error");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleGoogleSuccess = async (response: CredentialResponse) => {
     if (!response.credential) {
@@ -117,20 +128,7 @@ export default function AuthPage() {
                   <span className="flex-1 border-t border-border/60" />
                 </div>
                 <div className="flex justify-center">
-                  <TelegramLoginButton
-                    onSuccess={async () => {
-                      await queryClient.refetchQueries({ queryKey: ["session", "me"] });
-                      void queryClient.invalidateQueries({ queryKey: ["wallet"] });
-                      void queryClient.invalidateQueries({
-                        queryKey: MUDREX_KEY_PROBE_QUERY_KEY,
-                      });
-                      navigate(from, { replace: true });
-                    }}
-                    onError={(msg) => {
-                      setState("error");
-                      setMessage(msg);
-                    }}
-                  />
+                  <TelegramLoginButton afterAuthReturnPath={from} />
                 </div>
               </div>
             </div>

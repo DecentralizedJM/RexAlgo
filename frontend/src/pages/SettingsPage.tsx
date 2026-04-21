@@ -5,8 +5,9 @@
  * that don't fit on the dashboard or auth screen. Mudrex key rotation lives on
  * the auth flow; strategy settings live in the respective studios.
  */
+import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, BellOff, BellRing, Loader2, Unlink } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { AuthGateSplash } from "@/components/AuthGateSplash";
@@ -30,7 +31,25 @@ import { toast } from "sonner";
 export default function SettingsPage() {
   const authQ = useRequireAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = authQ.data?.user;
+
+  useEffect(() => {
+    const err = searchParams.get("telegram_error");
+    const linked = searchParams.get("telegram_linked");
+    if (!err && linked !== "1") return;
+    const next = new URLSearchParams(searchParams);
+    if (err) {
+      toast.error(err);
+      next.delete("telegram_error");
+    }
+    if (linked === "1") {
+      void queryClient.refetchQueries({ queryKey: ["session", "me"] });
+      toast.success("Telegram linked");
+      next.delete("telegram_linked");
+    }
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, queryClient]);
 
   const unlinkMut = useMutation({
     mutationFn: unlinkTelegram,
@@ -138,14 +157,7 @@ export default function SettingsPage() {
                   log in with this Telegram account later.
                 </p>
                 <div className="flex justify-start">
-                  <TelegramLoginButton
-                    mode="link"
-                    onSuccess={async () => {
-                      await queryClient.refetchQueries({ queryKey: ["session", "me"] });
-                      toast.success("Telegram linked");
-                    }}
-                    onError={(msg) => toast.error(msg)}
-                  />
+                  <TelegramLoginButton mode="link" afterAuthReturnPath="/settings" />
                 </div>
               </>
             )}

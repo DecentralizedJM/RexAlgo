@@ -2,11 +2,17 @@
  * Telegram login + account linking (Phase 6).
  *
  * POST /api/auth/telegram
- *   Body: Telegram Login Widget payload.
- *   Behaviour:
- *     - If an active session exists → link the Telegram id onto that user.
- *     - Else if a user already has this Telegram id  → sign them in.
- *     - Else → create a new user seeded from the Telegram profile and sign in.
+ *   Body: Telegram Login Widget payload (JSON callback flow).
+ *
+ * GET /api/auth/telegram?id=…&hash=…&return=/path
+ *   Telegram Login Widget **redirect** flow (`data-auth-url`). Same auth logic
+ *   as POST; strips `return` before verification. `return` must be a same-site
+ *   path (see {@link sanitizeReturnPath}).
+ *
+ * Behaviour (POST + GET):
+ *   - If an active session exists → link the Telegram id onto that user.
+ *   - Else if a user already has this Telegram id  → sign them in.
+ *   - Else → create a new user seeded from the Telegram profile and sign in.
  *
  * Response shape mirrors /api/auth/google for easy client reuse.
  */
@@ -25,17 +31,40 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { verifyTelegramLogin } from "@/lib/telegram";
 
-export async function POST(req: NextRequest) {
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+type TelegramJsonUser = {
+  id: string;
+  displayName: string;
+  email: string | null;
+  hasMudrexKey: boolean;
+  telegramId: string;
+  telegramUsername: string | null;
+};
 
+type RunTelegramAuthResult =
+  | { ok: false; status: number; message: string }
+  | { ok: true; mode: "linked"; user: TelegramJsonUser }
+  | { ok: true; mode: "session"; token: string; user: TelegramJsonUser };
+
+function sanitizeReturnPath(raw: string | null, fallback: string): string {
+  if (raw == null || raw === "") return fallback;
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return fallback;
+  }
+  if (!decoded.startsWith("/")) return fallback;
+  if (decoded.startsWith("//")) return fallback;
+  if (decoded.includes("://")) return fallback;
+  return decoded.slice(0, 2048);
+}
+
+async function runTelegramWidgetAuth(
+  body: Record<string, unknown>
+): Promise<RunTelegramAuthResult> {
   const verified = verifyTelegramLogin(body);
   if (!verified.ok) {
-    return NextResponse.json({ error: verified.reason }, { status: 400 });
+    return { ok: false, status: 400, message: verified.reason };
   }
 
   const tg = verified.data;
@@ -48,17 +77,17 @@ export async function POST(req: NextRequest) {
 
   const session = await getSession();
 
-  // Case 1: Signed-in user wants to link Telegram to their existing account.
   if (session) {
     const conflict = await db
       .select({ id: users.id })
       .from(users)
       .where(and(eq(users.telegramId, tgId), ne(users.id, session.user.id)));
     if (conflict.length > 0) {
-      return NextResponse.json(
-        { error: "This Telegram account is already linked to another user" },
-        { status: 409 }
-      );
+      return {
+        ok: false,
+        status: 409,
+        message: "This Telegram account is already linked to another user",
+      };
     }
     await db
       .update(users)
@@ -69,9 +98,9 @@ export async function POST(req: NextRequest) {
       })
       .where(eq(users.id, session.user.id));
 
-    return NextResponse.json({
-      success: true,
-      linked: true,
+    return {
+      ok: true,
+      mode: "linked",
       user: {
         id: session.user.id,
         displayName: session.user.displayName,
@@ -80,10 +109,9 @@ export async function POST(req: NextRequest) {
         telegramId: tgId,
         telegramUsername: tgUsername,
       },
-    });
+    };
   }
 
-  // Case 2: No session — find an existing user by Telegram id, else create one.
   const [existing] = await db
     .select()
     .from(users)
@@ -99,7 +127,6 @@ export async function POST(req: NextRequest) {
     displayName = existing.displayName;
     email = existing.email ?? null;
     encryptedKey = existing.apiSecretEncrypted ?? null;
-    // Refresh username on every login — Telegram allows users to change it.
     if (existing.telegramUsername !== tgUsername) {
       await db
         .update(users)
@@ -125,9 +152,10 @@ export async function POST(req: NextRequest) {
 
   const token = await createSession(userId, displayName, encryptedKey, email);
 
-  const response = NextResponse.json({
-    success: true,
-    linked: false,
+  return {
+    ok: true,
+    mode: "session",
+    token,
     user: {
       id: userId,
       displayName,
@@ -136,15 +164,91 @@ export async function POST(req: NextRequest) {
       telegramId: tgId,
       telegramUsername: tgUsername,
     },
-  });
-  clearAllSessionCookies(response);
-  response.cookies.set(COOKIE_NAME, token, {
+  };
+}
+
+function sessionCookieOptions() {
+  return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "lax" as const,
     maxAge: getSessionMaxAgeSeconds(),
     path: SESSION_COOKIE_PATH,
+  };
+}
+
+export async function GET(req: NextRequest) {
+  const url = req.nextUrl.clone();
+  const returnRaw = url.searchParams.get("return");
+  url.searchParams.delete("return");
+
+  const payload: Record<string, unknown> = {};
+  url.searchParams.forEach((v, k) => {
+    payload[k] = v;
   });
+
+  if (Object.keys(payload).length === 0) {
+    return NextResponse.json(
+      { error: "Expected Telegram login query parameters" },
+      { status: 400 }
+    );
+  }
+
+  const origin = req.nextUrl.origin;
+  const returnTo = sanitizeReturnPath(returnRaw, "/dashboard");
+  const result = await runTelegramWidgetAuth(payload);
+
+  if (!result.ok) {
+    const errPath =
+      returnTo === "/settings" || returnTo.startsWith("/settings?")
+        ? "/settings"
+        : "/auth";
+    const errUrl = new URL(errPath, origin);
+    errUrl.searchParams.set("telegram_error", result.message);
+    return NextResponse.redirect(errUrl);
+  }
+
+  if (result.mode === "linked") {
+    const okUrl = new URL(returnTo, origin);
+    okUrl.searchParams.set("telegram_linked", "1");
+    return NextResponse.redirect(okUrl);
+  }
+
+  const okUrl = new URL(returnTo, origin);
+  const res = NextResponse.redirect(okUrl);
+  clearAllSessionCookies(res);
+  res.cookies.set(COOKIE_NAME, result.token, sessionCookieOptions());
+  return res;
+}
+
+export async function POST(req: NextRequest) {
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const result = await runTelegramWidgetAuth(body);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.message }, { status: result.status });
+  }
+
+  if (result.mode === "linked") {
+    return NextResponse.json({
+      success: true,
+      linked: true,
+      user: result.user,
+    });
+  }
+
+  const response = NextResponse.json({
+    success: true,
+    linked: false,
+    user: result.user,
+  });
+  clearAllSessionCookies(response);
+  response.cookies.set(COOKIE_NAME, result.token, sessionCookieOptions());
   return response;
 }
 
