@@ -26,6 +26,16 @@ export type TelegramLoginPayload = {
 
 const MAX_AUTH_AGE_SEC = 60 * 60 * 24; // 24h
 
+/** Only these keys participate in the widget HMAC (core.telegram.org/widgets/login). */
+const TELEGRAM_LOGIN_SIGNED_KEYS = new Set([
+  "auth_date",
+  "first_name",
+  "id",
+  "last_name",
+  "photo_url",
+  "username",
+]);
+
 function botToken(): string {
   return (process.env.TELEGRAM_BOT_TOKEN ?? "").trim();
 }
@@ -47,17 +57,18 @@ export function verifyTelegramLogin(
   if (!token) {
     return { ok: false, reason: "TELEGRAM_BOT_TOKEN not configured" };
   }
-  if (typeof payload.hash !== "string" || !payload.hash) {
+  const hashRaw = typeof payload.hash === "string" ? payload.hash.trim() : "";
+  if (!hashRaw) {
     return { ok: false, reason: "Missing hash" };
   }
-  const hash = payload.hash;
+  const hash = hashRaw.toLowerCase();
 
-  // Telegram omits optional fields (e.g. last_name, username) from the signed
-  // payload when empty. If the query string still contains `last_name=`, the
-  // data-check-string must not include those keys or the HMAC will not match.
+  // Telegram omits optional fields when empty. Stray query keys (analytics,
+  // proxies) must not enter the check string — only fields Telegram signs.
   const entries: [string, string][] = [];
   for (const [k, v] of Object.entries(payload)) {
-    if (k === "hash" || v === undefined || v === null) continue;
+    if (k === "hash" || !TELEGRAM_LOGIN_SIGNED_KEYS.has(k)) continue;
+    if (v === undefined || v === null) continue;
     const sv = String(v);
     if (sv === "") continue;
     entries.push([k, sv]);
@@ -104,7 +115,7 @@ export function verifyTelegramLogin(
       photo_url:
         typeof payload.photo_url === "string" ? payload.photo_url : undefined,
       auth_date: authDate,
-      hash,
+      hash: hashRaw,
     },
   };
 }

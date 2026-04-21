@@ -66,7 +66,11 @@ export function TelegramLoginButton({
     const script = document.createElement("script");
     script.async = true;
     script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute("data-telegram-login", cfg.data.botUsername);
+    // Bot usernames are case-insensitive; wrong casing breaks the embed for some users.
+    script.setAttribute(
+      "data-telegram-login",
+      cfg.data.botUsername.trim().toLowerCase()
+    );
     script.setAttribute("data-size", "large");
     script.setAttribute("data-radius", "8");
     script.setAttribute("data-userpic", "false");
