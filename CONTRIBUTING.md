@@ -23,6 +23,13 @@ npm run dev
 
 See the root **[README.md](README.md#development)** (development + troubleshooting).
 
+## Branch naming
+
+Use the format `<type>/<short-description>` where `type` is one of:
+`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `security`.
+
+Examples: `feat/telegram-login`, `fix/session-cookie-domain`, `chore/deps-bump`.
+
 ## Pull requests
 
 1. Work from an authorized private branch.
