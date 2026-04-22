@@ -65,6 +65,14 @@ If `TELEGRAM_WEBHOOK_SECRET` is missing, the webhook refuses all updates
 |----------|---------|---------|
 | `REXALGO_SKIP_DB_BOOT` | unset | Set to `1` only in the SQLite→Postgres migration script. Skips automatic migrations + seed on boot. |
 | `REXALGO_DISABLE_NOTIFICATIONS` | unset | Set to `1` in tests to prevent the outbox worker from ticking. |
+| `REXALGO_ALLOW_DEV_SECRETS` | unset | Set to `1` in local dev to allow missing `JWT_SECRET`/`ENCRYPTION_KEY`/`FINGERPRINT_SECRET`. Never set in production — the API will boot with placeholder keys that are useless for real auth. |
+
+> **Redis memory-fallback note:** When `REDIS_URL` is not set, all distributed
+> rate-limiting (webhook quotas, auth rate limits, backtest concurrency) falls
+> back to per-replica in-memory state. For a single-instance dev setup this is
+> fine. For multi-replica production: set `REDIS_URL` so limits are shared
+> across all instances. The fallback is fail-open — a missing/crashed Redis does
+> not block API traffic, but limits become per-instance again until Redis recovers.
 
 ---
 
