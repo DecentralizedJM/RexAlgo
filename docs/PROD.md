@@ -66,6 +66,7 @@ If `TELEGRAM_WEBHOOK_SECRET` is missing, the webhook refuses all updates
 | `REXALGO_SKIP_DB_BOOT` | unset | Set to `1` only in the SQLite→Postgres migration script. Skips automatic migrations + seed on boot. |
 | `REXALGO_DISABLE_NOTIFICATIONS` | unset | Set to `1` in tests to prevent the outbox worker from ticking. |
 | `REXALGO_ALLOW_DEV_SECRETS` | unset | Set to `1` in local dev to allow missing `JWT_SECRET`/`ENCRYPTION_KEY`/`FINGERPRINT_SECRET`. Never set in production — the API will boot with placeholder keys that are useless for real auth. |
+| `REXALGO_WEBHOOK_MAX_SKEW_SEC` | `60` | Maximum clock skew in seconds accepted on signed copy-trading webhooks. Clamped to 30–900. Reducing below 60 tightens the replay window; increasing above 60 is not recommended for production. |
 
 > **Redis memory-fallback note:** When `REDIS_URL` is not set, all distributed
 > rate-limiting (webhook quotas, auth rate limits, backtest concurrency) falls
