@@ -24,11 +24,13 @@ RexAlgo handles **Mudrex API secrets** and **session tokens**. Treat this like p
 | Area | Status / goal |
 |------|----------------|
 | **HTTPS** | Required in production; terminate TLS at reverse proxy or host. |
-| **Rate limiting** | In-process limit on copy webhooks; extend with gateway limits for login and other `/api/*` routes (see [README.md#roadmap](README.md#roadmap)). |
+| **Rate limiting** | Auth endpoints (login, Google, Telegram poll) are rate-limited per IP. Copy webhooks are rate-limited per strategy via Redis or in-memory fallback. |
 | **CORS** | Restrict origins in production; dev may be permissive via Next/Vite. |
-| **Headers** | Consider strict CSP, `Secure` cookies, `SameSite` for session cookie in prod. |
+| **Headers** | `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`, `Referrer-Policy`, `Cross-Origin-Opener-Policy` applied in middleware. |
+| **Session cookies** | `HttpOnly`, `Secure` (production), `SameSite=Strict`, scoped to `/api`. Server-backed: revocable via `user_sessions.revoked_at`. |
 | **Dependency audit** | Run `npm audit`; address high/critical in lockstep with upgrades. |
 | **2FA / TOTP** | Not implemented; evaluate if you add email/password beyond API-secret auth. |
+| **Admin audit log** | Sensitive admin mutations (approvals, grants, user data access) are written to `admin_audit_log` and exposed at `GET /api/admin/audit`. |
 
 ## Reporting vulnerabilities
 
