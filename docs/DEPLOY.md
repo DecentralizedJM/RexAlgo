@@ -6,9 +6,9 @@
 > (1k → 10k CCU), and runbooks for secret rotation. This doc focuses on
 > **topology**; PROD covers **operations**.
 
-RexAlgo is a **Vite SPA** + **Next.js API** + **Postgres**. The browser calls **relative** `/api/*` with cookies (`Path=/api`, `SameSite=Lax`). That means:
+RexAlgo is a **Vite SPA** + **Next.js API** + **Postgres**. The browser calls **relative** `/api/*` with cookies (`Path=/api`, `SameSite=Strict`). That means:
 
-- **Best UX**: One **browser** origin for the UI **and** `/api` (nginx, or **Vercel rewrites** to Railway), so session cookies stay on that host (`Path=/api`, `SameSite=Lax`).
+- **Best UX**: One **browser** origin for the UI **and** `/api` (nginx, or **Vercel rewrites** to Railway), so session cookies stay on that host (`Path=/api`, `SameSite=Strict`).
 - **Direct cross-origin API** (browser calls `https://*.up.railway.app/api` from `https://your-vercel-domain`) **breaks cookie login** unless you add CORS + `SameSite=None; Secure` — **not** implemented here. **Vercel-only UI + Railway API is fine** when every `/api/*` request goes to your Vercel hostname and Vercel **proxies** to Railway (see Option B).
 
 Below: recommended patterns that keep **same-origin `/api`**.
