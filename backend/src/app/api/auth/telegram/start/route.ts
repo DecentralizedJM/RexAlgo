@@ -17,8 +17,10 @@
  *   { returnPath?: string, linkToken?: string }
  */
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { getSession, verifyTelegramLinkIntentJwt } from "@/lib/auth";
-import { ensureDbReady } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
+import { users } from "@/lib/schema";
 import {
   createTelegramLoginToken,
   TELEGRAM_LOGIN_TOKEN_TTL_MS,
@@ -90,6 +92,23 @@ export async function POST(req: NextRequest) {
     linkUserId = fromJwt;
   } else if (session) {
     linkUserId = session.user.id;
+  }
+
+  if (linkUserId) {
+    const [urow] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, linkUserId));
+    if (!urow) {
+      return NextResponse.json(
+        {
+          error:
+            "That account is not in our database anymore. Sign out and sign in with Google again, then connect Telegram.",
+          code: "LINK_USER_MISSING",
+        },
+        { status: 401 }
+      );
+    }
   }
 
   const row = await createTelegramLoginToken({
