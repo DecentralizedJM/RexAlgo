@@ -3,34 +3,24 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "headers": [
+  "routes": [
     {
-      "source": "/assets/:path*",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
+      "src": "/assets/(.*)",
+      "headers": { "Cache-Control": "public, max-age=31536000, immutable" },
+      "continue": true
     },
     {
-      "source": "/index.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, max-age=0"
-        }
-      ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://rexalgo-production.up.railway.app/api/:path*"
+      "src": "/index.html",
+      "headers": {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"
+      },
+      "continue": true
     },
     {
-      "source": "/:path*",
-      "destination": "/index.html"
-    }
+      "src": "/api/(.*)",
+      "dest": "$API_UPSTREAM/api/$1",
+      "env": ["API_UPSTREAM"]
+    },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }

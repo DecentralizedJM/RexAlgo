@@ -61,8 +61,15 @@ let bootPromise: Promise<void> | null = null;
 export function ensureDbReady(): Promise<void> {
   if (!bootPromise) {
     bootPromise = (async () => {
-      const migrationsFolder = path.join(process.cwd(), "drizzle");
-      await migrate(db, { migrationsFolder });
+      // Production deploys should run migrations as a pre-deploy step (audit #23).
+      // Setting `REXALGO_SKIP_MIGRATIONS=1` on the Railway service skips the
+      // lazy-on-first-request migrate pass so a cold boot is not blocked on
+      // DDL (which was the hot-path hazard the audit flagged). Dev and CI
+      // leave it unset so migrations keep applying automatically.
+      if (process.env.REXALGO_SKIP_MIGRATIONS !== "1") {
+        const migrationsFolder = path.join(process.cwd(), "drizzle");
+        await migrate(db, { migrationsFolder });
+      }
       const { seedDatabase } = await import("./seed");
       await seedDatabase();
       const { ensureNotificationsWorker } = await import("./notifications");

@@ -26,6 +26,17 @@ export const users = pgTable("users", {
   authProvider: text("auth_provider").notNull().default("legacy"),
   displayName: text("display_name").notNull(),
   apiSecretEncrypted: text("api_secret_encrypted"),
+  /**
+   * Deterministic HMAC-SHA256 of the Mudrex API secret, keyed by
+   * `FINGERPRINT_SECRET`. Lets the legacy Mudrex-key login endpoint look up
+   * existing accounts without storing the plaintext secret and without using
+   * a prefix of the secret as the primary key (the original, very bad
+   * design this migration fixes). Nullable because Google-only users never
+   * set this.
+   *
+   * Hex-encoded (64 chars). Unique so we can detect key reuse across accounts.
+   */
+  userSecretFingerprint: text("user_secret_fingerprint").unique(),
   /** Telegram numeric user id (as string to dodge 53-bit JS number limits). */
   telegramId: text("telegram_id").unique(),
   telegramUsername: text("telegram_username"),

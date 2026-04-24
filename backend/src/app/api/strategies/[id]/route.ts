@@ -9,6 +9,23 @@ import {
   serializeBacktestSpec,
 } from "@/lib/backtest/spec";
 import { validateStrategyPatch } from "@/lib/strategyValidation";
+import { queueNotification } from "@/lib/notifications";
+
+/**
+ * Fields that materially change what a strategy will *do* to subscribers.
+ * Editing any of them on an approved strategy bumps it back to `pending`
+ * so the admin can re-audit before users keep copying the old version of
+ * the strategy (audit #16).
+ *
+ * Non-sensitive fields (`name`, `description`, `riskLevel`, `isActive`,
+ * `timeframe`, sl/tp) still update in place without re-review.
+ */
+const SENSITIVE_EDIT_FIELDS = [
+  "symbol",
+  "side",
+  "leverage",
+  "backtestSpec",
+] as const;
 
 export async function GET(
   _req: NextRequest,
@@ -144,6 +161,22 @@ export async function PATCH(
       );
     }
 
+    // Audit #16: if an approved strategy edits a sensitive field, reset it
+    // to `pending` and notify the creator. This keeps the approval gate
+    // meaningful — an admin can't sign off on strategy X and then have the
+    // creator silently flip it to a leveraged short on a different symbol.
+    const patchedSensitive = SENSITIVE_EDIT_FIELDS.some(
+      (f) => v[f] !== undefined
+    );
+    const requeueForReview =
+      patchedSensitive && existing.status === "approved";
+    if (requeueForReview) {
+      patch.status = "pending";
+      patch.rejectionReason = null;
+      patch.reviewedAt = null;
+      patch.reviewedBy = null;
+    }
+
     await db.update(strategies).set(patch).where(eq(strategies.id, id));
 
     const [updated] = await db
@@ -151,7 +184,29 @@ export async function PATCH(
       .from(strategies)
       .where(eq(strategies.id, id));
 
-    return NextResponse.json({ strategy: updated });
+    if (requeueForReview) {
+      // Fire-and-forget; notification failures must not abort the PATCH.
+      void queueNotification(existing.creatorId, {
+        kind: "strategy_requeued_for_review",
+        text:
+          `Your strategy "${existing.name}" was put back into review because ` +
+          `you changed its symbol, side, leverage or backtest spec. It will ` +
+          `be hidden from the marketplace until an admin re-approves it.`,
+        meta: {
+          strategyId: id,
+          changedFields: SENSITIVE_EDIT_FIELDS.filter(
+            (f) => v[f] !== undefined
+          ),
+        },
+      });
+    }
+
+    return NextResponse.json({
+      strategy: updated,
+      ...(requeueForReview
+        ? { notice: "Strategy moved back to pending review due to sensitive edits." }
+        : {}),
+    });
   } catch (error) {
     console.error("Strategy patch error:", error);
     return NextResponse.json({ error: "Failed to update strategy" }, { status: 500 });

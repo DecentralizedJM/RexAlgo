@@ -36,7 +36,8 @@ export type NotificationKind =
   | "tv_alert_executed"
   | "strategy_deleted_by_admin"
   | "strategy_approved"
-  | "strategy_rejected";
+  | "strategy_rejected"
+  | "strategy_requeued_for_review";
 
 export type NotificationPayload = {
   kind: NotificationKind;

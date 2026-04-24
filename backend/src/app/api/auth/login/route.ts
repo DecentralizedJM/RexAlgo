@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { v4 as uuidv4 } from "uuid";
 import { validateApiSecret } from "@/lib/mudrex";
 import {
   encryptApiSecret,
@@ -12,6 +13,7 @@ import {
   checkAuthRateLimit,
   clientIpFromRequest,
 } from "@/lib/authRateLimit";
+import { computeUserSecretFingerprint } from "@/lib/userFingerprint";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -52,35 +54,50 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const encrypted = encryptApiSecret(apiSecret.trim());
+    const trimmedSecret = apiSecret.trim();
+    const encrypted = encryptApiSecret(trimmedSecret);
+    const fingerprint = computeUserSecretFingerprint(trimmedSecret);
 
-    const secretHash = Buffer.from(apiSecret.trim()).toString("base64").slice(0, 16);
-    const existingUsers = await db
+    // Legacy fallback: rows created before migration 0009 were keyed by
+    // `base64(apiSecret).slice(0, 16)` and have a null fingerprint. Look up
+    // the new fingerprint first, then fall back to the legacy id so those
+    // users transition on their next login (below we backfill the column).
+    const legacyId = Buffer.from(trimmedSecret).toString("base64").slice(0, 16);
+    let [existing] = await db
       .select()
       .from(users)
-      .where(eq(users.id, secretHash));
+      .where(eq(users.userSecretFingerprint, fingerprint));
+    if (!existing) {
+      const rows = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, legacyId));
+      if (rows.length > 0) existing = rows[0];
+    }
 
     let userId: string;
     let userName: string;
 
-    if (existingUsers.length > 0) {
-      userId = existingUsers[0].id;
+    if (existing) {
+      userId = existing.id;
       const incoming = displayName?.trim();
-      userName = incoming || existingUsers[0].displayName;
+      userName = incoming || existing.displayName;
       await db
         .update(users)
         .set({
           apiSecretEncrypted: encrypted,
+          userSecretFingerprint: fingerprint,
           ...(incoming ? { displayName: incoming } : {}),
         })
         .where(eq(users.id, userId));
     } else {
-      userId = secretHash;
+      userId = uuidv4();
       userName = displayName?.trim() || "Trader";
       await db.insert(users).values({
         id: userId,
         displayName: userName,
         apiSecretEncrypted: encrypted,
+        userSecretFingerprint: fingerprint,
       });
     }
 

@@ -11,7 +11,9 @@
     "db:migrate": "tsx scripts/run-migrations.ts",
     "db:flush": "tsx scripts/flush-app-data.ts",
     "db:studio": "drizzle-kit studio",
-    "db:import-sqlite": "tsx scripts/migrate-sqlite-to-postgres.ts"
+    "db:import-sqlite": "tsx scripts/migrate-sqlite-to-postgres.ts",
+    "migrate": "tsx scripts/run-migrations.ts",
+    "script:backfill-user-fingerprint": "tsx scripts/backfill-user-fingerprint.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1",

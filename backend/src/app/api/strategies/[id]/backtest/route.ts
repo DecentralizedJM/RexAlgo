@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { strategies } from "@/lib/schema";
+import { acquireBacktestSlot } from "@/lib/backtestConcurrency";
 import {
   defaultBacktestSpec,
   parseBacktestSpecJson,
@@ -56,65 +57,79 @@ export async function POST(
     );
   }
 
-  let body: Record<string, unknown> = {};
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    body = {};
-  }
-
-  const lookbackMonths = clampMonths(body.lookbackMonths);
-  const initialCapital = Math.max(
-    100,
-    Math.min(1e9, Number(body.initialCapital) || 10_000)
-  );
-  const riskPctPerTrade = Math.min(
-    0.1,
-    Math.max(0.005, Number(body.riskPctPerTrade) || 0.02)
-  );
-  const feeRoundTrip = Math.min(
-    0.05,
-    Math.max(0, Number(body.feeRoundTrip) || 0.001)
-  );
-
-  const spec =
-    parseBacktestSpecJson(strategy.backtestSpecJson) ?? defaultBacktestSpec();
-
-  const endMs = Date.now();
-  const startMs = endMs - lookbackMonths * 30 * 24 * 60 * 60 * 1000;
-
-  const symbol = normalizeLinearSymbol(strategy.symbol);
-  const interval = timeframeToInterval(strategy.timeframe);
-
-  let candles;
-  try {
-    candles = await fetchOhlcAscending({
-      symbol,
-      interval,
-      startMs,
-      endMs,
-    });
-  } catch (e) {
-    console.error("backtest ohlc fetch:", e);
+  // Per-user backtest concurrency cap (audit #14). Released in `finally` so
+  // a thrown error or early return never leaks a slot.
+  const lease = await acquireBacktestSlot(userId);
+  if (!lease.ok) {
     return NextResponse.json(
-      { error: "Could not load historical data. Try again later." },
-      { status: 502 }
+      { error: lease.reason, limit: lease.limit },
+      { status: 429, headers: { "Retry-After": "10" } }
     );
   }
 
-  const result = runStrategyBacktest(candles, strategy, spec, {
-    initialCapital,
-    riskPctPerTrade,
-    feeRoundTrip,
-    defaultStopPct: 0.02,
-  });
+  try {
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      body = {};
+    }
 
-  return NextResponse.json({
-    result,
-    meta: {
-      barsUsed: candles.length,
-      rangeStart: startMs,
-      rangeEnd: endMs,
-    },
-  });
+    const lookbackMonths = clampMonths(body.lookbackMonths);
+    const initialCapital = Math.max(
+      100,
+      Math.min(1e9, Number(body.initialCapital) || 10_000)
+    );
+    const riskPctPerTrade = Math.min(
+      0.1,
+      Math.max(0.005, Number(body.riskPctPerTrade) || 0.02)
+    );
+    const feeRoundTrip = Math.min(
+      0.05,
+      Math.max(0, Number(body.feeRoundTrip) || 0.001)
+    );
+
+    const spec =
+      parseBacktestSpecJson(strategy.backtestSpecJson) ?? defaultBacktestSpec();
+
+    const endMs = Date.now();
+    const startMs = endMs - lookbackMonths * 30 * 24 * 60 * 60 * 1000;
+
+    const symbol = normalizeLinearSymbol(strategy.symbol);
+    const interval = timeframeToInterval(strategy.timeframe);
+
+    let candles;
+    try {
+      candles = await fetchOhlcAscending({
+        symbol,
+        interval,
+        startMs,
+        endMs,
+      });
+    } catch (e) {
+      console.error("backtest ohlc fetch:", e);
+      return NextResponse.json(
+        { error: "Could not load historical data. Try again later." },
+        { status: 502 }
+      );
+    }
+
+    const result = runStrategyBacktest(candles, strategy, spec, {
+      initialCapital,
+      riskPctPerTrade,
+      feeRoundTrip,
+      defaultStopPct: 0.02,
+    });
+
+    return NextResponse.json({
+      result,
+      meta: {
+        barsUsed: candles.length,
+        rangeStart: startMs,
+        rangeEnd: endMs,
+      },
+    });
+  } finally {
+    await lease.release();
+  }
 }

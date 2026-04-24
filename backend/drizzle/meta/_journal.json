@@ -64,6 +64,13 @@
       "when": 1776534300000,
       "tag": "0008_user_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776534400000,
+      "tag": "0009_user_secret_fingerprint",
+      "breakpoints": true
     }
   ]
 }
