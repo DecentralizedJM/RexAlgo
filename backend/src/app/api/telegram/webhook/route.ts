@@ -19,6 +19,7 @@
  *      succession).
  */
 import { NextRequest, NextResponse } from "next/server";
+import { ensureDbReady } from "@/lib/db";
 import {
   parseStartDeepLinkPayload,
   sendTelegramMessage,
@@ -168,6 +169,7 @@ async function handleStart(
 }
 
 export async function POST(req: NextRequest) {
+  await ensureDbReady();
   if (!telegramBotConfigured()) {
     return NextResponse.json(
       { error: "Telegram bot is not configured" },

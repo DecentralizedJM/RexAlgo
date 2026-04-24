@@ -23,7 +23,7 @@ import {
   createSession,
   sessionCookieWriteOptions,
 } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { users } from "@/lib/schema";
 import {
   consumeTelegramLoginToken,
@@ -40,6 +40,7 @@ function noStore(res: NextResponse): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
+  await ensureDbReady();
   const token = req.nextUrl.searchParams.get("token")?.trim() ?? "";
   if (!token) {
     return noStore(

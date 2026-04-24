@@ -14,6 +14,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ExternalLink, Loader2 } from "lucide-react";
 import {
   fetchTelegramConfig,
+  fetchTelegramLinkIntent,
   pollTelegramBotLogin,
   startTelegramBotLogin,
   type SessionUser,
@@ -148,8 +149,17 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
   }, [finishWithPollResult, stopPolling]);
 
   const startMut = useMutation({
-    mutationFn: () =>
-      startTelegramBotLogin({ returnPath: afterAuthReturnPath ?? null }),
+    mutationFn: async () => {
+      let linkToken: string | null = null;
+      if (mode === "link") {
+        const intent = await fetchTelegramLinkIntent();
+        linkToken = intent.linkToken;
+      }
+      return startTelegramBotLogin({
+        returnPath: afterAuthReturnPath ?? null,
+        linkToken,
+      });
+    },
     onMutate: () => {
       setErrorMessage(null);
       setPhase("starting");

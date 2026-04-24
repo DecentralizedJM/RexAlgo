@@ -7,16 +7,18 @@
  * `START`, the bot webhook claims the token, and the frontend polls
  * `/api/auth/telegram/poll` for completion.
  *
- * Public endpoint: callable without a session (login flow). If a session is
- * present (Settings → "Connect Telegram"), the new Telegram identity is
- * linked to that user instead of creating a new one.
+ * Public endpoint: callable without a session (legacy Telegram-only login).
+ * For **link** flows (Google user adding alerts), the client should send either
+ * a normal session cookie **or** a short-lived `linkToken` from
+ * `GET /api/auth/telegram/link-intent` — some browsers omit the cookie on POST
+ * to `/api` while still sending it on GET, which previously stranded those users.
  *
  * Request body (optional):
- *   { returnPath?: string }   — sanitised same-site path the client should
- *                                navigate to after the session is minted.
+ *   { returnPath?: string, linkToken?: string }
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, verifyTelegramLinkIntentJwt } from "@/lib/auth";
+import { ensureDbReady } from "@/lib/db";
 import {
   createTelegramLoginToken,
   TELEGRAM_LOGIN_TOKEN_TTL_MS,
@@ -46,6 +48,7 @@ function sanitiseReturnPath(raw: unknown): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  await ensureDbReady();
   if (!telegramBotConfigured() || !telegramBotUsername()) {
     return NextResponse.json(
       {
@@ -56,17 +59,38 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { returnPath?: unknown } = {};
+  let body: { returnPath?: unknown; linkToken?: unknown } = {};
   try {
     const raw = await req.text();
-    if (raw) body = JSON.parse(raw) as { returnPath?: unknown };
+    if (raw) body = JSON.parse(raw) as { returnPath?: unknown; linkToken?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const returnPath = sanitiseReturnPath(body.returnPath);
   const session = await getSession();
-  const linkUserId = session?.user.id ?? null;
+
+  let linkUserId: string | null = null;
+  const linkTokenRaw =
+    typeof body.linkToken === "string" ? body.linkToken.trim() : "";
+  if (linkTokenRaw) {
+    const fromJwt = await verifyTelegramLinkIntentJwt(linkTokenRaw);
+    if (!fromJwt) {
+      return NextResponse.json(
+        { error: "Invalid or expired link token. Open Connect Telegram again." },
+        { status: 400 }
+      );
+    }
+    if (session && session.user.id !== fromJwt) {
+      return NextResponse.json(
+        { error: "Session does not match link token" },
+        { status: 403 }
+      );
+    }
+    linkUserId = fromJwt;
+  } else if (session) {
+    linkUserId = session.user.id;
+  }
 
   const row = await createTelegramLoginToken({
     linkUserId,

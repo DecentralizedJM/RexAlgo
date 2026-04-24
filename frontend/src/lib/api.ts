@@ -949,10 +949,22 @@ export type TelegramStartLoginResponse = {
   mode: "login" | "link";
 };
 
-export async function startTelegramBotLogin(opts?: { returnPath?: string | null }) {
+/** Session-backed; call before `startTelegramBotLogin` when linking Telegram to an existing account. */
+export async function fetchTelegramLinkIntent() {
+  return apiFetch<{ linkToken: string }>("/api/auth/telegram/link-intent");
+}
+
+export async function startTelegramBotLogin(opts?: {
+  returnPath?: string | null;
+  /** Proves which user to link when the session cookie is not sent on POST (e.g. Safari). */
+  linkToken?: string | null;
+}) {
   return apiFetch<TelegramStartLoginResponse>("/api/auth/telegram/start", {
     method: "POST",
-    body: JSON.stringify({ returnPath: opts?.returnPath ?? null }),
+    body: JSON.stringify({
+      returnPath: opts?.returnPath ?? null,
+      linkToken: opts?.linkToken ?? null,
+    }),
   });
 }
 

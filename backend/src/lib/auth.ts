@@ -171,6 +171,39 @@ export async function createSession(
   return token;
 }
 
+const TELEGRAM_LINK_JWT_PURPOSE = "telegram_link_v1";
+const TELEGRAM_LINK_JWT_MAX_SEC = 15 * 60;
+
+/**
+ * Short-lived JWT proving which RexAlgo user is connecting Telegram. Sent in
+ * `POST /api/auth/telegram/start` as `linkToken` so linking works even when the
+ * browser does not attach the session cookie on POST (Safari / partitioned
+ * storage / some proxy setups) — GET `/api/auth/telegram/link-intent` still
+ * receives the cookie and returns this token.
+ */
+export async function createTelegramLinkIntentJwt(userId: string): Promise<string> {
+  return new SignJWT({ purpose: TELEGRAM_LINK_JWT_PURPOSE })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setExpirationTime(`${TELEGRAM_LINK_JWT_MAX_SEC}s`)
+    .setIssuedAt()
+    .sign(JWT_SECRET);
+}
+
+/** Returns RexAlgo `userId` or `null` if invalid / expired / wrong purpose. */
+export async function verifyTelegramLinkIntentJwt(
+  token: string
+): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    if (payload.purpose !== TELEGRAM_LINK_JWT_PURPOSE) return null;
+    const sub = typeof payload.sub === "string" ? payload.sub : null;
+    return sub && sub.length > 0 ? sub : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function verifySession(
   token: string
 ): Promise<{
