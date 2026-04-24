@@ -7,6 +7,10 @@
 #
 #   ./scripts/test-redis.sh 'rediss://default:pwd@host:6379'
 #
+# Hostnames ending in `.railway.internal` only work **inside** Railway (e.g.
+# API service shell). From your Mac use the **public** Redis URL from the
+# Railway Redis plugin (Variables), or run this script in `railway shell`.
+#
 # Requires either `redis-cli` (brew install redis) or Node + workspace deps
 # (`npm install` at repo root).
 #
@@ -17,6 +21,15 @@ URL="${1:-${REDIS_URL:-}}"
 
 if [[ -z "$URL" ]]; then
   echo "Set REDIS_URL or pass the connection string as the first argument." >&2
+  exit 1
+fi
+
+if [[ "$URL" == *railway.internal* ]]; then
+  echo "This URL uses a private Railway hostname (*.railway.internal)." >&2
+  echo "Your Mac cannot resolve it (ENOTFOUND). Do one of:" >&2
+  echo "  • Railway → Redis → Variables → copy the **public** URL, then:" >&2
+  echo "      export REDIS_URL='…' && $0" >&2
+  echo "  • Or: Railway → your **API** service → Shell, paste the **private** URL, run this script there." >&2
   exit 1
 fi
 
@@ -50,6 +63,7 @@ const r = new Redis(url, {
   maxRetriesPerRequest: 1,
   tls,
 });
+r.on("error", () => {});
 r.ping()
   .then((p) => {
     console.log('OK — PING reply:', p);
