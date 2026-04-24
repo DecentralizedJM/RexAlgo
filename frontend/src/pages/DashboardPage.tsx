@@ -47,6 +47,7 @@ import {
 import { formatPair } from "@/lib/format";
 import { useRequireAuth } from "@/hooks/useAuth";
 import { AuthGateSplash } from "@/components/AuthGateSplash";
+import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 import { futuresAvailableUsdt } from "@/lib/walletFunding";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
@@ -538,6 +539,17 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {hasMudrexKey && <DisconnectMudrexControl />}
+            {user && !user.telegramId && (
+              <TelegramLoginButton
+                mode="link"
+                layout="inline"
+                afterAuthReturnPath="/dashboard"
+                onLinked={() => {
+                  void queryClient.refetchQueries({ queryKey: ["session", "me"] });
+                  toast.success("Telegram connected. You will get alerts here.");
+                }}
+              />
+            )}
             <Link to="/marketplace">
               <Button variant="outline" size="sm">
                 <BarChart3 className="w-4 h-4" /> Strategies

@@ -56,7 +56,7 @@ export default function SettingsPage() {
 
   const handleTelegramLinked = () => {
     void queryClient.refetchQueries({ queryKey: ["session", "me"] });
-    toast.success("Telegram linked — you'll get real-time trade alerts.");
+    toast.success("Telegram linked. You will get trade and alert DMs here.");
   };
 
   const unlinkMut = useMutation({
@@ -108,8 +108,8 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>Telegram</CardTitle>
             <CardDescription>
-              Link your Telegram account to receive trade confirmations and
-              admin updates as DMs, and to sign in on other devices.
+              Link Telegram for trade confirmations, PnL and risk alerts, and admin updates as DMs. Sign-in stays
+              Google-only.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -125,8 +125,7 @@ export default function SettingsPage() {
                     </span>
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Signing in with this Telegram account will log you into this
-                    same RexAlgo user.
+                    Alerts and notifications use this chat. Your account email stays the one from Google sign-in.
                   </p>
                 </div>
 
@@ -161,13 +160,12 @@ export default function SettingsPage() {
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  One tap connects your Telegram and unlocks real-time trade,
-                  PnL, and liquidation-risk alerts. You can also use Telegram
-                  to sign in on other devices.
+                  Connect Telegram to get real-time trade, PnL, and liquidation-risk alerts in this chat.
                 </p>
                 <div className="flex justify-start">
                   <TelegramLoginButton
                     mode="link"
+                    layout="card"
                     afterAuthReturnPath="/settings"
                     onLinked={handleTelegramLinked}
                   />

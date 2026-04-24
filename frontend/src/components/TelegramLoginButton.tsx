@@ -1,32 +1,17 @@
 /**
- * Bot-first Telegram login / link button.
- *
- * Why this replaces the old Login Widget:
- *   Telegram's Login Widget required a confirmation DM to already-started
- *   bots. Users who hadn't tapped `/start` got stuck on the "Please confirm
- *   access via Telegram" screen forever (see support screenshot in the
- *   change description). This component skips the widget entirely — clicking
- *   it requests a short-lived login token from our API, opens the
- *   `t.me/<bot>?start=rexalgo_<token>` deep link, and then polls
- *   `/api/auth/telegram/poll` until the bot webhook reports a claim.
+ * Bot-first Telegram link button (deep-link + poll). Styled like Telegram’s
+ * official login affordance: brand blue + paper-plane mark.
  *
  * Modes:
- *   - `login`: used on `/auth`. A successful claim calls `onSignedIn(user)`
- *     so the caller can update the query cache and navigate away.
- *   - `link`:  used on `/settings` (already authenticated). A successful
- *     claim is acknowledged via `onLinked()`.
+ *   - `login`: rare; kept for API parity. Success → `onSignedIn`.
+ *   - `link`:  signed-in user connects alerts. Success → `onLinked`.
  *
- * UX rules applied (see PART 12 of the change spec):
- *   - One tap to start. We only ask for a second tap ("Open Telegram again")
- *     if the deep-link popup was blocked by the browser.
- *   - No instructions before the tap. Helper text appears only after the
- *     user is waiting for the bot to confirm.
- *   - Never strand the user. If the token expires or the tab was buried in
- *     the background, a "Try again" button restarts the flow with one tap.
+ * `layout="card"` — full-width, tall (settings card).
+ * `layout="inline"` — compact (dashboard header next to Mudrex disconnect).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ExternalLink, Loader2, Send } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import {
   fetchTelegramConfig,
   pollTelegramBotLogin,
@@ -35,16 +20,37 @@ import {
   type TelegramPollResponse,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const POLL_INTERVAL_MS = 1500;
+
+/** Telegram brand blue (official widget tone). */
+const TG_BTN =
+  "border-0 bg-[#229ED9] text-white shadow-sm hover:bg-[#1f8bc7] hover:text-white active:bg-[#1a7aaf] disabled:opacity-60 disabled:hover:bg-[#229ED9]";
+
+function TelegramPlaneIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path d="M9.78 18.65l.75-3.54 8.05-7.38c.36-.33-.08-.5-.52-.2L7.74 16.3 3.64 14.7c-.88-.39-.86-.85.19-1.29l14.68-5.66c.88-.41 1.65-.2 1.38 1.19l-2.48 11.69c-.27 1.26-.92 1.56-1.87.97l-5.22-3.86-2.52 2.43c-.3.29-.54.53-1.08.54z" />
+    </svg>
+  );
+}
 
 type Phase = "idle" | "starting" | "waiting" | "completing" | "expired" | "error";
 
 type CommonProps = {
-  /** Path the caller wants the browser to navigate to once the session is minted. */
   afterAuthReturnPath?: string;
-  /** Label override for the idle button. */
   label?: string;
+  /** `card` = full-width settings; `inline` = compact dashboard header. */
+  layout?: "card" | "inline";
 };
 
 type LoginProps = CommonProps & {
@@ -66,6 +72,7 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
     mode = "login",
     afterAuthReturnPath,
     label,
+    layout = "card",
   } = props;
 
   const cfg = useQuery({
@@ -79,7 +86,6 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
-  /** Remember the popup handle so a second tap refocuses instead of re-opening. */
   const popupRef = useRef<Window | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -122,8 +128,6 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
         return;
       }
       if (res.status === "used") {
-        // Another tab already consumed this token — treat as success without
-        // user data (caller will refetch session).
         stopPolling();
         tokenRef.current = null;
         setDeepLink(null);
@@ -136,7 +140,6 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
         return;
       }
     } catch (e) {
-      // Network blip — keep polling, but surface the message if it persists.
       setErrorMessage(
         e instanceof Error ? e.message : "Could not reach RexAlgo"
       );
@@ -155,9 +158,6 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
       tokenRef.current = data.token;
       setDeepLink(data.deepLink);
       setPhase("waiting");
-      // `noopener` / `noreferrer` keep the popup from driving our tab. `_blank`
-      // gets us a fresh tab on desktop; mobile browsers hand the URL straight
-      // to the Telegram app which is the ideal outcome there.
       popupRef.current = window.open(data.deepLink, "_blank", "noopener,noreferrer");
       pollTimerRef.current = window.setTimeout(runPoll, POLL_INTERVAL_MS);
     },
@@ -171,12 +171,7 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
     return () => stopPolling();
   }, [stopPolling]);
 
-  const idleLabel = useMemo(() => {
-    if (label) return label;
-    return mode === "link"
-      ? "Connect Telegram (1 tap)"
-      : "Continue with Telegram";
-  }, [label, mode]);
+  const idleLabel = useMemo(() => label ?? "Connect Telegram", [label]);
 
   if (cfg.isLoading) return null;
   if (!cfg.data?.enabled) {
@@ -211,20 +206,31 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
     setPhase("idle");
   };
 
+  const isInline = layout === "inline";
+
   return (
-    <div className="flex w-full flex-col items-stretch gap-2">
+    <div
+      className={cn(
+        "flex flex-col gap-2",
+        isInline ? "w-auto max-w-none items-stretch" : "w-full max-w-[min(100%,20rem)] items-stretch"
+      )}
+    >
       <Button
         type="button"
-        variant="hero"
-        size="lg"
+        variant="ghost"
+        size={isInline ? "sm" : "lg"}
         disabled={isBusy}
         onClick={() => startMut.mutate()}
-        className="w-full justify-center gap-2"
+        className={cn(
+          TG_BTN,
+          "gap-2 font-semibold rounded-[10px]",
+          isInline ? "h-9 px-3 justify-center shrink-0" : "h-12 w-full justify-center px-8 text-base"
+        )}
       >
         {phase === "starting" || phase === "completing" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
         ) : (
-          <Send className="h-4 w-4" />
+          <TelegramPlaneIcon className="h-5 w-5 shrink-0 opacity-95" />
         )}
         {phase === "waiting"
           ? "Opening Telegram…"
@@ -236,7 +242,7 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
       {phase === "waiting" && deepLink && (
         <div className="rounded-lg border border-border/60 bg-card/40 p-3 text-xs text-muted-foreground">
           <p className="flex items-start gap-2">
-            <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+            <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-[#229ED9]" />
             <span>
               Waiting for you to tap <b>START</b> in Telegram. This usually
               takes a couple of seconds.
@@ -245,7 +251,7 @@ export function TelegramLoginButton(props: TelegramLoginButtonProps) {
           <button
             type="button"
             onClick={reopenDeepLink}
-            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#229ED9] hover:underline"
           >
             <ExternalLink className="h-3 w-3" />
             Re-open Telegram
