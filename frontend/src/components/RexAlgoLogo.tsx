@@ -7,16 +7,15 @@ type RexAlgoLogoProps = {
 };
 
 /**
- * RexAlgo mark — bundled SVG in `public/rexalgo-mark.svg` (served at site root).
- * Uses explicit pixel box + inline sizing so flex/nav CSS cannot squash the asset
- * (the old `/rexalgo-logo.png` was never shipped in the repo, so the image 404’d).
+ * Official RexAlgo mark — `public/rexalgo-mark.png` (square, dark tile + gradient R).
+ * Explicit pixel box + inline sizing so flex/nav CSS cannot squash the asset.
  */
 export function RexAlgoLogo({ className, size = 32 }: RexAlgoLogoProps) {
   const px = `${size}px`;
   return (
     <img
-      src="/rexalgo-mark.svg"
-      alt="RexAlgo"
+      src="/rexalgo-mark.png"
+      alt="RexAlgo — stylized R with motion lines"
       width={size}
       height={size}
       decoding="async"
