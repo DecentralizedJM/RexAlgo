@@ -6,15 +6,32 @@ type RexAlgoLogoProps = {
   size?: number;
 };
 
-/** RexAlgo mark — gradient “R” with motion lines (`/rexalgo-logo.png`). */
+/**
+ * RexAlgo mark — bundled SVG in `public/rexalgo-mark.svg` (served at site root).
+ * Uses explicit pixel box + inline sizing so flex/nav CSS cannot squash the asset
+ * (the old `/rexalgo-logo.png` was never shipped in the repo, so the image 404’d).
+ */
 export function RexAlgoLogo({ className, size = 32 }: RexAlgoLogoProps) {
+  const px = `${size}px`;
   return (
     <img
-      src="/rexalgo-logo.png"
+      src="/rexalgo-mark.svg"
       alt="RexAlgo"
       width={size}
       height={size}
-      className={cn("object-contain shrink-0 rounded-lg", className)}
+      decoding="async"
+      draggable={false}
+      className={cn(
+        "block shrink-0 max-w-none select-none object-contain rounded-lg",
+        className
+      )}
+      style={{
+        width: px,
+        height: px,
+        minWidth: px,
+        minHeight: px,
+        flexShrink: 0,
+      }}
     />
   );
 }
