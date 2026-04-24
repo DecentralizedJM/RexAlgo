@@ -514,7 +514,7 @@ export default function DashboardPage() {
                   className={`h-2 w-2 rounded-full ${hasMudrexKey ? "bg-profit" : "bg-warning"}`}
                   aria-hidden
                 />
-                {hasMudrexKey ? "Mudrex key on file" : "Mudrex key not linked"}
+                {hasMudrexKey ? "Mudrex Key Active" : "Mudrex key not linked"}
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
