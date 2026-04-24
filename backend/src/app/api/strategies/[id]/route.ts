@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isAdminUser } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { strategies } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -7,6 +8,7 @@ import {
   parseBacktestSpecFromBody,
   serializeBacktestSpec,
 } from "@/lib/backtest/spec";
+import { validateStrategyPatch } from "@/lib/strategyValidation";
 
 export async function GET(
   _req: NextRequest,
@@ -22,6 +24,20 @@ export async function GET(
 
     if (!strategy) {
       return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
+    }
+
+    // Gate pending / rejected / deactivated strategies so enumerating UUIDs
+    // can't surface drafts or rejection reasons. Creators always see their
+    // own row; admins see everything. Return 404 (not 403) to avoid
+    // confirming that a hidden strategy exists.
+    const isPublic = strategy.status === "approved" && strategy.isActive;
+    if (!isPublic) {
+      const session = await getSession();
+      const isCreator = session?.user.id === strategy.creatorId;
+      const isAdmin = isAdminUser(session?.user ?? null);
+      if (!isCreator && !isAdmin) {
+        return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
+      }
     }
 
     return NextResponse.json({ strategy });
@@ -56,57 +72,61 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await req.json()) as Record<string, unknown>;
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
 
-    if ("type" in body || "creatorId" in body || "creator_id" in body) {
+    if (
+      rawBody &&
+      typeof rawBody === "object" &&
+      !Array.isArray(rawBody) &&
+      ("type" in rawBody || "creatorId" in rawBody || "creator_id" in rawBody)
+    ) {
       return NextResponse.json(
         { error: "Cannot change type or creator" },
         { status: 400 }
       );
     }
 
+    const validation = validateStrategyPatch(rawBody);
+    if (!validation.ok) {
+      return NextResponse.json(
+        {
+          error: "Invalid strategy input",
+          code: "VALIDATION_FAILED",
+          details: validation.errors,
+        },
+        { status: 400 }
+      );
+    }
+
     const patch: Partial<typeof strategies.$inferInsert> = {};
+    const v = validation.patch;
+    if (v.name !== undefined) patch.name = v.name;
+    if (v.description !== undefined) patch.description = v.description;
+    if (v.symbol !== undefined) patch.symbol = v.symbol;
+    if (v.side !== undefined) patch.side = v.side;
+    if (v.leverage !== undefined) patch.leverage = v.leverage;
+    if (v.stoplossPct !== undefined) patch.stoplossPct = v.stoplossPct;
+    if (v.takeprofitPct !== undefined) patch.takeprofitPct = v.takeprofitPct;
+    if (v.riskLevel !== undefined) patch.riskLevel = v.riskLevel;
+    if (v.timeframe !== undefined) patch.timeframe = v.timeframe;
+    if (v.isActive !== undefined) patch.isActive = v.isActive;
 
-    if (typeof body.name === "string") patch.name = body.name;
-    if (typeof body.description === "string") patch.description = body.description;
-    if (typeof body.symbol === "string") patch.symbol = body.symbol;
-    if (body.side === "LONG" || body.side === "SHORT" || body.side === "BOTH") {
-      patch.side = body.side;
-    }
-    if (typeof body.leverage === "string") patch.leverage = body.leverage;
-    if (body.stoplossPct === null) {
-      patch.stoplossPct = null;
-    } else if (body.stoplossPct !== undefined) {
-      const v = parseFloat(String(body.stoplossPct));
-      if (!Number.isNaN(v)) patch.stoplossPct = v;
-    }
-    if (body.takeprofitPct === null) {
-      patch.takeprofitPct = null;
-    } else if (body.takeprofitPct !== undefined) {
-      const v = parseFloat(String(body.takeprofitPct));
-      if (!Number.isNaN(v)) patch.takeprofitPct = v;
-    }
-    if (body.riskLevel === "low" || body.riskLevel === "medium" || body.riskLevel === "high") {
-      patch.riskLevel = body.riskLevel;
-    }
-    if (typeof body.timeframe === "string" || body.timeframe === null) {
-      patch.timeframe = body.timeframe as string | null;
-    }
-    if (typeof body.isActive === "boolean") {
-      patch.isActive = body.isActive;
-    }
-
-    if (body.backtestSpec !== undefined) {
+    if (v.backtestSpec !== undefined) {
       if (existing.type !== "algo") {
         return NextResponse.json(
           { error: "backtestSpec only applies to algo strategies" },
           { status: 400 }
         );
       }
-      if (body.backtestSpec === null) {
+      if (v.backtestSpec === null) {
         patch.backtestSpecJson = null;
       } else {
-        const spec = parseBacktestSpecFromBody(body.backtestSpec);
+        const spec = parseBacktestSpecFromBody(v.backtestSpec);
         if (!spec) {
           return NextResponse.json(
             { error: "Invalid backtestSpec (engine and params)" },

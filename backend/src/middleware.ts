@@ -19,18 +19,48 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { sessionJwtIssuedAtAllowed } from "@/lib/sessionPolicy";
+import { requireSecretEnv } from "@/lib/requireEnv";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "rexalgo-dev-secret-change-in-production-2024"
-);
+// Fail-fast: production deploy with missing JWT_SECRET must not boot. The
+// middleware runs on Edge but `requireSecretEnv` has no Node dependencies.
+const JWT_SECRET = new TextEncoder().encode(requireSecretEnv("JWT_SECRET"));
 
 const COOKIE_NAME = "rexalgo_session";
+
+/**
+ * Defence-in-depth HTTP response headers. These are cheap, apply to every API
+ * response, and reduce the blast radius of common web-app exploits:
+ *
+ *   - `X-Frame-Options: DENY` / `frame-ancestors 'none'` — block clickjacking
+ *     (the SPA never embeds the API in an iframe).
+ *   - `X-Content-Type-Options: nosniff` — browsers must trust our
+ *     `Content-Type` instead of guessing (avoids MIME confusion XSS).
+ *   - `Referrer-Policy: strict-origin-when-cross-origin` — don't leak paths
+ *     or query strings to third-party origins when the SPA links outward.
+ *   - `Strict-Transport-Security` (prod only) — forbid plaintext fallback
+ *     from any browser that has seen this header.
+ *   - `Cross-Origin-Opener-Policy: same-origin` — isolates the window group
+ *     so popups (e.g. Google OAuth) can't poke at our window object.
+ */
+function applySecurityHeaders(res: NextResponse): NextResponse {
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  if (process.env.NODE_ENV === "production") {
+    res.headers.set(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains"
+    );
+  }
+  return res;
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (pathname.startsWith("/api/strategies") && req.method === "GET") {
-    return NextResponse.next();
+    return applySecurityHeaders(NextResponse.next());
   }
 
   if (
@@ -41,30 +71,34 @@ export async function middleware(req: NextRequest) {
     const token = req.cookies.get(COOKIE_NAME)?.value;
 
     if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applySecurityHeaders(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      );
     }
 
     try {
       const { payload } = await jwtVerify(token, JWT_SECRET);
       const sid = typeof payload.sid === "string" ? payload.sid : "";
       if (!sid || !sessionJwtIssuedAtAllowed(payload.iat)) {
-        return NextResponse.json({ error: "Session expired" }, { status: 401 });
+        return applySecurityHeaders(
+          NextResponse.json({ error: "Session expired" }, { status: 401 })
+        );
       }
-      return NextResponse.next();
+      return applySecurityHeaders(NextResponse.next());
     } catch {
-      return NextResponse.json({ error: "Session expired" }, { status: 401 });
+      return applySecurityHeaders(
+        NextResponse.json({ error: "Session expired" }, { status: 401 })
+      );
     }
   }
 
-  return NextResponse.next();
+  return applySecurityHeaders(NextResponse.next());
 }
 
 export const config = {
   matcher: [
-    "/api/mudrex/:path*",
-    "/api/strategies/:path*",
-    "/api/subscriptions/:path*",
-    "/api/copy-trading/:path*",
-    "/api/marketplace/studio/:path*",
+    // Include every /api/* route so security headers apply universally.
+    // The session-gate branch above still only runs on its specific paths.
+    "/api/:path*",
   ],
 };

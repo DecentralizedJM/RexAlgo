@@ -104,8 +104,8 @@ On the **first** `npm run dev`, **`predev`** creates **`backend/.env.local`** fr
 
 | Variable | Required | Notes |
 |----------|----------|--------|
-| `JWT_SECRET` | **Yes** | Signs session cookie (`openssl rand -hex 32`) |
-| `ENCRYPTION_KEY` | **Yes** | AES-GCM for Mudrex + webhook secrets |
+| `JWT_SECRET` | **Yes** | Signs session cookie (`openssl rand -hex 32`). **The API refuses to boot if unset** — no public-repo fallback. Set `REXALGO_ALLOW_DEV_SECRETS=1` in non-prod to fall back to a tagged fake. |
+| `ENCRYPTION_KEY` | **Yes** | AES-GCM master key for Mudrex + webhook secrets. Each row is encrypted with a **fresh random salt** (v2 envelope); legacy single-salt rows decrypt and are re-written on next save. Same fail-fast rule as `JWT_SECRET`. |
 | `DATABASE_URL` | **Yes** | Postgres, e.g. `postgres://rexalgo:rexalgo@127.0.0.1:5432/rexalgo` after `docker compose -f docker-compose.dev.yml up -d` |
 | `GOOGLE_CLIENT_ID` | **Yes** for Google sign-in | Must match frontend `VITE_GOOGLE_CLIENT_ID` |
 | `REDIS_URL` | Optional | `redis://127.0.0.1:6379` — cross-process webhook limits; omit for single dev instance |

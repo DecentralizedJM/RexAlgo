@@ -16,6 +16,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import path from "path";
 import * as schema from "./schema";
+import { installShutdownHandlers } from "./shutdown";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -38,11 +39,18 @@ function shouldUseSsl(url: string): boolean {
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  max: Number.parseInt(process.env.PGPOOL_MAX ?? "10", 10),
+  // Raised from 10 to 25 so a single API replica does not bottleneck the DB
+  // under 500+ concurrent users. Tune via `PGPOOL_MAX`; ensure the sum across
+  // replicas stays well under `max_connections` on Postgres.
+  max: Number.parseInt(process.env.PGPOOL_MAX ?? "25", 10),
   ssl: shouldUseSsl(DATABASE_URL) ? { rejectUnauthorized: false } : undefined,
 });
 
 export const db: NodePgDatabase<typeof schema> = drizzle(pool, { schema });
+
+// Registers SIGTERM/SIGINT hooks that stop the notifications worker, wait
+// for in-flight requests, and cleanly close the pool. No-op on repeat calls.
+installShutdownHandlers(pool);
 
 let bootPromise: Promise<void> | null = null;
 

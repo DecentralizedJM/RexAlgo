@@ -11,6 +11,7 @@ import { decryptApiSecret } from "@/lib/auth";
 import { verifyCopyWebhookSignature } from "@/lib/copyWebhookHmac";
 import { parseCopySignalV1, executeMirror } from "@/lib/copyMirror";
 import { checkCopyWebhookRateLimit } from "@/lib/copyWebhookRateLimit";
+import { enforceBodyLimit } from "@/lib/bodyLimit";
 
 export async function POST(
   req: NextRequest,
@@ -18,11 +19,19 @@ export async function POST(
 ) {
   const { strategyId } = await ctx.params;
 
+  const tooLarge = enforceBodyLimit(req);
+  if (tooLarge) return tooLarge;
+
   if (!(await checkCopyWebhookRateLimit(strategyId))) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 
-  const rawBody = await req.text();
+  let rawBody: string;
+  try {
+    rawBody = await req.text();
+  } catch {
+    return NextResponse.json({ error: "Could not read request body" }, { status: 400 });
+  }
 
   const [strategy] = await db
     .select()

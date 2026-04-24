@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { subscriptions, strategies } from "@/lib/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 export async function GET() {
   const session = await getSession();
@@ -121,13 +121,13 @@ export async function POST(req: NextRequest) {
       isActive: true,
     });
 
-    const [st] = await db
-      .select({ c: strategies.subscriberCount })
-      .from(strategies)
-      .where(eq(strategies.id, strategyId));
+    // Atomic increment: two concurrent subscribes must both advance the
+    // counter. Previous read-modify-write lost updates under any concurrency.
     await db
       .update(strategies)
-      .set({ subscriberCount: (st?.c ?? 0) + 1 })
+      .set({
+        subscriberCount: sql`${strategies.subscriberCount} + 1`,
+      })
       .where(eq(strategies.id, strategyId));
 
     return NextResponse.json({ success: true, subscriptionId: id }, { status: 201 });
@@ -166,14 +166,13 @@ export async function DELETE(req: NextRequest) {
       .where(eq(subscriptions.id, subscriptionId));
 
     if (wasActive) {
-      const [st] = await db
-        .select({ c: strategies.subscriberCount })
-        .from(strategies)
-        .where(eq(strategies.id, sub.strategyId));
-      const next = Math.max(0, (st?.c ?? 1) - 1);
+      // Atomic decrement with a floor at 0. `GREATEST` is the pg-native
+      // clamp; Drizzle's `sql` tag keeps the column reference type-safe.
       await db
         .update(strategies)
-        .set({ subscriberCount: next })
+        .set({
+          subscriberCount: sql`GREATEST(0, ${strategies.subscriberCount} - 1)`,
+        })
         .where(eq(strategies.id, sub.strategyId));
     }
 

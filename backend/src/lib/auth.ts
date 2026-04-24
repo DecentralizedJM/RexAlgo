@@ -23,14 +23,19 @@ import { and, eq, isNull, lte } from "drizzle-orm";
 import crypto from "crypto";
 import type { AuthUser } from "@/types";
 import { sessionJwtIssuedAtAllowed } from "@/lib/sessionPolicy";
+import { requireSecretEnv } from "@/lib/requireEnv";
 import { db } from "@/lib/db";
 import { userSessions, users } from "@/lib/schema";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "rexalgo-dev-secret-change-in-production-2024"
-);
+/**
+ * Fail-fast on missing secrets so a production deploy cannot silently boot
+ * with the public-repo default fallback. See {@link requireSecretEnv} for the
+ * exact behaviour (throws at first access, tolerates dev without a .env when
+ * `REXALGO_ALLOW_DEV_SECRETS=1`).
+ */
+const JWT_SECRET = new TextEncoder().encode(requireSecretEnv("JWT_SECRET"));
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "rexalgo-enc-key-32chars-changeme!";
+const ENCRYPTION_KEY = requireSecretEnv("ENCRYPTION_KEY");
 const ALGORITHM = "aes-256-gcm";
 const COOKIE_NAME = "rexalgo_session";
 
@@ -89,20 +94,49 @@ export function sessionCookieDomainFromEnv(): string | undefined {
   }
 }
 
+type SameSitePolicy = "lax" | "strict" | "none";
+
+/**
+ * Session cookie SameSite policy.
+ *
+ * Default is `strict`: the browser will not attach the cookie on any
+ * cross-site navigation, which eliminates the low-grade CSRF risk that
+ * `lax` leaves open (a GET-able mutation handler would be CSRF-able from
+ * any site under `lax`). All our API traffic is XHR/`fetch()` from our own
+ * SPA, so `strict` is safe.
+ *
+ * OAuth & Telegram login flows never re-use the existing session cookie
+ * across the provider bounce — they mint a brand-new cookie on the final
+ * callback which the browser is happy to accept regardless of SameSite.
+ *
+ * Operators can downgrade to `lax` for a deploy via
+ * `REXALGO_SESSION_SAMESITE=lax` if a CSRF-hostile flow surfaces during
+ * smoke tests. `none` requires `Secure=true` (enforced below via
+ * `NODE_ENV=production`).
+ */
+function sessionCookieSameSite(): SameSitePolicy {
+  const raw = process.env.REXALGO_SESSION_SAMESITE?.trim().toLowerCase();
+  if (raw === "lax" || raw === "none") return raw;
+  return "strict";
+}
+
 /** Standard options for setting the session cookie on API responses. */
 export function sessionCookieWriteOptions(): {
   httpOnly: boolean;
   secure: boolean;
-  sameSite: "lax";
+  sameSite: SameSitePolicy;
   maxAge: number;
   path: string;
   domain?: string;
 } {
   const domain = sessionCookieDomainFromEnv();
+  const sameSite = sessionCookieSameSite();
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    // SameSite=None requires Secure even in dev; keep production behaviour
+    // unchanged and only force `secure` when the policy demands it.
+    secure: process.env.NODE_ENV === "production" || sameSite === "none",
+    sameSite,
     maxAge: getSessionMaxAgeSeconds(),
     path: SESSION_COOKIE_PATH,
     ...(domain ? { domain } : {}),
@@ -112,16 +146,17 @@ export function sessionCookieWriteOptions(): {
 function sessionCookieClearOptions(path: string): {
   httpOnly: boolean;
   secure: boolean;
-  sameSite: "lax";
+  sameSite: SameSitePolicy;
   maxAge: number;
   path: string;
   domain?: string;
 } {
   const domain = sessionCookieDomainFromEnv();
+  const sameSite = sessionCookieSameSite();
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production" || sameSite === "none",
+    sameSite,
     maxAge: 0,
     path,
     ...(domain ? { domain } : {}),
@@ -132,39 +167,92 @@ function sessionCookieClearOptions(path: string): {
 function sessionCookieClearHostOnlyOptions(path: string): {
   httpOnly: boolean;
   secure: boolean;
-  sameSite: "lax";
+  sameSite: SameSitePolicy;
   maxAge: number;
   path: string;
 } {
+  const sameSite = sessionCookieSameSite();
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production" || sameSite === "none",
+    sameSite,
     maxAge: 0,
     path,
   };
 }
 
+/**
+ * AES-256-GCM at-rest encryption for third-party API secrets.
+ *
+ * Stored format has two versions:
+ *   v1 (legacy):  `<iv_hex>:<tag_hex>:<cipher_hex>` — key derived with the
+ *                 hardcoded salt `"salt"`. Every row shares the same derived
+ *                 key; one leaked `ENCRYPTION_KEY` decrypts every row.
+ *   v2 (current): `v2:<salt_hex>:<iv_hex>:<tag_hex>:<cipher_hex>` — fresh
+ *                 16-byte random salt per row, so each ciphertext has its own
+ *                 derived key. Requires the same `ENCRYPTION_KEY` master to
+ *                 decrypt, but eliminates the bulk-leak amplification.
+ *
+ * `encryptApiSecret` always writes v2. `decryptApiSecret` reads both; every
+ * authenticated write path (login / link-mudrex / TV-webhook create & rotate
+ * / copy-webhook create & rotate) re-encrypts when rewriting the column, so
+ * the legacy v1 rows fade as users sign back in.
+ */
+const ENC_V2 = "v2";
+const V2_SALT_BYTES = 16;
+
+function deriveKey(salt: Buffer): Buffer {
+  return crypto.scryptSync(ENCRYPTION_KEY, salt, 32);
+}
+
 export function encryptApiSecret(apiSecret: string): string {
-  const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
+  const salt = crypto.randomBytes(V2_SALT_BYTES);
+  const key = deriveKey(salt);
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   let encrypted = cipher.update(apiSecret, "utf8", "hex");
   encrypted += cipher.final("hex");
   const authTag = cipher.getAuthTag().toString("hex");
-  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
+  return `${ENC_V2}:${salt.toString("hex")}:${iv.toString("hex")}:${authTag}:${encrypted}`;
 }
 
 export function decryptApiSecret(encrypted: string): string {
-  const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
-  const [ivHex, authTagHex, data] = encrypted.split(":");
-  const iv = Buffer.from(ivHex, "hex");
-  const authTag = Buffer.from(authTagHex, "hex");
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(authTag);
-  let decrypted = decipher.update(data, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
+  const parts = encrypted.split(":");
+
+  if (parts[0] === ENC_V2 && parts.length === 5) {
+    const [, saltHex, ivHex, authTagHex, data] = parts;
+    const salt = Buffer.from(saltHex, "hex");
+    const key = deriveKey(salt);
+    const iv = Buffer.from(ivHex, "hex");
+    const authTag = Buffer.from(authTagHex, "hex");
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(data, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  }
+
+  // Legacy v1 format: `<iv>:<tag>:<cipher>` with hardcoded "salt" literal.
+  // Kept so existing rows continue to work until their next write.
+  if (parts.length === 3) {
+    const [ivHex, authTagHex, data] = parts;
+    const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
+    const iv = Buffer.from(ivHex, "hex");
+    const authTag = Buffer.from(authTagHex, "hex");
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(data, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  }
+
+  throw new Error("Unrecognised ciphertext format");
+}
+
+/** True when the stored ciphertext uses the legacy v1 single-salt format. */
+export function isLegacyEncryptedSecret(encrypted: string): boolean {
+  const parts = encrypted.split(":");
+  return parts.length === 3 && parts[0] !== ENC_V2;
 }
 
 export interface CreateSessionOptions {
@@ -284,7 +372,12 @@ export async function getSession(): Promise<{
 
   if (!row) return null;
   if (row.revokedAt) return null;
-  if (row.expiresAt.getTime() <= Date.now()) return null;
+  // Allow a 1-second grace window at the expiry boundary. Without it, a
+  // session that JUST expired (by a handful of ms) fails here even though
+  // the JWT `exp` check upstream in middleware still passed — the client
+  // then sees a confusing "logged out mid-request". JWT `exp` is only
+  // second-granular anyway, so a sub-second mismatch is a pure race.
+  if (row.expiresAt.getTime() < Date.now() - 1000) return null;
 
   let apiSecret: string | null = null;
   if (row.apiSecretEncrypted) {

@@ -41,6 +41,7 @@ import {
 import { executeMirror } from "@/lib/copyMirror";
 import { queueNotification } from "@/lib/notifications";
 import { checkCopyWebhookRateLimit } from "@/lib/copyWebhookRateLimit";
+import { enforceBodyLimit } from "@/lib/bodyLimit";
 import {
   createOrder,
   getAsset,
@@ -229,11 +230,19 @@ export async function POST(
 ) {
   const { id } = await ctx.params;
 
+  const tooLarge = enforceBodyLimit(req);
+  if (tooLarge) return tooLarge;
+
   if (!(await checkCopyWebhookRateLimit(`tv:${id}`))) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 
-  const rawBody = await req.text();
+  let rawBody: string;
+  try {
+    rawBody = await req.text();
+  } catch {
+    return NextResponse.json({ error: "Could not read request body" }, { status: 400 });
+  }
   const clientIp =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||

@@ -212,15 +212,93 @@ export type MirrorSummary = {
   errors: number;
 };
 
+type SubscriberRow = {
+  userId: string;
+  marginPerTrade: string;
+  apiSecretEncrypted: string | null;
+};
+
+/**
+ * Bounded-concurrency fan-out. 100 subscribers × 200ms Mudrex latency used
+ * to stall the webhook handler for ~20s when processed serially; with a
+ * batch size of 10 concurrent requests per chunk that drops to ~2s while
+ * still staying well below Mudrex per-account burst limits (each user has
+ * their own key, and we serialise on a per-bucket basis inside
+ * {@link mudrexRateLimit}).
+ */
+const MIRROR_CONCURRENCY = 10;
+
+async function processSubscriber(
+  strategy: StrategyRow,
+  signal: CopySignalV1,
+  signalEventId: string,
+  sub: SubscriberRow
+): Promise<"ok" | "error" | "skipped"> {
+  if (sub.userId === strategy.creatorId) return "skipped";
+
+  if (!sub.apiSecretEncrypted) {
+    await db.insert(copyMirrorAttempts).values({
+      id: uuidv4(),
+      signalId: signalEventId,
+      userId: sub.userId,
+      status: "error",
+      detail: "Subscriber has no Mudrex API key linked",
+    });
+    return "error";
+  }
+
+  let apiSecret: string;
+  try {
+    apiSecret = decryptApiSecret(sub.apiSecretEncrypted);
+  } catch {
+    await db.insert(copyMirrorAttempts).values({
+      id: uuidv4(),
+      signalId: signalEventId,
+      userId: sub.userId,
+      status: "error",
+      detail: "Failed to decrypt subscriber API credentials",
+    });
+    return "error";
+  }
+
+  const result =
+    signal.action === "open"
+      ? await mirrorOpen(strategy, signal, apiSecret, sub.marginPerTrade, sub.userId)
+      : await mirrorClose(signal, apiSecret);
+
+  if (result.ok) {
+    await db.insert(copyMirrorAttempts).values({
+      id: uuidv4(),
+      signalId: signalEventId,
+      userId: sub.userId,
+      status: "ok",
+      detail: signal.action === "open" ? "Order placed" : "Position closed",
+      mudrexOrderId: result.orderId,
+    });
+    return "ok";
+  }
+
+  await db.insert(copyMirrorAttempts).values({
+    id: uuidv4(),
+    signalId: signalEventId,
+    userId: sub.userId,
+    status: "error",
+    detail: result.detail,
+  });
+  return "error";
+}
+
 /**
  * Execute a validated signal for all active subscribers (excluding the strategy creator).
+ * Subscribers are processed in bounded concurrency batches — see
+ * {@link MIRROR_CONCURRENCY}.
  */
 export async function executeMirror(
   strategy: StrategyRow,
   signal: CopySignalV1,
   signalEventId: string
 ): Promise<MirrorSummary> {
-  const subs = await db
+  const subs: SubscriberRow[] = await db
     .select({
       userId: subscriptions.userId,
       marginPerTrade: subscriptions.marginPerTrade,
@@ -238,60 +316,22 @@ export async function executeMirror(
   let ok = 0;
   let errors = 0;
 
-  for (const sub of subs) {
-    if (sub.userId === strategy.creatorId) continue;
-
-    if (!sub.apiSecretEncrypted) {
-      await db.insert(copyMirrorAttempts).values({
-        id: uuidv4(),
-        signalId: signalEventId,
-        userId: sub.userId,
-        status: "error",
-        detail: "Subscriber has no Mudrex API key linked",
-      });
-      errors++;
-      continue;
-    }
-
-    let apiSecret: string;
-    try {
-      apiSecret = decryptApiSecret(sub.apiSecretEncrypted);
-    } catch {
-      await db.insert(copyMirrorAttempts).values({
-        id: uuidv4(),
-        signalId: signalEventId,
-        userId: sub.userId,
-        status: "error",
-        detail: "Failed to decrypt subscriber API credentials",
-      });
-      errors++;
-      continue;
-    }
-
-    const result =
-      signal.action === "open"
-        ? await mirrorOpen(strategy, signal, apiSecret, sub.marginPerTrade, sub.userId)
-        : await mirrorClose(signal, apiSecret);
-
-    if (result.ok) {
-      await db.insert(copyMirrorAttempts).values({
-        id: uuidv4(),
-        signalId: signalEventId,
-        userId: sub.userId,
-        status: "ok",
-        detail: signal.action === "open" ? "Order placed" : "Position closed",
-        mudrexOrderId: result.orderId,
-      });
-      ok++;
-    } else {
-      await db.insert(copyMirrorAttempts).values({
-        id: uuidv4(),
-        signalId: signalEventId,
-        userId: sub.userId,
-        status: "error",
-        detail: result.detail,
-      });
-      errors++;
+  for (let i = 0; i < subs.length; i += MIRROR_CONCURRENCY) {
+    const batch = subs.slice(i, i + MIRROR_CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map((sub) => processSubscriber(strategy, signal, signalEventId, sub))
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        if (r.value === "ok") ok++;
+        else if (r.value === "error") errors++;
+        // "skipped" (strategy creator) is neither success nor failure.
+      } else {
+        // Unexpected throw inside processSubscriber — count as an error so
+        // the outer summary reflects reality even without an attempts row.
+        errors++;
+        console.error("[copyMirror] subscriber task threw", r.reason);
+      }
     }
   }
 

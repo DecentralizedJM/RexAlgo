@@ -19,6 +19,7 @@
  *      succession).
  */
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { ensureDbReady } from "@/lib/db";
 import {
   parseStartDeepLinkPayload,
@@ -33,6 +34,7 @@ import {
   welcomeMessageFor,
 } from "@/lib/telegramBotAuth";
 import { logTelegramOauth } from "@/lib/telegramOauthLog";
+import { enforceBodyLimit } from "@/lib/bodyLimit";
 
 type TelegramUser = {
   id?: number;
@@ -71,13 +73,19 @@ function webhookAuthOk(req: NextRequest): boolean {
     return process.env.REXALGO_TELEGRAM_ALLOW_UNSIGNED === "1";
   }
   if (!got) return false;
-  if (got.length !== expected.length) return false;
-  // Length-safe compare — header and secret are both ASCII.
-  let diff = 0;
-  for (let i = 0; i < got.length; i++) {
-    diff |= got.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return diff === 0;
+  // Constant-time comparison across equally-sized buffers. Padding both to
+  // `max(expected.length, got.length)` means an attacker cannot distinguish
+  // "wrong length" from "wrong bytes" via response timing — crypto.timingSafeEqual
+  // throws on mismatched-length inputs, so we equalise the buffers first.
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(got, "utf8");
+  const len = Math.max(a.length, b.length);
+  const padA = Buffer.alloc(len);
+  const padB = Buffer.alloc(len);
+  a.copy(padA);
+  b.copy(padB);
+  const equal = crypto.timingSafeEqual(padA, padB);
+  return equal && a.length === b.length;
 }
 
 function displayNameFromTelegram(u: TelegramUser, telegramId: string): string {
@@ -169,6 +177,9 @@ async function handleStart(
 }
 
 export async function POST(req: NextRequest) {
+  const tooLarge = enforceBodyLimit(req);
+  if (tooLarge) return tooLarge;
+
   await ensureDbReady();
   if (!telegramBotConfigured()) {
     return NextResponse.json(

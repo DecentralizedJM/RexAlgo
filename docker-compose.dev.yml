@@ -1,10 +1,15 @@
 # Local dev dependencies for RexAlgo.
-# Start just Postgres for npm run dev (the API + UI still run on the host via npm run dev).
+# Start Postgres + Redis for npm run dev (the API + UI still run on the host).
 #
 #   docker compose -f docker-compose.dev.yml up -d
 #   docker compose -f docker-compose.dev.yml down
 #
-# Then set DATABASE_URL=postgres://rexalgo:rexalgo@127.0.0.1:5432/rexalgo in backend/.env.local
+# Then in backend/.env.local:
+#   DATABASE_URL=postgres://rexalgo:rexalgo@127.0.0.1:5432/rexalgo
+#   REDIS_URL=redis://127.0.0.1:6379
+#
+# Redis is optional — the app falls back to an in-process Map — but running it
+# locally keeps dev parity with production (shared auth + webhook rate limits).
 
 services:
   postgres:
@@ -22,6 +27,19 @@ services:
       test: ["CMD-SHELL", "pg_isready -U rexalgo -d rexalgo"]
       interval: 10s
       timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: rexalgo-redis-dev
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
       retries: 5
     restart: unless-stopped
 

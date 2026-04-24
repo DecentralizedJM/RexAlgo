@@ -7,21 +7,43 @@ import {
   clearAllSessionCookies,
   sessionCookieWriteOptions,
 } from "@/lib/auth";
+import {
+  authRateLimitResponse,
+  checkAuthRateLimit,
+  clientIpFromRequest,
+} from "@/lib/authRateLimit";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
-  try {
-    const { apiSecret, displayName } = await req.json();
+  const ip = clientIpFromRequest(req);
+  if (!(await checkAuthRateLimit("login", ip))) {
+    const { body, status, headers } = authRateLimitResponse();
+    return NextResponse.json(body, { status, headers });
+  }
 
-    if (!apiSecret || typeof apiSecret !== "string") {
+  let apiSecret: string;
+  let displayName: string | undefined;
+  try {
+    const parsed = (await req.json()) as {
+      apiSecret?: unknown;
+      displayName?: unknown;
+    };
+    if (!parsed || typeof parsed.apiSecret !== "string") {
       return NextResponse.json(
         { error: "API secret is required" },
         { status: 400 }
       );
     }
+    apiSecret = parsed.apiSecret;
+    displayName =
+      typeof parsed.displayName === "string" ? parsed.displayName : undefined;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 
+  try {
     const isValid = await validateApiSecret(apiSecret.trim());
     if (!isValid) {
       return NextResponse.json(

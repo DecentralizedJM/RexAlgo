@@ -38,4 +38,11 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/drizzle ./drizzle
 
 EXPOSE 3000
+
+# Let the orchestrator (Docker Compose / Railway / Kubernetes) detect a hung
+# process or DB outage quickly. /api/health performs a `SELECT 1` + Redis
+# PING, so a 200 here implies the full request path is healthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3000/api/health || exit 1
+
 CMD ["node", "server.js"]

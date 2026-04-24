@@ -6,6 +6,11 @@ import {
   clearAllSessionCookies,
   sessionCookieWriteOptions,
 } from "@/lib/auth";
+import {
+  authRateLimitResponse,
+  checkAuthRateLimit,
+  clientIpFromRequest,
+} from "@/lib/authRateLimit";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -41,8 +46,21 @@ async function verifyGoogleToken(
 }
 
 export async function POST(req: NextRequest) {
+  const ip = clientIpFromRequest(req);
+  if (!(await checkAuthRateLimit("google", ip))) {
+    const { body, status, headers } = authRateLimitResponse();
+    return NextResponse.json(body, { status, headers });
+  }
+
+  let credential: unknown;
   try {
-    const { credential } = await req.json();
+    const parsed = (await req.json()) as { credential?: unknown };
+    credential = parsed?.credential;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  try {
 
     if (!credential || typeof credential !== "string") {
       return NextResponse.json(

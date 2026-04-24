@@ -195,10 +195,32 @@ class TierBucket {
   private tsDay: number[] = [];
   private waiters: Waiter[] = [];
   private pumping = false;
+  /**
+   * Unix ms of the last `acquire` / `penalise` call. Used by the eviction
+   * sweep in {@link InMemoryMudrexRateLimiter} to drop buckets that have
+   * been idle longer than the eviction threshold, so long-running servers
+   * don't grow a per-API-key bucket forever.
+   */
+  lastUsed: number = Date.now();
+
+  /**
+   * Returns true when the bucket has no in-flight waiters AND has no
+   * recorded usage inside any of its windows. Safe to evict.
+   */
+  get isIdle(): boolean {
+    return (
+      this.waiters.length === 0 &&
+      this.tsSec.length === 0 &&
+      this.tsMin.length === 0 &&
+      this.tsHour.length === 0 &&
+      this.tsDay.length === 0
+    );
+  }
 
   constructor(private readonly limits: TierLimits) {}
 
   async acquire(maxWaitMs: number, signal?: AbortSignal): Promise<void> {
+    this.lastUsed = Date.now();
     if (signal?.aborted) {
       throw new MudrexRateLimitAbortedError();
     }
@@ -230,6 +252,7 @@ class TierBucket {
   /** Record `n` fake consumed tokens without issuing a real request. */
   penalise(n: number): void {
     const now = Date.now();
+    this.lastUsed = now;
     for (let i = 0; i < n; i++) {
       this.tsSec.push(now);
       this.tsMin.push(now);
@@ -322,10 +345,42 @@ class TierBucket {
   }
 }
 
+/**
+ * Per-API-key bucket idle TTL. Beyond this, an idle bucket is dropped on the
+ * next sweep. 1h comfortably covers the longest Mudrex window (`perDay`
+ * entries are naturally trimmed inside `earliestFreeMs`) while still letting
+ * an inactive trader's memory footprint go to zero.
+ */
+const BUCKET_IDLE_TTL_MS = 60 * 60 * 1000;
+const EVICTION_INTERVAL_MS = 10 * 60 * 1000;
+
 class InMemoryMudrexRateLimiter implements MudrexRateLimiter {
   private buckets = new Map<string, TierBucket>();
+  private evictTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private readonly config: RateLimiterConfig) {}
+  constructor(private readonly config: RateLimiterConfig) {
+    this.startEvictionSweep();
+  }
+
+  private startEvictionSweep(): void {
+    if (this.evictTimer) return;
+    this.evictTimer = setInterval(() => {
+      this.evictIdleBuckets();
+    }, EVICTION_INTERVAL_MS);
+    // Don't keep the event loop alive for the sweep.
+    if (this.evictTimer && typeof this.evictTimer.unref === "function") {
+      this.evictTimer.unref();
+    }
+  }
+
+  private evictIdleBuckets(): void {
+    const now = Date.now();
+    for (const [key, bucket] of this.buckets) {
+      if (now - bucket.lastUsed > BUCKET_IDLE_TTL_MS && bucket.isIdle) {
+        this.buckets.delete(key);
+      }
+    }
+  }
 
   private bucketFor(apiKey: string, tier: MudrexTier): TierBucket {
     const key = `${tier}:${apiKey}`;

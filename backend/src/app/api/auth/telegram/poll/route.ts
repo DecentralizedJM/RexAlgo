@@ -23,6 +23,11 @@ import {
   createSession,
   sessionCookieWriteOptions,
 } from "@/lib/auth";
+import {
+  authRateLimitResponse,
+  checkAuthRateLimit,
+  clientIpFromRequest,
+} from "@/lib/authRateLimit";
 import { db, ensureDbReady } from "@/lib/db";
 import { users } from "@/lib/schema";
 import {
@@ -40,6 +45,12 @@ function noStore(res: NextResponse): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
+  const ip = clientIpFromRequest(req);
+  if (!(await checkAuthRateLimit("tg", ip))) {
+    const { body, status, headers } = authRateLimitResponse();
+    return noStore(NextResponse.json(body, { status, headers }));
+  }
+
   await ensureDbReady();
   const token = req.nextUrl.searchParams.get("token")?.trim() ?? "";
   if (!token) {

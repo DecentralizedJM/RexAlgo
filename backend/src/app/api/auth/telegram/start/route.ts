@@ -19,6 +19,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getSession, verifyTelegramLinkIntentJwt } from "@/lib/auth";
+import {
+  authRateLimitResponse,
+  checkAuthRateLimit,
+  clientIpFromRequest,
+} from "@/lib/authRateLimit";
 import { db, ensureDbReady } from "@/lib/db";
 import { users } from "@/lib/schema";
 import {
@@ -50,6 +55,12 @@ function sanitiseReturnPath(raw: unknown): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = clientIpFromRequest(req);
+  if (!(await checkAuthRateLimit("tg", ip))) {
+    const { body, status, headers } = authRateLimitResponse();
+    return NextResponse.json(body, { status, headers });
+  }
+
   await ensureDbReady();
   if (!telegramBotConfigured() || !telegramBotUsername()) {
     return NextResponse.json(
