@@ -537,30 +537,22 @@ export default function DashboardPage() {
               </p>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {hasMudrexKey && <DisconnectMudrexControl />}
-            {user && !user.telegramId && (
-              <TelegramLoginButton
-                mode="link"
-                layout="inline"
-                afterAuthReturnPath="/dashboard"
-                onLinked={() => {
-                  void queryClient.refetchQueries({ queryKey: ["session", "me"] });
-                  toast.success("Telegram connected. You will get alerts here.");
-                }}
-              />
-            )}
-            <Link to="/marketplace">
-              <Button variant="outline" size="sm">
-                <BarChart3 className="w-4 h-4" /> Strategies
-              </Button>
-            </Link>
-            <Link to="/copy-trading">
-              <Button variant="outline" size="sm">
-                <Users className="w-4 h-4" /> Copy trading
-              </Button>
-            </Link>
-          </div>
+          {(hasMudrexKey || (user && !user.telegramId)) && (
+            <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 shrink-0">
+              {hasMudrexKey && <DisconnectMudrexControl />}
+              {user && !user.telegramId && (
+                <TelegramLoginButton
+                  mode="link"
+                  layout="inline"
+                  afterAuthReturnPath="/dashboard"
+                  onLinked={() => {
+                    void queryClient.refetchQueries({ queryKey: ["session", "me"] });
+                    toast.success("Telegram connected. You will get alerts here.");
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {!hasMudrexKey && <ConnectMudrexCard />}
