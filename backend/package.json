@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/run-migrations.ts",
+    "db:flush": "tsx scripts/flush-app-data.ts",
     "db:studio": "drizzle-kit studio",
     "db:import-sqlite": "tsx scripts/migrate-sqlite-to-postgres.ts"
   },
