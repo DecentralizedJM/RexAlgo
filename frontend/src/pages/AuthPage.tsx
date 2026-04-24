@@ -5,7 +5,7 @@ import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
-import { loginWithGoogle, ApiError } from "@/lib/api";
+import { loginWithGoogle, ApiError, type SessionUser } from "@/lib/api";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
 import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 
@@ -62,6 +62,18 @@ export default function AuthPage() {
   const handleGoogleError = () => {
     setState("error");
     setMessage("Google sign-in was cancelled or failed. Please try again.");
+  };
+
+  const handleTelegramSignedIn = (user: SessionUser, returnPath: string | null) => {
+    // Seed the cache so the app doesn't flash an auth-gate splash on navigate.
+    queryClient.setQueryData(["session", "me"], {
+      user,
+      sessionExpiresAt: null,
+    });
+    void queryClient.refetchQueries({ queryKey: ["session", "me"] });
+    void queryClient.invalidateQueries({ queryKey: ["wallet"] });
+    void queryClient.invalidateQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY });
+    navigate(returnPath ?? from, { replace: true });
   };
 
   return (
@@ -127,9 +139,13 @@ export default function AuthPage() {
                   or
                   <span className="flex-1 border-t border-border/60" />
                 </div>
-                <div className="flex justify-center">
-                  <TelegramLoginButton afterAuthReturnPath={from} />
-                </div>
+                <TelegramLoginButton
+                  afterAuthReturnPath={from}
+                  onSignedIn={handleTelegramSignedIn}
+                />
+                <p className="mt-2 text-center text-[11px] text-muted-foreground/90">
+                  One tap — opens Telegram. No phone number, no OTP.
+                </p>
               </div>
             </div>
           )}

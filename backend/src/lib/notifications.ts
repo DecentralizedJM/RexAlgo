@@ -101,6 +101,8 @@ async function tick(): Promise<void> {
       payloadJson: notificationsOutbox.payloadJson,
       attempts: notificationsOutbox.attempts,
       telegramId: users.telegramId,
+      telegramChatId: users.telegramChatId,
+      telegramConnected: users.telegramConnected,
       telegramNotifyEnabled: users.telegramNotifyEnabled,
     })
     .from(notificationsOutbox)
@@ -116,7 +118,10 @@ async function tick(): Promise<void> {
     .limit(BATCH);
 
   for (const row of rows) {
-    if (!row.telegramId || !row.telegramNotifyEnabled) {
+    // Prefer `chat_id` captured during `/start`; fall back to `telegram_id`
+    // (identical for private chats) for rows that predate bot-first login.
+    const chatId = row.telegramChatId ?? row.telegramId;
+    if (!chatId || !row.telegramNotifyEnabled || !row.telegramConnected) {
       await db
         .update(notificationsOutbox)
         .set({ status: "skipped", sentAt: new Date() })
@@ -139,7 +144,7 @@ async function tick(): Promise<void> {
       continue;
     }
 
-    const res = await sendTelegramMessage(row.telegramId, text);
+    const res = await sendTelegramMessage(chatId, text);
     if (res.ok) {
       await db
         .update(notificationsOutbox)
@@ -154,6 +159,16 @@ async function tick(): Promise<void> {
       const reason = res.reason;
       const hard = /blocked|chat not found|user is deactivated|bot was kicked/i.test(reason);
       const nextAttempts = row.attempts + 1;
+      // Hard error ⇒ bot can't reach this user anymore. Flip
+      // `telegramConnected` off so the UI can prompt them to re-run the
+      // one-tap flow, and so subsequent notifications short-circuit to
+      // `skipped` instead of burning retry budget.
+      if (hard) {
+        await db
+          .update(users)
+          .set({ telegramConnected: false })
+          .where(eq(users.id, row.userId));
+      }
       await db
         .update(notificationsOutbox)
         .set({

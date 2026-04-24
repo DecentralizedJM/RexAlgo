@@ -378,6 +378,8 @@ export async function DELETE() {
     .set({
       telegramId: null,
       telegramUsername: null,
+      telegramChatId: null,
+      telegramConnected: false,
       telegramNotifyEnabled: false,
     })
     .where(eq(users.id, session.user.id));

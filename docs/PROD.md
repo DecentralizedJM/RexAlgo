@@ -37,13 +37,15 @@ with a clear error if any required one is missing.
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `TELEGRAM_BOT_TOKEN` | from `@BotFather` | Used for HMAC-verifying the Login Widget and sending DMs. |
-| `TELEGRAM_BOT_USERNAME` | `RexAlgoBot` | Used by the frontend to mount the Login Widget. Both vars must be set for the button to render. |
-| `PUBLIC_APP_URL` | `https://rexalgo.xyz` | **SPA origin** (no trailing slash). When the API runs on Railway behind a CDN/proxy, OAuth redirects use `X-Forwarded-Host` first; if that header is absent, this value must be the site users open in the browser — otherwise `Location` after Telegram login can target the wrong host. |
-| `REXALGO_PUBLIC_BROWSER_ORIGIN` | `https://rexalgo.xyz` | Optional override **first** for Telegram OAuth `Location` when `PUBLIC_APP_URL` is intentionally the **API** host (webhooks). Alias: `PUBLIC_BROWSER_ORIGIN`. |
+| `TELEGRAM_BOT_TOKEN` | from `@BotFather` | Used for bot API calls (sending DMs and replying to `/start`). |
+| `TELEGRAM_BOT_USERNAME` | `RexAlgoBot` | Used by the frontend to build `https://t.me/<bot>?start=…` deep links. Both `TELEGRAM_BOT_*` vars must be set for the button to render. |
+| `TELEGRAM_WEBHOOK_SECRET` | `openssl rand -hex 32` | Shared secret validated against `X-Telegram-Bot-Api-Secret-Token` on every inbound webhook at `POST /api/telegram/webhook`. Required whenever the bot vars are set. Register via `scripts/set-telegram-webhook.sh`. |
 
-If either is missing, the Telegram Login button silently disappears and the
-notifications worker is a no-op.
+If `TELEGRAM_BOT_TOKEN` or `TELEGRAM_BOT_USERNAME` is missing, the Telegram
+button silently disappears and the notifications worker is a no-op.
+
+If `TELEGRAM_WEBHOOK_SECRET` is missing, the webhook refuses all updates
+(`403`) unless `REXALGO_TELEGRAM_ALLOW_UNSIGNED=1` is set — dev-only.
 
 **Railway-only (recommended):** set `REXALGO_TELEGRAM_TRACE=1` on the API service only when debugging; structured `[rexalgo:telegram]` logs already run on Railway in production by default.
 
@@ -199,17 +201,37 @@ webhook. We document this on the TradingView Webhooks page.
 
 ## 6. Telegram
 
-### Login
+### Login (bot-first deep-link flow)
 
-Telegram Login Widget posts to `/api/auth/telegram`:
+Users never see Telegram's Login Widget anymore — it stranded anyone who
+hadn't already started the bot on the "Please confirm access via Telegram"
+screen. The new flow is driven by the bot itself:
 
-1. If a session exists → links Telegram to that user.
-2. Else if Telegram id is already known → signs in that user.
-3. Else → creates a new `users` row with `auth_provider = 'telegram'`.
+1. Browser calls `POST /api/auth/telegram/start`. The server writes a
+   short-lived row to `telegram_login_tokens` (10-min TTL) and returns a
+   `t.me/<bot>?start=rexalgo_<token>` deep link.
+2. Browser opens the link (handed off to the Telegram app on mobile /
+   Telegram Web on desktop). The user taps **START**.
+3. Telegram posts the `/start rexalgo_<token>` message to
+   `POST /api/telegram/webhook` (secured by
+   `X-Telegram-Bot-Api-Secret-Token` = `TELEGRAM_WEBHOOK_SECRET`). The
+   webhook claims the token, upserts / links the user, captures
+   `chat_id`, flips `telegram_connected = true`, and DMs a welcome.
+4. Browser's `GET /api/auth/telegram/poll?token=…` sees `status=claimed`,
+   mints a session cookie (login) or acknowledges the link, and consumes
+   the token.
 
-HMAC verification uses `TELEGRAM_BOT_TOKEN` (see
-`backend/src/lib/telegram.ts`). The widget mounts only when
-`/api/auth/telegram/config` reports `enabled: true`.
+Key files:
+
+- `backend/src/lib/telegramBotAuth.ts` — token lifecycle + user upsert.
+- `backend/src/app/api/auth/telegram/start/route.ts` — step 1.
+- `backend/src/app/api/telegram/webhook/route.ts` — step 3.
+- `backend/src/app/api/auth/telegram/poll/route.ts` — step 4.
+
+The legacy Login Widget endpoint (`POST/GET /api/auth/telegram`) still
+accepts payloads for backwards compatibility but is no longer used by the
+SPA. Frontend consumers go through `frontend/src/components/TelegramLoginButton.tsx`,
+which drives steps 1, 2 and 4.
 
 ### Notifications
 

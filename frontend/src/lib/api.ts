@@ -84,6 +84,11 @@ export type SessionUser = {
   telegramId?: string | null;
   telegramUsername?: string | null;
   telegramNotifyEnabled?: boolean;
+  /**
+   * `true` once the user has tapped `/start` on the RexAlgo bot at least once.
+   * We only ship DMs to connected users — see `backend/src/lib/notifications.ts`.
+   */
+  telegramConnected?: boolean;
 };
 
 export async function loginWithGoogle(credential: string) {
@@ -900,6 +905,7 @@ export async function fetchTelegramConfig() {
   );
 }
 
+/** @deprecated Login Widget flow — kept for backward compatibility. Use the bot-first flow (`startTelegramBotLogin` + `pollTelegramBotLogin`). */
 export async function loginOrLinkWithTelegram(payload: TelegramWidgetPayload) {
   return apiFetch<{
     success: true;
@@ -920,6 +926,61 @@ export async function setTelegramNotifyEnabled(notifyEnabled: boolean) {
     "/api/auth/telegram",
     { method: "PATCH", body: JSON.stringify({ notifyEnabled }) }
   );
+}
+
+// ── Bot-first Telegram login ────────────────────────────────────────
+//
+// Flow:
+//   1. `startTelegramBotLogin({ returnPath })` → the server creates a token
+//      and returns the `t.me/<bot>?start=rexalgo_<token>` deep link.
+//   2. Frontend opens `deepLink` (new tab / same tab — whichever the
+//      component chooses) so the user lands inside Telegram.
+//   3. Frontend polls `pollTelegramBotLogin(token)` every ~1.5s until the
+//      response is `status: "ok"` (user tapped START) or `"expired"`.
+
+export type TelegramStartLoginResponse = {
+  ok: true;
+  token: string;
+  /** `https://t.me/<botUsername>?start=rexalgo_<token>` */
+  deepLink: string;
+  botUsername: string;
+  expiresAt: string;
+  expiresInMs: number;
+  mode: "login" | "link";
+};
+
+export async function startTelegramBotLogin(opts?: { returnPath?: string | null }) {
+  return apiFetch<TelegramStartLoginResponse>("/api/auth/telegram/start", {
+    method: "POST",
+    body: JSON.stringify({ returnPath: opts?.returnPath ?? null }),
+  });
+}
+
+export type TelegramPollResponse =
+  | { status: "pending" }
+  | { status: "expired" }
+  | { status: "used" }
+  | {
+      status: "ok";
+      linked: boolean;
+      user: SessionUser;
+      returnPath: string | null;
+    };
+
+export async function pollTelegramBotLogin(token: string) {
+  const res = await fetch(
+    `/api/auth/telegram/poll?token=${encodeURIComponent(token)}`,
+    { credentials: "include", cache: "no-store" }
+  );
+  const data = (await res.json().catch(() => ({}))) as TelegramPollResponse | { error?: string };
+  if (!res.ok) {
+    throw new ApiError(
+      "error" in data && data.error ? String(data.error) : res.statusText,
+      res.status,
+      data
+    );
+  }
+  return data as TelegramPollResponse;
 }
 
 // ─── TradingView webhooks (API path: /api/tv-webhooks) ───────────────

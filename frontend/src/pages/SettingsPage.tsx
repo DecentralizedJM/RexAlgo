@@ -35,6 +35,9 @@ export default function SettingsPage() {
   const user = authQ.data?.user;
 
   useEffect(() => {
+    // Legacy login-widget query params — still supported so stale tabs don't
+    // lose feedback after the deploy swap. New flow surfaces toasts via the
+    // component's onLinked callback below.
     const err = searchParams.get("telegram_error");
     const linked = searchParams.get("telegram_linked");
     if (!err && linked !== "1") return;
@@ -50,6 +53,11 @@ export default function SettingsPage() {
     }
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, queryClient]);
+
+  const handleTelegramLinked = () => {
+    void queryClient.refetchQueries({ queryKey: ["session", "me"] });
+    toast.success("Telegram linked — you'll get real-time trade alerts.");
+  };
 
   const unlinkMut = useMutation({
     mutationFn: unlinkTelegram,
@@ -153,11 +161,16 @@ export default function SettingsPage() {
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Tap the button below to link Telegram. You'll also be able to
-                  log in with this Telegram account later.
+                  One tap connects your Telegram and unlocks real-time trade,
+                  PnL, and liquidation-risk alerts. You can also use Telegram
+                  to sign in on other devices.
                 </p>
                 <div className="flex justify-start">
-                  <TelegramLoginButton mode="link" afterAuthReturnPath="/settings" />
+                  <TelegramLoginButton
+                    mode="link"
+                    afterAuthReturnPath="/settings"
+                    onLinked={handleTelegramLinked}
+                  />
                 </div>
               </>
             )}

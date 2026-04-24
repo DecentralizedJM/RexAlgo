@@ -48,6 +48,37 @@ export function telegramBotUsername(): string {
   return (process.env.TELEGRAM_BOT_USERNAME ?? "").trim();
 }
 
+/**
+ * Shared secret for the inbound `/telegram/webhook`. Telegram includes it as
+ * `X-Telegram-Bot-Api-Secret-Token` on every update when `setWebhook` was
+ * called with `secret_token`. Empty string means the webhook runs unsecured —
+ * we refuse updates in that case unless `REXALGO_TELEGRAM_ALLOW_UNSIGNED=1`.
+ */
+export function telegramWebhookSecret(): string {
+  return (process.env.TELEGRAM_WEBHOOK_SECRET ?? "").trim();
+}
+
+/** Public base URL (origin only) used when registering the webhook with Telegram. */
+export function telegramBotStartDeepLink(token: string): string {
+  const username = telegramBotUsername();
+  if (!username) {
+    throw new Error("TELEGRAM_BOT_USERNAME is not configured");
+  }
+  return `https://t.me/${username}?start=${encodeURIComponent(token)}`;
+}
+
+/** Parse `rexalgo_<token>` out of a `/start` payload, returning the token only. */
+export function parseStartDeepLinkPayload(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  const prefix = "rexalgo_";
+  if (!trimmed.startsWith(prefix)) return null;
+  const body = trimmed.slice(prefix.length);
+  // Telegram allows A-Za-z0-9_- up to 64 chars in the start param.
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(body)) return null;
+  return body;
+}
+
 export function verifyTelegramLogin(
   payload: Record<string, unknown>
 ):

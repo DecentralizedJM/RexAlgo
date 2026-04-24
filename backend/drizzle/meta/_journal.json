@@ -50,6 +50,13 @@
       "when": 1776534100000,
       "tag": "0006_tv_webhook_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776534200000,
+      "tag": "0007_telegram_bot_auth",
+      "breakpoints": true
     }
   ]
 }

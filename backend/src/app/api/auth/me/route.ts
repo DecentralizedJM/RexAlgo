@@ -21,6 +21,7 @@ export async function GET() {
       telegramId: users.telegramId,
       telegramUsername: users.telegramUsername,
       telegramNotifyEnabled: users.telegramNotifyEnabled,
+      telegramConnected: users.telegramConnected,
     })
     .from(users)
     .where(eq(users.id, session.user.id));
@@ -34,6 +35,7 @@ export async function GET() {
       telegramId: row?.telegramId ?? null,
       telegramUsername: row?.telegramUsername ?? null,
       telegramNotifyEnabled: row?.telegramNotifyEnabled ?? false,
+      telegramConnected: row?.telegramConnected ?? false,
     },
     sessionExpiresAt:
       session.sessionExpiresAt?.toISOString() ?? null,

@@ -73,7 +73,16 @@ fi
 cat <<'NEXT'
 
 Remaining manual checks (cannot be automated):
-  1. Open https://rexalgo.xyz/settings signed in → Telegram card → click "Login with Telegram" → card flips to "Linked as @…".
-  2. In a private window, https://rexalgo.xyz/auth → Telegram button → completes login.
-  3. Have a test user /start the bot once, then trigger a notification event (e.g. approve a master-access request) and confirm the DM arrives.
+  1. Make sure `setWebhook` has been called so the bot can drive login:
+       scripts/set-telegram-webhook.sh https://api.rexalgo.xyz
+     Then getWebhookInfo should show url=<…>/api/telegram/webhook with
+     pending_update_count=0 and no last_error_message.
+  2. In a private window, https://rexalgo.xyz/auth → tap "Continue with
+     Telegram" → Telegram opens → tap START → auth page finishes sign-in
+     without ever landing on the "Please confirm access via Telegram" screen.
+  3. https://rexalgo.xyz/settings (signed in) → Telegram card →
+     "Connect Telegram (1 tap)" flips the card to "Linked as @…".
+  4. Trigger a notification event (e.g. approve a master-access request) and
+     confirm the DM arrives — it will, because the bot-first flow captures
+     chat_id during the handshake.
 NEXT

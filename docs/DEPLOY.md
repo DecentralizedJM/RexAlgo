@@ -120,42 +120,74 @@ The **web** image defaults to `API_UPSTREAM=http://api:3000` (Compose service na
 | `API_UPSTREAM` | Web (nginx) | Full URL of Next API for `proxy_pass` |
 | `NODE_ENV=production` | API | `Secure` cookies |
 | `REXALGO_OHLC_API_BASE` | API (optional) | Internal base URL for historical candle fetches used by `POST /api/strategies/[id]/backtest` (default built-in). Operators only — not shown in product UI. |
-| `TELEGRAM_BOT_TOKEN` | API (optional) | Enables Telegram Login Widget on `/auth` and `/settings` and DM notifications. Both `TELEGRAM_BOT_*` vars must be set for the widget to render. |
-| `TELEGRAM_BOT_USERNAME` | API (optional) | Bot username from BotFather, no leading `@`. Served by `GET /api/auth/telegram/config` to the SPA so the widget can mount. |
+| `TELEGRAM_BOT_TOKEN` | API (optional) | Enables the bot-first login button on `/auth` and `/settings` and DM notifications. Both `TELEGRAM_BOT_*` vars must be set for the button to render. |
+| `TELEGRAM_BOT_USERNAME` | API (optional) | Bot username from BotFather, no leading `@`. Served by `GET /api/auth/telegram/config` to the SPA so the button can build the `t.me/<bot>?start=…` deep link. |
+| `TELEGRAM_WEBHOOK_SECRET` | API (required if bot vars are set) | Shared secret validated against Telegram's `X-Telegram-Bot-Api-Secret-Token` header on every inbound webhook. Generate with `openssl rand -hex 32`, set on Railway, and pass to `setWebhook` via `scripts/set-telegram-webhook.sh`. |
 | `REXALGO_SESSION_COOKIE_DOMAIN` | API (optional) | Override cookie `Domain` (e.g. `.rexalgo.xyz`). If unset, `PUBLIC_APP_URL`’s hostname is used so sessions survive **Vercel → Railway** proxying. |
 
 ---
 
 ## Telegram login + notifications
 
-The flow is fully implemented (see [PROD.md § Telegram](./PROD.md#6-telegram)); enabling it is an operator task:
+We use a **bot-first deep-link flow** — not the Login Widget — because the
+widget strands users on "Please confirm access via Telegram" whenever they
+haven't already started the bot. Flow summary:
+
+1. Browser → `POST /api/auth/telegram/start` creates a short-lived token.
+2. Browser opens `https://t.me/<bot>?start=rexalgo_<token>`.
+3. User taps **START** → bot webhook `/api/telegram/webhook` claims the token,
+   captures `chat_id`, upserts the user, and DMs a welcome message.
+4. Browser's `GET /api/auth/telegram/poll?token=…` mints the session cookie.
+
+Enabling in production (operator task):
 
 1. **Create the bot in BotFather**
-   - Open a chat with [`@BotFather`](https://t.me/BotFather) on Telegram.
-   - Run `/newbot` (or pick an existing one) and record the **bot token** and **bot username**.
-2. **Attach the production domain to the bot** (required by Telegram for the Login Widget)
-   - Still in BotFather: `/setdomain` → pick the bot → send the browser host users actually visit, e.g. `rexalgo.xyz`.
-   - Do **not** use the Railway API host here. The widget verifies the hostname that loaded the page, which on this deployment is the Vercel / custom domain, not the API.
-3. **Set env vars on the Next API service** (Railway only — not on Vercel) alongside `JWT_SECRET` / `ENCRYPTION_KEY`:
+   - Open a chat with [`@BotFather`](https://t.me/BotFather).
+   - Run `/newbot` (or reuse an existing one) and record the **bot token** +
+     **bot username** (no leading `@`).
+2. **Set env vars on the Next API service** (Railway only — not Vercel):
    - `TELEGRAM_BOT_TOKEN=<token from BotFather>`
    - `TELEGRAM_BOT_USERNAME=<bot username, no @>`
-   - **`PUBLIC_APP_URL=https://rexalgo.xyz`** (or your real site origin, no trailing slash) if the API does not receive `X-Forwarded-Host` from the proxy. Otherwise OAuth `Location` headers can point at the Railway hostname and the flow appears “stuck”.
-   - If `PUBLIC_APP_URL` **must** stay as your API base for webhooks, set **`REXALGO_PUBLIC_BROWSER_ORIGIN=https://rexalgo.xyz`** (SPA only) so Telegram redirects still use the site origin.
-4. **Redeploy the API** so the new env is picked up. `GET https://rexalgo.xyz/api/auth/telegram/config` should return `{ "enabled": true, "botUsername": "…" }`.
+   - `TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)` — shared secret for the
+     inbound webhook. Must match the value passed to `setWebhook` below.
+   - `PUBLIC_APP_URL=https://rexalgo.xyz` (site origin, no trailing slash).
+3. **Register the webhook with Telegram** (one-shot; rerun after token rotation):
+   ```bash
+   TELEGRAM_BOT_TOKEN=… \
+   TELEGRAM_WEBHOOK_SECRET=… \
+   bash scripts/set-telegram-webhook.sh https://api.rexalgo.xyz
+   ```
+   The script calls `setWebhook` with `secret_token`, then prints
+   `getWebhookInfo` so you can eyeball `pending_update_count` and
+   `last_error_message` (both should stay empty).
+4. **Redeploy the API** so the new env is picked up.
    Fastest check — run from the repo:
    ```bash
    bash scripts/verify-telegram.sh                       # hits rexalgo.xyz
-   TELEGRAM_BOT_TOKEN=… bash scripts/verify-telegram.sh  # also calls getMe to validate the token
+   TELEGRAM_BOT_TOKEN=… bash scripts/verify-telegram.sh  # also calls getMe
    ```
 5. **Smoke test** (the script prints this same checklist)
-   - **Link from settings**: sign in, open `https://rexalgo.xyz/settings`, the Telegram card should show the Login Widget. Linking should refetch `/api/auth/me` and show `Linked as @…`.
-   - **Standalone login**: in a private window, `https://rexalgo.xyz/auth` should show the Telegram button. Completing it must sign you in (creates a Telegram-backed user on first use).
-   - **DM**: trigger an event that emits a notification (e.g. approving a master-access request) and confirm the outbox worker delivers a DM within ~5s. The user must have **started the bot** at least once (Telegram won't accept DMs otherwise).
-6. **Debugging a stuck widget** (after confirming in the Telegram app)
-   - **API (Railway logs only in production):** JSON lines prefixed with `[rexalgo:telegram]` are emitted when `RAILWAY_ENVIRONMENT` is set (Railway’s default). Local `NODE_ENV=development` always logs. Set **`REXALGO_TELEGRAM_TRACE=1` on Railway** if you need logs on another host or extra fields. After confirmation you should see `get_enter` (check **`redirectOrigin`** vs **`nextOrigin`** — they should match your public site) → `oauth_in` → `oauth_verify_ok` (or `oauth_verify_failed` with `reason`) → `get_redirect`. If **`get_enter` never appears**, the browser never hit your API.
-   - **Optional:** keep `REXALGO_TELEGRAM_TRACE=1` on Railway only to also log Telegram `telegramUserId` and `auth_date` after a successful hash check (disable when finished).
-   - **Browser:** open `https://rexalgo.xyz/auth?telegram_debug=1` (or `localStorage.setItem("rexalgoDebugTelegram","1")` then reload). The console logs the exact `data-auth-url`. In **Network**, watch for `GET /api/auth/telegram?...` after you tap confirm in Telegram.
-7. **Rotating the bot token** (if ever needed): see [PROD.md § Secret rotation](./PROD.md#8-secret-rotation-runbook). Existing `users.telegram_id` rows stay valid.
+   - **Standalone login**: in a private window open `https://rexalgo.xyz/auth`,
+     tap **Continue with Telegram** → Telegram opens → tap **START** → the
+     auth tab completes sign-in without ever stalling on the phone-confirm
+     screen.
+   - **Link from settings**: signed in, `https://rexalgo.xyz/settings` →
+     Telegram card → **Connect Telegram (1 tap)** flips to `Linked as @…`.
+   - **DM**: trigger an event that emits a notification (e.g. approving a
+     master-access request) and confirm the outbox worker delivers a DM
+     within ~5s. `telegram_connected=true` is set during `/start`, so this
+     works on the first try without any "please start the bot" nudge.
+6. **Debugging**
+   - **API logs**: JSON lines prefixed with `[rexalgo:telegram]`. Key events:
+     `bot_login_start` (POST /start), `bot_start_claimed` (webhook claimed a
+     token), `bot_poll` (browser minted the session).
+   - If `bot_login_start` never appears, the browser couldn't reach the API.
+   - If `bot_start_claimed` never appears, `setWebhook` wasn't run (or the
+     `TELEGRAM_WEBHOOK_SECRET` mismatch is rejecting deliveries — the route
+     logs `bot_webhook_bad_secret` in that case).
+7. **Rotating the bot token**: generate a new token in BotFather, update
+   `TELEGRAM_BOT_TOKEN`, redeploy, and re-run `scripts/set-telegram-webhook.sh`.
+   Existing `users.telegram_id` / `users.telegram_chat_id` rows stay valid.
 
 ---
 

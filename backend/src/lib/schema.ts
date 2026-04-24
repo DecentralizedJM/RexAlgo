@@ -29,6 +29,19 @@ export const users = pgTable("users", {
   /** Telegram numeric user id (as string to dodge 53-bit JS number limits). */
   telegramId: text("telegram_id").unique(),
   telegramUsername: text("telegram_username"),
+  /**
+   * Private chat id for this user. For private chats Telegram guarantees
+   * `chat.id === from.id`, so this mirrors `telegramId` most of the time, but
+   * we keep it as a separate column so future bot-initiated DMs can address
+   * channels/groups without schema changes.
+   */
+  telegramChatId: text("telegram_chat_id"),
+  /**
+   * `true` once the user has tapped `/start` on the bot at least once. This is
+   * what unlocks DM delivery: without a started chat, the Bot API refuses the
+   * first `sendMessage`. The bot-first login flow sets this during `/start`.
+   */
+  telegramConnected: boolean("telegram_connected").notNull().default(false),
   /** When true, we enqueue Telegram DMs for notable events (see notificationsOutbox). */
   telegramNotifyEnabled: boolean("telegram_notify_enabled")
     .notNull()
@@ -36,6 +49,49 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),
+});
+
+/**
+ * Short-lived login intents for the bot-first Telegram sign-in flow
+ * (`backend/src/lib/telegramBotAuth.ts`).
+ *
+ * Lifecycle:
+ *   pending  → row just created by POST /api/auth/telegram/start. The token
+ *              is embedded in a `t.me/<bot>?start=rexalgo_<token>` deep link.
+ *   claimed  → bot webhook received `/start rexalgo_<token>` from a Telegram
+ *              user; the row now carries `userId` + `telegramId` and the
+ *              frontend poll can mint a session cookie.
+ *   used     → poll endpoint minted the session and consumed the token. No
+ *              further polls will succeed for this token.
+ *   expired  → token TTL elapsed before claim.
+ *
+ * `linkUserId` is set when the start request came from an already-authenticated
+ * browser (Settings → "Connect Telegram"). In that case the webhook links the
+ * Telegram account to the existing user instead of creating a new one.
+ */
+export const telegramLoginTokens = pgTable("telegram_login_tokens", {
+  token: text("token").primaryKey(),
+  status: text("status", {
+    enum: ["pending", "claimed", "used", "expired"],
+  })
+    .notNull()
+    .default("pending"),
+  /** Set when the start request carried a session cookie (link flow). */
+  linkUserId: text("link_user_id").references(() => users.id, {
+    onDelete: "cascade",
+  }),
+  /** Populated by the webhook once the user taps `/start`. */
+  userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+  telegramId: text("telegram_id"),
+  telegramUsername: text("telegram_username"),
+  /** Path to navigate to after the poll succeeds. */
+  returnPath: text("return_path"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" })
+    .notNull(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true, mode: "date" }),
 });
 
 export const strategies = pgTable("strategies", {
