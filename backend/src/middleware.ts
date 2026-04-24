@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { sessionJwtIssuedAtAllowed } from "@/lib/sessionPolicy";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "rexalgo-dev-secret-change-in-production-2024"
@@ -32,7 +33,14 @@ export async function middleware(req: NextRequest) {
     }
 
     try {
-      await jwtVerify(token, JWT_SECRET);
+      const { payload } = await jwtVerify(token, JWT_SECRET);
+      if (
+        typeof payload.userId !== "string" ||
+        !payload.userId ||
+        !sessionJwtIssuedAtAllowed(payload.iat)
+      ) {
+        return NextResponse.json({ error: "Session expired" }, { status: 401 });
+      }
       return NextResponse.next();
     } catch {
       return NextResponse.json({ error: "Session expired" }, { status: 401 });

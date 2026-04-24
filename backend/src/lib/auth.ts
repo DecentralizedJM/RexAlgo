@@ -8,6 +8,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import type { AuthUser } from "@/types";
+import { sessionJwtIssuedAtAllowed } from "@/lib/sessionPolicy";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "rexalgo-dev-secret-change-in-production-2024"
@@ -215,6 +216,7 @@ export async function verifySession(
 } | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
+    if (!sessionJwtIssuedAtAllowed(payload.iat)) return null;
     const exp =
       typeof payload.exp === "number" && Number.isFinite(payload.exp)
         ? new Date(payload.exp * 1000)
