@@ -1,103 +1,130 @@
-%% RexAlgo — Mermaid diagram source (paste blocks into README or use a Mermaid preview extension)
+%% RexAlgo — Mermaid diagram source (blocks mirror README Architecture section)
 %% Narrative + tables: README.md | Metadata: repo/project.json
 
 %% --- System context ---
 flowchart TB
   subgraph actors [Actors]
     U[Trader / user]
+    B[External bots\nTradingView / custom]
   end
   subgraph rexalgo [RexAlgo deployment]
-    APP[RexAlgo app\nVite UI + Next API]
-    DB[(SQLite)]
+    APP[Vite UI + Next API]
+    PG[(PostgreSQL)]
+    RD[(Redis\noptional)]
   end
   subgraph external [External]
     MR[Mudrex Futures API]
+    TG[Telegram Bot API]
   end
-  U -->|HTTPS| APP
-  APP --> DB
-  APP -->|REST + API secret| MR
+  U -->|HTTPS same-origin /api| APP
+  B -->|HTTPS signed webhooks| APP
+  APP --> PG
+  APP -.->|rate limits / shared state| RD
+  APP --> MR
+  APP --> TG
 
-%% --- Development topology (monorepo npm run dev) ---
+%% --- Development topology ---
 flowchart LR
   subgraph dev [Developer machine]
     BR[Browser]
-    V["Vite :8080"]
-    N[Next 127.0.0.1:3000]
-    DB[(SQLite file)]
+    V[Vite :8080]
+    N[Next :3000]
+    PG[(Postgres\ncompose dev)]
   end
   MR[Mudrex API]
   BR -->|UI + HMR| V
-  V -->|proxy /api/*| N
-  N --> DB
+  V -->|proxy /api| N
+  N --> PG
   N --> MR
 
-%% --- Docker / production ---
+%% --- Docker production ---
 flowchart TB
-  BR[Browser] -->|HTTP/S| NG[nginx]
-  NG -->|static SPA| DIST[frontend dist]
-  NG -->|proxy /api/*| API[Next.js API]
-  API --> VOL[(Docker volume\nSQLite)]
+  BR[Browser] --> NG[nginx]
+  NG --> DIST[Static SPA]
+  NG --> API[Next API]
+  API --> PG[(Postgres volume)]
   API --> MR[Mudrex API]
+
+%% --- Hosting split Vercel + Railway ---
+flowchart LR
+  subgraph browser [Browser]
+    U[User]
+  end
+  subgraph vercel [Vercel]
+    SPA[Static SPA]
+  end
+  subgraph railway [Railway]
+    API[Next API]
+    PG[(Postgres)]
+    RD[(Redis optional)]
+  end
+  U -->|same host /api rewrites| SPA
+  SPA -->|/api rewrite| API
+  API --> PG
+  API -.-> RD
 
 %% --- Logical request path ---
 flowchart LR
   UI[Vite SPA]
   PX[Proxy\nVite or nginx]
-  NX[Next.js App Router]
-  DB[(SQLite)]
+  NX[Next App Router]
+  PG[(Postgres)]
+  RD[(Redis)]
   MR[Mudrex REST]
-  UI -->|"/api/*"| PX
+  UI -->|/api| PX
   PX --> NX
-  NX --> DB
+  NX --> PG
+  NX -.-> RD
   NX --> MR
 
-%% --- Backend modules ---
+%% --- Session + auth high level ---
 flowchart TB
-  subgraph routes [app/api]
-    A1["/api/auth/*"]
-    A2["/api/strategies/*"]
-    A3["/api/subscriptions"]
-    A4["/api/mudrex/*"]
+  subgraph signin [Sign-in paths]
+    G[Google OAuth\nPOST /api/auth/google]
+    T[Telegram deep link\nbot + webhook]
   end
-  subgraph lib [lib]
-    AUTH[auth.ts\nJWT + encrypt secret]
-    MR[mudrex.ts\nHTTP client]
-    DBL[db.ts + schema.ts\nDrizzle]
-  end
+  API[Next API]
+  Sess[(user_sessions)]
+  Cookie[HttpOnly cookie\nsid in JWT]
+  G --> API
+  T --> API
+  API --> Sess
+  API --> Cookie
+
+%% --- Copy webhook signal path ---
+flowchart LR
+  BOT[Signal bot] -->|POST + HMAC| WH[/api/webhooks/copy-trading/id]
+  WH --> RL[Redis rate limit\noptional]
+  WH --> CM[copyMirror]
+  CM --> MR[Mudrex per subscriber]
+
+%% --- TV webhook path ---
+flowchart LR
+  TV[TradingView] -->|POST JSON| TVW[/api/webhooks/tv/id]
+  TVW --> RL2[Redis rate limit\noptional]
+  TVW --> ORD[Order or strategy route]
+
+%% --- Backend route map simplified ---
+flowchart TB
   MW[middleware.ts]
-  MW --> routes
-  routes --> AUTH
-  routes --> MR
-  routes --> DBL
-  AUTH --> DBL
-  MR -->|outbound HTTPS| EXT[Mudrex]
-
-%% --- Auth sequence ---
-sequenceDiagram
-  participant B as Browser
-  participant V as Vite dev proxy
-  participant N as Next API
-  participant M as Mudrex API
-  B->>V: POST /api/auth/login (secret)
-  V->>N: forward + cookie jar
-  N->>M: validate credentials
-  M-->>N: OK / error
-  N-->>V: Set-Cookie HttpOnly JWT
-  V-->>B: response + cookie
-  Note over B,N: Later requests send cookie. API secret stays encrypted in SQLite.
-
-%% --- Subscription sequence ---
-sequenceDiagram
-  participant B as Browser
-  participant N as Next API
-  participant D as SQLite
-  participant M as Mudrex
-  B->>N: GET /api/strategies/by-id (public)
-  N->>D: load strategy
-  N-->>B: strategy detail
-  B->>N: POST /api/subscriptions + margin (auth)
-  N->>N: verify JWT + user
-  N->>D: persist subscription
-  N->>M: trading calls with user secret
-  M-->>N: result
-  N-->>B: subscription state
+  subgraph auth [Auth]
+    A1[/api/auth/google]
+    A2[/api/auth/telegram/*]
+    A3[/api/auth/logout]
+  end
+  subgraph product [Product]
+    P1[/api/marketplace/*]
+    P2[/api/copy-trading/*]
+    P3[/api/mudrex/*]
+  end
+  subgraph webhooks [Webhooks]
+    W1[/api/webhooks/copy-trading/*]
+    W2[/api/webhooks/tv/*]
+  end
+  subgraph admin [Admin]
+    AD[/api/admin/*]
+  end
+  MW --> auth
+  MW --> product
+  MW --> webhooks
+  MW --> admin

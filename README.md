@@ -1,14 +1,19 @@
 # RexAlgo
 
-**RexAlgo** is a full-stack platform for **algorithmic strategies** and **copy trading**, built on the [**Mudrex Futures API**](https://docs.trade.mudrex.com/docs/overview). It pairs a premium **Vite + React** UI (shadcn, Tailwind) with a **Next.js** API, **PostgreSQL** (Drizzle), and optional **Docker** deployment.
+**RexAlgo** is a full-stack platform for **algorithmic strategies** and **copy trading**, built on the [**Mudrex Futures API**](https://docs.trade.mudrex.com/docs/overview). It pairs a **Vite + React** UI (shadcn, Tailwind) with a **Next.js** API, **PostgreSQL** (Drizzle), optional **Redis** (distributed limits), and **Docker**-ready deployment.
 
 <p align="center">
-  <a href="#quick-start">Quick start</a> ·
+  <a href="#features">Features</a> ·
   <a href="#repository-layout">Layout</a> ·
+  <a href="#diagram-index">Diagrams</a> ·
+  <a href="#quick-start-localhost">Quick start</a> ·
+  <a href="#development">Development</a> ·
+  <a href="#authentication--sessions">Auth & sessions</a> ·
+  <a href="#webhooks--external-signals">Webhooks</a> ·
   <a href="#hosting-railway-and-vercel">Hosting</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="#development">Development</a> ·
   <a href="#docker-full-stack">Docker</a> ·
+  <a href="#scripts">Scripts</a> ·
   <a href="#roadmap">Roadmap</a> ·
   <a href="#credits">Credits</a>
 </p>
@@ -19,14 +24,19 @@
 
 | Area | What you get |
 |------|----------------|
-| **Auth** | Connect with your **Mudrex API secret**; encrypted storage + JWT session. Without API connection, key actions are disabled until you connect. |
+| **Identity** | **Google OAuth** at `/auth` (see `VITE_GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_ID`). Optional **Telegram** bot login + notifications when `TELEGRAM_*` is set. |
+| **Mudrex** | Link your **Mudrex API secret** from the dashboard (encrypted at rest). Wallet, orders, positions, and studio flows call Mudrex on your behalf. |
+| **Sessions** | **Server-backed sessions** (`user_sessions` in Postgres): JWT cookie carries an opaque **`sid`**; rotate `JWT_SECRET` or set `REXALGO_SESSION_MIN_IAT` for mass sign-out. See [docs/PROD.md](docs/PROD.md). |
+| **Redis** | Optional **`REDIS_URL`**: shared **webhook rate limits** across API replicas (recommended when horizontally scaled). |
 | **Wallet / trading** | Spot & futures balances, transfers, positions, orders (via Mudrex) |
 | **Algo marketplace** | Browse & subscribe to `algo` strategies with **margin per trade** |
-| **Strategy studio** | Masters create **algo** listings, **webhooks** (HMAC), pause/edit — **`/marketplace/studio`** (open from **Master studio** dropdown → **Strategy**) |
-| **Copy trading** | Browse `copy_trading` strategies, subscribe, same margin model |
-| **Master studio** | Top-nav parent for studio routes with dropdown options: **Strategy** and **Copy trading**. Copy-trading studio route: **`/copy-trading/studio`** |
-| **Signal mirroring** | Signed `POST /api/webhooks/copy-trading/{strategyId}` → mirror **open/close** to subscribers via Mudrex |
-| **Single UI** | All product screens live in **`frontend/`** (Lovable / Vite). **`backend/`** is API-only (+ tiny root status page). |
+| **Strategy studio** | Masters create **algo** listings, **signed webhooks** — **`/marketplace/studio`** via **Master studio → Strategy** |
+| **Copy trading** | Browse `copy_trading` strategies, subscribe; studio at **`/copy-trading/studio`** |
+| **Master studio** | Top-nav dropdown: **Strategy** and **Copy trading** (master access + admin gates) |
+| **Copy webhook** | `POST /api/webhooks/copy-trading/{strategyId}` with **HMAC** → mirror **open/close** to subscribers |
+| **TradingView** | User-owned **`/tv-webhooks`**, `POST /api/webhooks/tv/{id}` adapter, media-kit square mark in UI |
+| **Admin** | **`/admin`** when your email is in **`ADMIN_EMAILS`** (master access, strategies, users) |
+| **Single UI** | Product screens in **`frontend/`**; **`backend/`** is API-only (+ health). |
 
 ---
 
@@ -34,21 +44,43 @@
 
 ```
 RexAlgo/
-├── frontend/          # Vite + React Router + shadcn (Lovable / rex-trader-playground lineage)
-│   ├── src/lib/api.ts # HTTP client → /api (see file header)
-├── backend/           # Next.js 16 — API only (no duplicate app UI)
-│   ├── src/app/api/   # REST routes
-├── repo/              # project.json (roadmap/stack), architecture.mmd (diagram source), ABOUT.txt
-├── docker-compose.yml
+├── frontend/              # Vite + React Router + shadcn
+│   ├── src/lib/api.ts     # fetch → /api (same-origin in prod)
+│   └── src/assets/        # e.g. TradingView media-kit SVG
+├── backend/               # Next.js — App Router API
+│   ├── src/app/api/       # REST routes
+│   ├── src/lib/           # auth, db, mudrex, redis, webhooks, …
+│   └── drizzle/           # SQL migrations (applied on API boot)
+├── scripts/               # Operator helpers (Redis, Railway DB, Telegram)
+├── repo/                  # project.json, architecture.mmd (diagram source)
+├── docker-compose.yml     # postgres + api + nginx web
+├── docker-compose.dev.yml # local Postgres for dev
 ├── docs/
-│   └── DEPLOY.md      # Railway, Vercel, env checklist
-├── package.json       # npm workspaces
+│   ├── DEPLOY.md          # Railway, Vercel, topology
+│   └── PROD.md            # env matrix, scaling, runbooks
+├── package.json           # npm workspaces
 ├── CONTRIBUTING.md
 ├── SECURITY.md
-└── LICENSE            # MIT
+└── LICENSE                # MIT
 ```
 
-Structured metadata (roadmap, stack pointers): **`repo/project.json`**. Mermaid source (all diagrams): **`repo/architecture.mmd`**.
+Diagram source (same graphs as below, for editors): **`repo/architecture.mmd`**.
+
+---
+
+## Diagram index
+
+| Diagram | Section | What it shows |
+|---------|---------|----------------|
+| System context | [Architecture](#architecture) | Users, bots, app, Postgres, Redis, Mudrex, Telegram |
+| Dev topology | [Architecture](#architecture) | Browser → Vite → Next → Postgres |
+| Vercel + Railway | [Architecture](#architecture) | Same-origin `/api` via rewrites |
+| Session & auth | [Authentication & sessions](#authentication--sessions) | Google / Telegram → API → `user_sessions` + cookie |
+| Copy webhook path | [Webhooks](#webhooks--external-signals) | Bot → verify → Redis → mirror → Mudrex |
+| TV webhook path | [Webhooks](#webhooks--external-signals) | TradingView → adapter → order/strategy |
+| Request path | [Architecture](#architecture) | SPA → proxy → Next → Postgres / Redis / Mudrex |
+
+All diagrams use **Mermaid** (renders on GitHub).
 
 ---
 
@@ -64,29 +96,33 @@ cd RexAlgo
 npm install
 ```
 
-### 2. Environment file (backend)
+### 2. Environment files
 
-On the **first** `npm run dev`, the root **`predev`** script creates **`backend/.env.local`** from **`backend/.env.example`** if it does not exist.
+On the **first** `npm run dev`, **`predev`** creates **`backend/.env.local`** from **`backend/.env.example`** if missing.
 
-**You must edit `backend/.env.local` before relying on auth or encryption in dev:**
+**Edit `backend/.env.local` before relying on auth or encryption:**
 
 | Variable | Required | Notes |
 |----------|----------|--------|
-| `JWT_SECRET` | **Yes** | Long random string (e.g. `openssl rand -hex 32`) |
-| `ENCRYPTION_KEY` | **Yes** | Strong passphrase; used to encrypt Mudrex secrets and webhook signing secrets in secure storage |
-| `DATABASE_URL` | **Yes** | Postgres connection string. Local dev: `postgres://rexalgo:rexalgo@127.0.0.1:5432/rexalgo` (spin up with `docker compose -f docker-compose.dev.yml up -d`) |
-| `ADMIN_EMAILS` | Optional | Comma-separated list of emails with `/admin` access (approve master studio requests, manage strategies) |
-| `PUBLIC_API_URL` | Recommended | No trailing slash. Used to render full webhook URLs (e.g. `https://api.rexalgo.xyz`). In local dev with external bots, set to your ngrok URL to **Next :3000**. |
-| `PUBLIC_APP_URL` | Deprecated alias | Kept for backward compatibility; prefer `PUBLIC_API_URL`. |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` | Optional | For Telegram login + notifications |
-| `REXALGO_SESSION_MAX_AGE_DAYS` | Optional | Browser session length (JWT + cookie), **1–90** (default **90**). Capped at Mudrex’s typical API key lifetime so the cookie doesn’t outlive a single key rotation. |
+| `JWT_SECRET` | **Yes** | Signs session cookie (`openssl rand -hex 32`) |
+| `ENCRYPTION_KEY` | **Yes** | AES-GCM for Mudrex + webhook secrets |
+| `DATABASE_URL` | **Yes** | Postgres, e.g. `postgres://rexalgo:rexalgo@127.0.0.1:5432/rexalgo` after `docker compose -f docker-compose.dev.yml up -d` |
+| `GOOGLE_CLIENT_ID` | **Yes** for Google sign-in | Must match frontend `VITE_GOOGLE_CLIENT_ID` |
+| `REDIS_URL` | Optional | `redis://127.0.0.1:6379` — cross-process webhook limits; omit for single dev instance |
+| `ADMIN_EMAILS` | Optional | Comma-separated emails → `/admin` + master approvals |
+| `PUBLIC_API_URL` | Recommended | No trailing slash. Full webhook URLs in studios + TV webhooks (tunnel **:3000** for local bots) |
+| `PUBLIC_APP_URL` | Legacy / fallback | Telegram redirect fallback; prefer `PUBLIC_API_URL` for webhook bases |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` | Optional | Bot login + `POST /api/telegram/webhook`; see [docs/PROD.md](docs/PROD.md) |
+| `REXALGO_SESSION_MAX_AGE_DAYS` | Optional | **1–90** (default **90**) |
+| `REXALGO_SESSION_MIN_IAT` | Optional | Unix time — reject older JWTs (emergency mass sign-out) |
+
+**Frontend:** create **`frontend/.env.local`** with **`VITE_GOOGLE_CLIENT_ID`** (same OAuth client id as **`GOOGLE_CLIENT_ID`** on the API).
 
 ```bash
-# If you skipped dev and want to create the file manually:
 cp backend/.env.example backend/.env.local
 ```
 
-After changing secrets, **restart** `npm run dev`.
+Restart **`npm run dev`** after changing secrets.
 
 ### 3. Run both apps
 
@@ -96,18 +132,11 @@ npm run dev
 
 | Open this | URL |
 |-----------|-----|
-| **Everything (UI + API)** | **[http://127.0.0.1:8080](http://127.0.0.1:8080)** (recommended) |
+| **Everything (UI + API)** | **[http://127.0.0.1:8080](http://127.0.0.1:8080)** |
 
-**Prefer `127.0.0.1` over `localhost`:** browsers keep **separate cookie jars** for `localhost` vs `127.0.0.1`. If you use `http://localhost:8080`, the session cookie is shared with **every other tab** on `http://localhost:*`, which can break other local apps.
+**Prefer `127.0.0.1` over `localhost`:** separate cookie jars; `localhost` cookies apply to **all ports** on that name.
 
-**Vite** listens on **:8080** (your only tab). It **proxies `/api`** to Next on **127.0.0.1:3000**. `dev:web` waits until **`GET /api/health`** returns **200** (so another random app on port **3000** won’t fool the dev script). HMR stays on **8080**. The session cookie is scoped to **`Path=/api`** so it is not sent to non-API paths on the same host.
-
-Sign in at **`/auth`** with your **Mudrex API secret**.
-Users can browse marketplace and studio pages without an API connection, but key actions such as subscribe, copy, and creating new strategies stay disabled until the API secret is connected on the dashboard.
-
-**Session length:** The HttpOnly session cookie and JWT are issued together and expire after the same period (**default 90 days**, configurable with **`REXALGO_SESSION_MAX_AGE_DAYS`**, max **90**). There is **no sliding refresh**—when the JWT expires, the user signs in again with their API secret (same or newly rotated Mudrex key).
-
-**Mudrex API key expiry (~90 days):** RexAlgo cannot extend Mudrex’s key lifetime. While your session JWT is valid, the app keeps using the encrypted secret from your last successful login. If Mudrex invalidates or rotates the key **before** the JWT expires, **Mudrex API calls** (wallet, orders, copy mirroring, etc.) return **401** with a clear error until the user **creates a new key in Mudrex** and **signs in again** at `/auth`. **Account id:** RexAlgo’s internal user id is derived from the API secret you used at login—**a different Mudrex key is a different RexAlgo user** (listings/subscriptions don’t carry over). To “refresh” the same key without changing identity, paste the **same** secret again before it expires, or sign in again after JWT expiry with the same key if Mudrex still accepts it. **`GET /api/auth/me`** returns **`sessionExpiresAt`** (ISO timestamp) for UI countdowns.
+Vite **:8080** proxies **`/api`** → Next **:3000**. Session cookie is typically scoped to **`Path=/api`**. **`GET /api/health`** must return JSON with **`service":"rexalgo-api"`** before the UI starts (`wait-on`).
 
 ### 4. Verify the API (optional)
 
@@ -123,94 +152,159 @@ curl -s http://127.0.0.1:3000/api/health
 ### Prerequisites
 
 - **Node.js 20+**, **npm 10+**
-- **PostgreSQL 14+** — start the local dev instance with the provided compose file:
+- **PostgreSQL** — local dev:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
-# then add to backend/.env.local:
 # DATABASE_URL=postgres://rexalgo:rexalgo@127.0.0.1:5432/rexalgo
 ```
 
 ### Install & run
-
-From the repository root, `npm install` pulls **both** workspaces. Run:
 
 ```bash
 npm run dev
 ```
 
 | What | URL / notes |
-|------|----------------|
-| **Use in browser** | **http://127.0.0.1:8080** (Vite + `/api` proxy). Avoid `localhost` if you run other dev servers on `localhost` too. |
-| **Next API** | **127.0.0.1:3000** — don’t open for normal use; must be running for `/api` |
+|------|-------------|
+| **Browser** | **http://127.0.0.1:8080** |
+| **Next API** | **127.0.0.1:3000** — used via proxy; opening it directly skips SPA cookie context |
 
-**Workspace-only** (two URLs again — for debugging):
+**Workspace-only:**
 
 ```bash
-npm run dev -w @rexalgo/backend    # http://127.0.0.1:3000
-npm run dev -w @rexalgo/frontend   # http://127.0.0.1:8080 + Vite proxy /api → 3000
+npm run dev -w @rexalgo/backend
+npm run dev -w @rexalgo/frontend
 ```
 
-### Backend environment
+### Copy trading & algo studios (signed webhooks)
 
-Same as [Quick start §2](#2-environment-file-backend). Reference: **`backend/.env.example`**.
+1. Sign in → **Master studio** → **Copy trading** or **Strategy** → enable webhook → copy **signing secret** (once).
+2. External bot: **`POST /api/webhooks/copy-trading/{strategyId}`** with header **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** where **`v1`** = HMAC-SHA256 of **`${t}.${rawBody}`** (UTF-8) using the secret as key.
+3. Subscribers get mirrored **open** / **close** on Mudrex using **their** stored API secrets.
+4. **Logout** clears the browser cookie; mirroring still uses **encrypted DB secrets** until keys expire.
 
-- **`REXALGO_SESSION_COOKIE_PATH`** — default **`/api`** (cookie not sent on non-API paths).
-- **`PUBLIC_APP_URL`** — prod API origin or **ngrok** tunnel to **Next :3000** so studio UIs show absolute webhook URLs.
+Set **`PUBLIC_API_URL`** (or tunnel to **:3000**) so studio shows reachable URLs for external bots.
 
-### Copy trading (Copy trading studio + webhooks)
+### TradingView webhooks
 
-1. Sign in → open **Master studio** in top nav → choose **Copy trading** (`/copy-trading/studio`) → create a **copy_trading** strategy → **Enable webhook** and copy the **signing secret** (shown once).
-2. Your bot runs **outside** RexAlgo (VPS, laptop, cloud). It `POST`s JSON signals to **`POST /api/webhooks/copy-trading/{strategyId}`** with header **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** where **`v1`** is **HMAC-SHA256** of **`${t}.${rawBody}`** (UTF-8) using the signing secret as the HMAC key (UTF-8 bytes of the secret string).
-3. **Subscribers** (users who subscribed to that strategy in the app) get **mirrored** **open** / **close** actions on **their** Mudrex account via the API secret they stored at login. Sizing uses each subscriber’s **margin per trade** and the strategy’s **leverage**.
-4. **Sign out vs mirroring:** **Signing out** only removes the **browser JWT cookie**. The server still has each user’s **encrypted Mudrex API secret** in Postgres. Webhook handling (`executeMirror`) loads subscribers from the DB and calls Mudrex with those secrets—it does **not** use the UI session. So **subscribed strategies keep mirroring after logout** as long as **Mudrex still accepts** each subscriber’s stored key. If a key expires, that subscriber’s mirrors fail until they **sign in again** with a new key (see banner in the app).
-5. **Local dev**: external bots cannot reach `localhost`; use **ngrok** (or similar) to **`127.0.0.1:3000`** and set **`PUBLIC_APP_URL`** to the tunnel URL. Vite on **8080** is only for the browser; webhooks hit Next directly unless you add a proxy rule.
+User-owned endpoints under **`/tv-webhooks`**; TradingView **`POST`**s to **`/api/webhooks/tv/{id}`** (see [docs/PROD.md](docs/PROD.md) for signing vs URL secrecy).
 
-### Algo strategies (Strategy studio + webhooks)
+---
 
-1. Sign in → open **Master studio** in top nav → choose **Strategy** (`/marketplace/studio`) → create an **algo** listing → **Enable webhook** and copy the **signing secret** (shown once).
-2. **Same** webhook endpoint and **HMAC** contract as copy trading: **`POST /api/webhooks/copy-trading/{strategyId}`** with **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** (HMAC-SHA256 of **`${t}.${rawBody}`**).
-3. **Subscribers** use the marketplace → strategy detail → subscribe; **mirroring** to their Mudrex account works the same as for copy-trading strategies.
-4. **`PUBLIC_APP_URL`** and **ngrok to :3000** apply the same way as in copy-trading studio.
+## Authentication & sessions
 
-### Auth flow
+1. User opens **`/auth`** → **Google** sign-in (or Telegram when configured).
+2. API verifies the credential, upserts **`users`**, creates **`user_sessions`**, returns **HttpOnly** **`rexalgo_session`** (JWS wrapping **`sid`** + metadata).
+3. **Mudrex API secret** is linked separately from the **dashboard** (encrypted in Postgres). Trading and webhooks require a valid Mudrex key where applicable.
 
-1. Open the UI → **Connect** / **Auth**
-2. Enter your **Mudrex API secret** (validated against [Mudrex Futures API](https://docs.trade.mudrex.com/docs/overview))
-3. Session cookie (**`Path=/api`**) is set for the host you use (**`127.0.0.1:8080`** recommended); Vite’s dev proxy forwards `/api` to Next (same origin)
+```mermaid
+flowchart TB
+  subgraph clients [Clients]
+    BR[Browser SPA]
+  end
+  subgraph identity [Identity providers]
+    GO[Google OAuth]
+    TE[Telegram Bot]
+  end
+  subgraph api [Next API]
+    AG["POST /api/auth/google"]
+    AT["/api/auth/telegram/*"]
+    AUTH[auth.ts\nsession + cookie]
+  end
+  subgraph data [Data plane]
+    USERS[(users)]
+    SESS[(user_sessions)]
+  end
+  BR --> GO
+  BR --> TE
+  GO --> AG
+  TE --> AT
+  AG --> AUTH
+  AT --> AUTH
+  AUTH --> USERS
+  AUTH --> SESS
+  AUTH -->|Set-Cookie| BR
+```
 
-### Troubleshooting
+**Operational knobs:** `REXALGO_SESSION_COOKIE_PATH`, `REXALGO_SESSION_COOKIE_DOMAIN`, `REXALGO_SESSION_MIN_IAT` — see **[docs/PROD.md](docs/PROD.md)**.
 
-| Issue | Try |
-|--------|-----|
-| **401 on `/api/*` after login** | Open the UI at **http://127.0.0.1:8080** (Vite), not **127.0.0.1:3000** (API only — no session from the SPA) |
-| **Other localhost dev apps acting weird** | Use **127.0.0.1:8080** for RexAlgo, or clear site data for `localhost`. Cookies for `localhost` apply to **all ports** on that name. |
-| **UI loads but `/api` fails / wrong responses** | Something else may be using **port 3000**. Run `curl -s http://127.0.0.1:3000/api/health` — you should see **`\"service\":\"rexalgo-api\"`**. If not, stop the other process or set **`VITE_API_PROXY_TARGET`** (frontend) and start Next on that port. |
-| **`npm run dev` hangs before Vite starts** | RexAlgo API didn’t become healthy in time. Ensure **`npm run dev:api`** works (no **EADDRINUSE** on 3000) and **`/api/health`** returns JSON as above. |
-| **DB errors** | Ensure `REXALGO_DB_PATH` (if set) is writable |
-| **Build failures** | Node 20+; run `npm install` from **repo root** (workspaces) |
+**Mudrex key rotation:** while the session is valid, the app uses the last encrypted secret; if Mudrex returns **401**, reconnect from the dashboard. Internal RexAlgo user id is tied to the Mudrex identity you linked.
+
+---
+
+## Webhooks & external signals
+
+```mermaid
+flowchart LR
+  subgraph copy [Copy-trading signal]
+    BOT[Your bot]
+    WH1["/api/webhooks/copy-trading/{id}"]
+    RL1[(Redis\noptional)]
+    CM[copyMirror]
+    MR1[Mudrex\nper subscriber]
+  end
+  BOT --> WH1
+  WH1 --> RL1
+  WH1 --> CM
+  CM --> MR1
+```
+
+```mermaid
+flowchart LR
+  subgraph tv [TradingView alert]
+    TVS[TradingView]
+    WH2["/api/webhooks/tv/{id}"]
+    RL2[(Redis\noptional)]
+    EX[Adapter\norder / strategy]
+    MR2[Mudrex or\ninternal routes]
+  end
+  TVS --> WH2
+  WH2 --> RL2
+  WH2 --> EX
+  EX --> MR2
+```
 
 ---
 
 ## Hosting: Railway and Vercel
 
-**Yes — both work**, as long as the **browser** still calls **`/api` on the same hostname** as the UI (nginx reverse proxy or Vercel rewrites). That keeps the HttpOnly session cookie working (`SameSite=Lax`, `Path=/api`).
+Same-origin **`/api`** (nginx or **Vercel rewrites** → Railway) keeps **`SameSite=Lax`** cookies reliable. **Do not** point the browser at a raw Railway hostname for `/api` while the SPA lives on Vercel unless you implement cross-site cookie rules (not in this repo).
 
-| Approach | UI | API |
-|----------|-----|-----|
-| **Railway (2 services)** | `frontend/Dockerfile` — set `API_UPSTREAM` to your API’s public URL | `backend/Dockerfile` — point `DATABASE_URL` at Railway Postgres |
-| **Vercel + Railway** | Vite static on Vercel; rewrite `/api/*` → Railway (see `frontend/vercel.example.json`) | Same Next API on Railway |
-| **Docker / VPS** | `docker compose up` (nginx already proxies `/api`) | Same compose file |
+| Pattern | UI | API |
+|---------|-----|-----|
+| **Railway (2 services)** | Static + nginx (`frontend/Dockerfile`), `API_UPSTREAM` | Next (`backend/Dockerfile`), Postgres + optional Redis |
+| **Vercel + Railway** | Static on Vercel; **`/api/*` rewrite** to Railway | Next on Railway |
+| **Docker Compose** | `web` + `api` + `postgres` | See [Docker](#docker-full-stack) |
 
-Full steps, env vars, and webhook notes: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
-Production operations (Postgres, admin dashboard, TradingView webhooks, Telegram,
-scaling checklist, secret rotation runbook): **[docs/PROD.md](docs/PROD.md)**.
+Details: **[docs/DEPLOY.md](docs/DEPLOY.md)** · Operations: **[docs/PROD.md](docs/PROD.md)**.
+
+```mermaid
+flowchart LR
+  subgraph user [Browser]
+    U[User]
+  end
+  subgraph edge [One public hostname]
+    SPA[Vite static]
+    RW["/api/* rewrite"]
+  end
+  subgraph origin [API origin]
+    API[Next.js]
+    PG[(Postgres)]
+    RD[(Redis optional)]
+  end
+  U --> SPA
+  SPA --> RW
+  RW --> API
+  API --> PG
+  API -.-> RD
+```
 
 ---
 
 ## Architecture
 
-RexAlgo is a **browser client**, an optional **reverse proxy**, **Next.js**, **Postgres**, and the **Mudrex REST API**. Diagrams render on GitHub; the same blocks live in **`repo/architecture.mmd`**.
+RexAlgo is a **browser client**, a **reverse proxy or edge rewrite**, **Next.js**, **Postgres**, optional **Redis**, and **Mudrex** (+ optional **Telegram**).
 
 ### System context
 
@@ -218,20 +312,23 @@ RexAlgo is a **browser client**, an optional **reverse proxy**, **Next.js**, **P
 flowchart TB
   subgraph actors [Actors]
     U[Trader / user]
+    B[External bots\nTV + custom]
   end
-
-  subgraph rexalgo [RexAlgo — your deployment]
-    APP[RexAlgo app\nVite UI + Next API]
-    DB[(SQLite)]
+  subgraph rexalgo [RexAlgo]
+    APP[Vite UI + Next API]
+    PG[(PostgreSQL)]
+    RD[(Redis\noptional)]
   end
-
   subgraph external [External]
     MR[Mudrex Futures API]
+    TG[Telegram]
   end
-
   U -->|HTTPS| APP
-  APP --> DB
-  APP -->|REST + API secret| MR
+  B -->|signed webhooks| APP
+  APP --> PG
+  APP -.->|rate limits| RD
+  APP --> MR
+  APP --> TG
 ```
 
 ### Development topology
@@ -241,122 +338,109 @@ flowchart LR
   subgraph dev [Developer machine]
     BR[Browser]
     V["Vite :8080"]
-    N[Next 127.0.0.1:3000]
-    DB[(SQLite file)]
+    N["Next :3000"]
+    DB[(Postgres)]
   end
   MR[Mudrex API]
-
-  BR -->|UI + HMR| V
-  V -->|proxy /api/*| N
+  BR --> V
+  V -->|proxy /api| N
   N --> DB
   N --> MR
 ```
 
-### Production (Docker)
+### Production (Docker Compose)
 
 ```mermaid
 flowchart TB
-  BR[Browser] -->|HTTP/S| NG[nginx]
-  NG -->|static SPA| DIST[frontend dist]
-  NG -->|proxy /api/*| API[Next.js API]
-  API --> VOL[(Docker volume\nSQLite)]
+  BR[Browser] --> NG[nginx]
+  NG --> DIST[frontend dist]
+  NG -->|/api| API[Next API]
+  API --> PG[(Postgres\nvolume)]
   API --> MR[Mudrex API]
 ```
-
-**Production checklist (before going live)**
-
-| Item | Notes |
-|------|--------|
-| **Secrets** | Strong `JWT_SECRET` and `ENCRYPTION_KEY` (see `backend/.env.example`, root `.env.example` for Docker). Never use dev defaults. |
-| **HTTPS** | Terminate TLS at nginx or your host; session cookies use `Secure` when `NODE_ENV=production`. |
-| **Mudrex** | Live trading uses your real API secret; balances come from [Mudrex FAPI](https://docs.trade.mudrex.com/docs/quick-reference) (`GET /wallet/funds`, `POST /futures/funds`). |
-| **CORS / origin** | Serve SPA and `/api` from the **same site** (nginx pattern in-repo) so cookies stay first-party. |
-| **Ops** | Back up SQLite volume; monitor API errors; plan rate limits for public login (see [SECURITY.md](SECURITY.md)). |
 
 ### Logical request path
 
 ```mermaid
 flowchart LR
   UI[Vite SPA]
-  PX[Proxy\nVite or nginx]
-  NX[Next.js App Router]
-  DB[(SQLite)]
+  PX[Proxy]
+  NX[Next App Router]
+  PG[(Postgres)]
+  RD[(Redis)]
   MR[Mudrex REST]
-
-  UI -->|"/api/*"| PX
+  UI -->|/api| PX
   PX --> NX
-  NX --> DB
+  NX --> PG
+  NX -.-> RD
   NX --> MR
 ```
 
-### Backend modules
+### Backend route map (simplified)
 
 ```mermaid
 flowchart TB
-  subgraph routes [app/api]
-    A1["/api/auth/*"]
-    A2["/api/strategies/*"]
-    A3["/api/subscriptions"]
-    A4["/api/mudrex/*"]
-    A5["/api/webhooks/copy-trading/*"]
-    A6["/api/copy-trading/studio/*"]
-    A7["/api/marketplace/studio/*"]
-  end
-
-  subgraph lib [lib]
-    AUTH[auth.ts\nJWT + encrypt secret]
-    MR[mudrex.ts\nHTTP client]
-    DBL[db.ts + schema.ts\nDrizzle]
-    CM[copyMirror.ts\nsignal fan-out]
-  end
-
   MW[middleware.ts]
-
-  MW --> routes
-  routes --> AUTH
-  routes --> MR
-  routes --> DBL
-  routes --> CM
-  AUTH --> DBL
-  CM --> MR
-  MR -->|outbound HTTPS| EXT[Mudrex]
+  subgraph auth [Auth]
+    G["/api/auth/google"]
+    T["/api/auth/telegram/*"]
+    L["/api/auth/logout"]
+  end
+  subgraph product [Product + Mudrex]
+    M1["/api/marketplace/*"]
+    M2["/api/copy-trading/*"]
+    M3["/api/mudrex/*"]
+  end
+  subgraph hooks [Webhooks]
+    W1["/api/webhooks/copy-trading/*"]
+    W2["/api/webhooks/tv/*"]
+  end
+  subgraph admin [Admin + master]
+    A["/api/admin/*"]
+    MA["/api/master-access/*"]
+  end
+  MW --> auth
+  MW --> product
+  MW --> hooks
+  MW --> admin
 ```
 
-### Authentication sequence
+### Google sign-in (sequence)
 
 ```mermaid
 sequenceDiagram
   participant B as Browser
-  participant V as Vite dev proxy
+  participant V as Vite proxy
   participant N as Next API
-  participant M as Mudrex API
+  participant G as Google tokeninfo
+  participant P as Postgres
 
-  B->>V: POST /api/auth/login (secret)
-  V->>N: forward + cookie jar
-  N->>M: validate credentials
-  M-->>N: OK / error
-  N-->>V: Set-Cookie HttpOnly JWT
-  V-->>B: response + cookie
-  Note over B,N: Later requests send cookie. API secret stays encrypted in SQLite.
+  B->>V: POST /api/auth/google (id_token)
+  V->>N: forward + cookies
+  N->>G: verify id_token
+  G-->>N: email, sub
+  N->>P: upsert user + insert user_sessions
+  N-->>V: Set-Cookie rexalgo_session
+  V-->>B: 200 + user payload
 ```
 
-### Strategy subscription sequence
+### Strategy subscription (sequence)
 
 ```mermaid
 sequenceDiagram
   participant B as Browser
   participant N as Next API
-  participant D as SQLite
+  participant P as Postgres
   participant M as Mudrex
 
-  B->>N: GET /api/strategies/by-id (public)
-  N->>D: load strategy
-  N-->>B: strategy detail
+  B->>N: GET /api/strategies/... (public)
+  N->>P: read strategy
+  N-->>B: detail
 
-  B->>N: POST /api/subscriptions + margin (auth)
-  N->>N: verify JWT + user
-  N->>D: persist subscription
-  N->>M: trading calls with user secret
+  B->>N: POST /api/subscriptions (auth)
+  N->>N: validate session + Mudrex key
+  N->>P: persist subscription
+  N->>M: trade calls
   M-->>N: result
   N-->>B: subscription state
 ```
@@ -366,10 +450,11 @@ sequenceDiagram
 | Layer | Tech | Where |
 |-------|------|--------|
 | UI | Vite, React Router, shadcn, TanStack Query, Tailwind | `frontend/` |
-| API | Next.js 16 App Router | `backend/src/app/` |
+| API | Next.js App Router | `backend/src/app/` |
 | Data | Postgres + Drizzle | `backend/src/lib/db.ts`, `schema.ts` |
+| Cache | Redis (optional) | `backend/src/lib/redis.ts` |
 | Execution | Mudrex REST | `backend/src/lib/mudrex.ts` |
-| Session | JWT HttpOnly cookie + encrypted secret | `backend/src/lib/auth.ts`, `middleware.ts` |
+| Session | JWT cookie + **`user_sessions`** | `backend/src/lib/auth.ts`, `middleware.ts` |
 
 ---
 
@@ -377,82 +462,87 @@ sequenceDiagram
 
 ```bash
 cp .env.example .env
-# Set JWT_SECRET, ENCRYPTION_KEY (never use example values in production).
-# Optional: HOST_PORT=8080 (avoids binding host :80 without sudo on many machines)
-# Optional: PUBLIC_APP_URL=https://your-public-host (webhook URLs in studio)
+# Set JWT_SECRET, ENCRYPTION_KEY, DATABASE_URL (or use compose defaults), optional PUBLIC_API_URL
 
 docker compose up --build -d
 ```
 
-Open **http://localhost** (or **http://localhost:8080** if `HOST_PORT=8080`).  
-Nginx serves the UI and proxies **`/api`** to the API container. Postgres data persists in volume **`rexalgo_pg`** (see `docker-compose.yml`).
+Open **http://localhost** (or **`HOST_PORT=8080`**). Nginx serves the UI and proxies **`/api`** to the API container. Postgres uses volume **`rexalgo_pg`**.
 
 ```bash
-npm run docker:logs   # or: docker compose logs -f
+npm run docker:logs
 npm run docker:down
 ```
 
 ---
 
-## Scripts (root)
+## Scripts
+
+### Root (`package.json`)
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev` | Runs **`predev`** (creates `backend/.env.local` from example if missing), then Next **127.0.0.1:3000** + Vite **:8080** (`wait-on` then UI) |
-| `npm run build` | Build both workspaces |
-| `npm run lint` | Lint frontend & backend (if configured) |
-| `npm run docker:up` | `docker compose up --build -d` |
+| `npm run dev` | **`predev`** seeds `backend/.env.local` if missing; Next **:3000** + Vite **:8080** |
+| `npm run build` | Frontend then backend production builds |
+| `npm run lint` | Both workspaces |
+| `npm run docker:up` / `down` / `logs` | Compose helpers |
 
-Workspace-only:
+### Repo `scripts/` (operator)
 
-```bash
-npm run dev -w @rexalgo/frontend
-npm run dev -w @rexalgo/backend
-```
+| Script | Purpose |
+|--------|---------|
+| `scripts/test-redis.sh` | Smoke-test **`REDIS_URL`** connectivity |
+| `scripts/flush-railway-db.sh` | Guarded Railway DB URL helper (see script header) |
+| `scripts/set-telegram-webhook.sh` | Point Telegram at **`/api/telegram/webhook`** (if present) |
+
+Backend: **`npm run db:flush`** (destructive; requires explicit confirm env — see `backend/package.json`).
+
+---
+
+## Troubleshooting
+
+| Issue | Try |
+|--------|-----|
+| **401 on `/api/*` after login** | Use the UI at **127.0.0.1:8080** (Vite), not the raw API port |
+| **`npm run dev` hangs** | Free **:3000**; confirm **`/api/health`** |
+| **DB errors** | **`DATABASE_URL`** reachable; migrations run on API boot |
+| **Webhook 429 / uneven limits across replicas** | Set **`REDIS_URL`** so limits are global |
+| **Build failures** | Node 20+; `npm install` from **repo root** |
 
 ---
 
 ## Roadmap
 
-Priorities are **Mudrex-first**. Structured copy: **`repo/project.json`** → `roadmap`.
+Structured copy: **`repo/project.json`**.
 
 ### Near term
 
 | Item | Notes |
 |------|--------|
-| **Frontend lint clean pass** | Then remove `continue-on-error` for lint in `.github/workflows/ci.yml` |
-| **CI hardening** | Optional `npm audit` reporting |
-| **Env templates** | Keep `.env.example` / `backend/.env.example` in sync |
+| **CI lint** | Remove `continue-on-error` for frontend lint when clean |
+| **Env templates** | Keep root + `backend/.env.example` aligned with [PROD.md](docs/PROD.md) |
 
 ### Medium term
 
 | Item | Notes |
 |------|--------|
-| **Paper / dry-run mode** | Where API allows; clear UI state |
-| **Rate limiting** | Expand beyond webhook route; login and sensitive `/api/*` routes |
-| **Strategy performance** | Auto **PnL / win rate** from Mudrex with clear attribution rules |
+| **Paper / dry-run** | Where Mudrex allows; clear UI |
+| **Broader rate limits** | Expand Redis-backed limits beyond webhooks where needed |
+| **Strategy analytics** | PnL / win rate with clear attribution |
 
 ### Longer term
 
 | Item | Notes |
 |------|--------|
-| **Realtime updates** | WebSocket/SSE if Mudrex exposes streams |
-| **Telegram / MCP** | Alerts; read-only agents first |
-| **Observability** | Latency, Mudrex errors, structured logs |
-
-### Out of scope (by default)
-
-| Item | Reason |
-|------|--------|
-| **Non-Mudrex execution** | Intentional single-venue adapter; fork for other venues |
-| **Incompatible copyleft in tree** | Conflicts with MIT unless maintainers approve |
+| **Realtime** | SSE/WebSocket where APIs support |
+| **Observability** | Latency, error budgets, structured logs |
 
 ---
 
 ## Policies & links
 
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — PRs, Lovable workflow, licenses  
-- **[SECURITY.md](SECURITY.md)** — secrets, hardening, disclosure  
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — PRs, workflow, licenses  
+- **[SECURITY.md](SECURITY.md)** — secrets, disclosure  
 
 ---
 
