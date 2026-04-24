@@ -29,7 +29,7 @@
       "destination": "https://rexalgo-production.up.railway.app/api/:path*"
     },
     {
-      "source": "/:path*",
+      "source": "/((?!assets/|rexalgo-mark\\.png|rexalgo-logo\\.png|mudrex-logo\\.png|favicon\\.ico|robots\\.txt|placeholder\\.svg).*)",
       "destination": "/index.html"
     }
   ]

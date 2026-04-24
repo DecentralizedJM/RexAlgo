@@ -27,8 +27,19 @@ if (upstream) {
     destination: `${upstream}/api/:path*`,
   });
 }
-// SPA: only after static paths miss (Vercel checks dist/ before applying this).
-rewrites.push({ source: "/:path*", destination: "/index.html" });
+/**
+ * SPA shell — **must not** match Vite bundles under `/assets/*` or root files from
+ * `public/` (`*.png`, `favicon.ico`, etc.). On some deployments the broad
+ * `/:path* → /index.html` rule is applied even when a static file exists, which
+ * serves HTML for `.css`/`.js` → the page renders unstyled (HTML only, no layout).
+ *
+ * @see https://stackoverflow.com/questions/64920230
+ */
+rewrites.push({
+  source:
+    "/((?!assets/|rexalgo-mark\\.png|rexalgo-logo\\.png|mudrex-logo\\.png|favicon\\.ico|robots\\.txt|placeholder\\.svg).*)",
+  destination: "/index.html",
+});
 
 export const config = {
   installCommand: "npm install",
