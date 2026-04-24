@@ -64,15 +64,15 @@ let bootPromise: Promise<void> | null = null;
 export function ensureDbReady(): Promise<void> {
   if (!bootPromise) {
     bootPromise = (async () => {
-      // Production deploys should run migrations as a pre-deploy step (audit #23).
-      // Setting `REXALGO_SKIP_MIGRATIONS=1` on the Railway service skips the
-      // lazy-on-first-request migrate pass so a cold boot is not blocked on
-      // DDL (which was the hot-path hazard the audit flagged). Dev and CI
-      // leave it unset so migrations keep applying automatically.
-      if (process.env.REXALGO_SKIP_MIGRATIONS !== "1") {
-        const migrationsFolder = path.join(process.cwd(), "drizzle");
-        await migrate(db, { migrationsFolder });
-      }
+      // Always run Drizzle migrate on first boot. It is idempotent (no-op when the
+      // DB is already at head) and cheap when there is nothing to apply. We
+      // previously skipped when `REXALGO_SKIP_MIGRATIONS=1` so operators could rely
+      // only on Railway pre-deploy — but if that step fails or is missing, the API
+      // would boot against an old schema and queries touching new columns would
+      // fail (e.g. missing `user_secret_fingerprint`). Running migrate here
+      // self-heals. You can still run `npm run migrate` in pre-deploy as a duplicate.
+      const migrationsFolder = path.join(process.cwd(), "drizzle");
+      await migrate(db, { migrationsFolder });
       const { seedDatabase } = await import("./seed");
       await seedDatabase();
       const { maybeAutoBackfillUserFingerprints } = await import(
