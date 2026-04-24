@@ -10,11 +10,10 @@
 #   • From your **laptop**: use the **public** connection string from the Railway
 #     Postgres plugin (Variables / Connect), or `railway connect` / TCP proxy.
 #
-# Ways to provide DATABASE_URL:
-#   1) export DATABASE_URL='postgresql://…'  (then run this script)
-#   2) Create `scripts/.railway-db-url` (gitignored): one URL per line, no quotes
-#      needed. Lines starting with # are ignored. First non-empty line wins.
-#      See scripts/.railway-db-url.example
+# Ways to provide DATABASE_URL (first match wins):
+#   1) Already set in the environment (e.g. export before running) — **takes precedence**
+#   2) Else: `scripts/.railway-db-url` (gitignored), first non-comment line. See
+#      scripts/.railway-db-url.example
 #
 # Usage:
 #   bash scripts/flush-railway-db.sh
@@ -24,7 +23,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCAL_URL_FILE="$ROOT/scripts/.railway-db-url"
 
-if [[ -f "$LOCAL_URL_FILE" ]]; then
+# Do not let a stale gitignored file override a URL you just exported in the shell.
+if [[ -z "${DATABASE_URL:-}" && -f "$LOCAL_URL_FILE" ]]; then
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line//$'\r'/}"
     line="${line#"${line%%[![:space:]]*}"}"
