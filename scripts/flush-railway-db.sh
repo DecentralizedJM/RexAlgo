@@ -59,6 +59,12 @@ const u = process.env.DATABASE_URL || '';
 try {
   const x = new URL(u.replace(/^postgres:/i, 'postgresql:'));
   if (!x.hostname) throw new Error('missing host');
+  if (x.hostname.endsWith('.railway.internal')) {
+    console.error('Refusing: ' + x.hostname + ' is only reachable inside Railway’s network.');
+    console.error('On your Mac, use DATABASE_PUBLIC_URL (or the public TCP URL) from Railway → Postgres → Variables.');
+    console.error('Or run this flush in a Railway shell / `railway connect` to Postgres.');
+    process.exit(1);
+  }
   process.exit(0);
 } catch (e) {
   console.error('DATABASE_URL is not a valid URL for this check.');

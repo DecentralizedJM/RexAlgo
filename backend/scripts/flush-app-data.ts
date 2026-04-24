@@ -59,6 +59,15 @@ function databaseHostHint(url: string): string {
   }
 }
 
+function isRailwayPrivateHostname(url: string): boolean {
+  try {
+    const u = new URL(url.replace(/^postgres:/i, "postgresql:"));
+    return u.hostname.endsWith(".railway.internal");
+  } catch {
+    return false;
+  }
+}
+
 const TRUNCATE_SQL = `
 TRUNCATE TABLE
   "telegram_login_tokens",
@@ -87,6 +96,22 @@ async function main() {
   const DATABASE_URL = process.env.DATABASE_URL;
   if (!DATABASE_URL) {
     console.error("DATABASE_URL is required");
+    process.exit(1);
+  }
+
+  if (isRailwayPrivateHostname(DATABASE_URL)) {
+    console.error(
+      "Refusing to connect: host ends with .railway.internal (private Railway DNS)."
+    );
+    console.error(
+      "From your laptop that name will not resolve (ENOTFOUND). Use the public URL instead:"
+    );
+    console.error(
+      "  Railway → Postgres service → Variables → DATABASE_PUBLIC_URL (or the TCP/public connect string)."
+    );
+    console.error(
+      "Alternatives: run db:flush in a Railway shell on a service in the same project, or use `railway connect` to Postgres."
+    );
     process.exit(1);
   }
 
