@@ -1,0 +1,6 @@
+# Copy this file to `scripts/.railway-db-url` and fill in your URL (file is gitignored).
+#
+# postgres.railway.internal only works **inside** Railway (e.g. API service shell).
+# From your Mac, use the **public** Postgres URL from Railway → Postgres → Connect.
+
+export DATABASE_URL='postgresql://USER:PASSWORD@HOST:PORT/railway'
