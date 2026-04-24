@@ -46,6 +46,9 @@ const pool = new Pool({
   ssl: shouldUseSsl(DATABASE_URL) ? { rejectUnauthorized: false } : undefined,
 });
 
+/** Raw pool for `pg_advisory_*` (see `userFingerprintBackfill.ts`). */
+export const dbPool = pool;
+
 export const db: NodePgDatabase<typeof schema> = drizzle(pool, { schema });
 
 // Registers SIGTERM/SIGINT hooks that stop the notifications worker, wait
@@ -72,6 +75,10 @@ export function ensureDbReady(): Promise<void> {
       }
       const { seedDatabase } = await import("./seed");
       await seedDatabase();
+      const { maybeAutoBackfillUserFingerprints } = await import(
+        "./userFingerprintBackfill"
+      );
+      await maybeAutoBackfillUserFingerprints();
       const { ensureNotificationsWorker } = await import("./notifications");
       ensureNotificationsWorker();
     })().catch((err) => {
