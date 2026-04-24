@@ -121,12 +121,10 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const sessionToken = await createSession(
-    user.id,
-    user.displayName,
-    user.apiSecretEncrypted ?? null,
-    user.email ?? null
-  );
+  const sessionToken = await createSession(user.id, {
+    userAgent: req.headers.get("user-agent"),
+    authProvider: "telegram",
+  });
 
   logTelegramOauth("bot_poll", { outcome: "session" });
   const res = NextResponse.json({

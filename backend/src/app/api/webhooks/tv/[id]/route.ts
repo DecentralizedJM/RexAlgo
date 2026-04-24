@@ -2,8 +2,9 @@
  * TradingView webhook ingress (Phase 5).
  *
  * Flow:
- *   1. Rate-limit per webhook id (reuses the in-memory bucket used by copy-trade
- *      webhooks; swap to Redis before horizontal scale — see repo TODOs).
+ *   1. Rate-limit per webhook id (shares the distributed bucket used by
+ *      copy-trade webhooks — Redis when `REDIS_URL` is set, in-process Map
+ *      otherwise — see `lib/copyWebhookRateLimit.ts`).
  *   2. Verify `X-RexAlgo-Signature: t=<unix>,v1=<hmac>` against the stored
  *      per-webhook secret.
  *   3. Parse the alert with `parseTvAlert` (simple `{ action, symbol, leverage,
@@ -228,7 +229,7 @@ export async function POST(
 ) {
   const { id } = await ctx.params;
 
-  if (!checkCopyWebhookRateLimit(`tv:${id}`)) {
+  if (!(await checkCopyWebhookRateLimit(`tv:${id}`))) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 

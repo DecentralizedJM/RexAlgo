@@ -113,8 +113,10 @@ The **web** image defaults to `API_UPSTREAM=http://api:3000` (Compose service na
 
 | Variable | Where | Purpose |
 |----------|--------|---------|
-| `JWT_SECRET` | API | Session JWT signing |
+| `JWT_SECRET` | API | Signs the `rexalgo_session` cookie (JWS wrapper around an opaque `sid`). Rotate ⇒ forced global sign-out. |
 | `ENCRYPTION_KEY` | API | Encrypt Mudrex + webhook secrets at rest |
+| `DATABASE_URL` | API | Postgres connection. Migrations run on boot; `user_sessions` is created by `0008_user_sessions`. |
+| `REDIS_URL` | API (optional, recommended in prod) | Shared Redis for cross-instance state. Required once you run more than one API replica so the 120 req/min webhook rate limit is enforced globally instead of per process. |
 | `PUBLIC_APP_URL` | API | Full webhook URLs in studio UIs (no trailing slash). **Vercel UI + Railway API:** set to your SPA origin (e.g. `https://rexalgo.xyz`) so Telegram OAuth redirects return to the same host the browser uses (fallback when `X-Forwarded-Host` is missing). |
 | `REXALGO_DB_PATH` | API | SQLite path; use `/data/rexalgo.db` + volume on Railway |
 | `API_UPSTREAM` | Web (nginx) | Full URL of Next API for `proxy_pass` |

@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiSecret } from "@/lib/mudrex";
-import {
-  getSession,
-  encryptApiSecret,
-  createSession,
-  COOKIE_NAME,
-  clearAllSessionCookies,
-  sessionCookieWriteOptions,
-} from "@/lib/auth";
+import { getSession, encryptApiSecret } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -43,14 +36,10 @@ export async function POST(req: NextRequest) {
       .set({ apiSecretEncrypted: encrypted })
       .where(eq(users.id, session.user.id));
 
-    const token = await createSession(
-      session.user.id,
-      session.user.displayName,
-      encrypted,
-      session.user.email
-    );
-
-    const response = NextResponse.json({
+    // The session cookie references `user_sessions.id`; the Mudrex secret is
+    // loaded fresh from `users` on each `getSession()` call, so we no longer
+    // need to re-issue the cookie on link/unlink.
+    return NextResponse.json({
       success: true,
       user: {
         id: session.user.id,
@@ -59,10 +48,6 @@ export async function POST(req: NextRequest) {
         hasMudrexKey: true,
       },
     });
-    clearAllSessionCookies(response);
-    response.cookies.set(COOKIE_NAME, token, sessionCookieWriteOptions());
-
-    return response;
   } catch (error) {
     console.error("Link Mudrex error:", error);
     return NextResponse.json(
@@ -84,14 +69,7 @@ export async function DELETE() {
       .set({ apiSecretEncrypted: null })
       .where(eq(users.id, session.user.id));
 
-    const token = await createSession(
-      session.user.id,
-      session.user.displayName,
-      null,
-      session.user.email
-    );
-
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
       user: {
         id: session.user.id,
@@ -100,10 +78,6 @@ export async function DELETE() {
         hasMudrexKey: false,
       },
     });
-    clearAllSessionCookies(response);
-    response.cookies.set(COOKIE_NAME, token, sessionCookieWriteOptions());
-
-    return response;
   } catch (error) {
     console.error("Unlink Mudrex error:", error);
     return NextResponse.json(

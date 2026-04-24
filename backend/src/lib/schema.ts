@@ -363,6 +363,53 @@ export const notificationsOutbox = pgTable("notifications_outbox", {
   sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }),
 });
 
+/**
+ * Server-side session rows for the browser cookie (`rexalgo_session`).
+ *
+ * The cookie is a short JWS carrying just `sid` (+ `exp` / `iat`). Every
+ * request loads the row to confirm the session is still valid — that makes
+ * per-device logout and admin revoke a one-row update instead of a global
+ * `JWT_SECRET` / `REXALGO_SESSION_MIN_IAT` rotation.
+ *
+ * We never trust user data from the cookie beyond the session id; display
+ * name, email, and the encrypted Mudrex secret live on `users` and are read
+ * fresh on each `getSession()` call.
+ *
+ * Hot path: primary-key lookup on `id`. Admin "list my sessions" and cleanup
+ * jobs use the secondary indexes below.
+ */
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /**
+     * Optional first-party context captured at login — never indexed, never
+     * promoted to PII beyond a coarse "Chrome on macOS" string the user sees
+     * in a future device list. Kept NULL-safe.
+     */
+    userAgent: text("user_agent"),
+    /** Login kind so device lists can surface "Google" / "Telegram". */
+    authProvider: text("auth_provider").notNull().default("unknown"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" })
+      .notNull(),
+    /** Set when the user (or an admin) invalidates this specific session. */
+    revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [
+    index("user_sessions_user_idx").on(t.userId),
+    index("user_sessions_expires_idx").on(t.expiresAt),
+  ]
+);
+
 export const tvWebhookEvents = pgTable(
   "tv_webhook_events",
   {

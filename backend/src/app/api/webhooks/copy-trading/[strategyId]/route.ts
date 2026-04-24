@@ -18,7 +18,7 @@ export async function POST(
 ) {
   const { strategyId } = await ctx.params;
 
-  if (!checkCopyWebhookRateLimit(strategyId)) {
+  if (!(await checkCopyWebhookRateLimit(strategyId))) {
     return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 

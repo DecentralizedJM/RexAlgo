@@ -88,7 +88,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const token = await createSession(userId, userName, encryptedKey, email);
+    const token = await createSession(userId, {
+      userAgent: req.headers.get("user-agent"),
+      authProvider: "google",
+    });
 
     const response = NextResponse.json({
       success: true,

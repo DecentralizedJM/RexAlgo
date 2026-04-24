@@ -1,14 +1,30 @@
 /**
- * Session + secret storage: JWT in HttpOnly cookie (`rexalgo_session`), AES-256-GCM for secure Mudrex secret encryption.
+ * Server-backed browser sessions + AES-256-GCM secret storage.
+ *
+ * A session is a row in `user_sessions`; the HttpOnly `rexalgo_session` cookie
+ * carries a signed JWS whose only meaningful claim is `sid`. Every request
+ * looks up the row so per-device logout and admin revoke are a one-row update
+ * rather than a global `JWT_SECRET` / `REXALGO_SESSION_MIN_IAT` rotation.
+ *
+ * Legacy sessions (pre–user_sessions rollout) had `userId` / `apiSecretEncrypted`
+ * embedded directly in the JWT. Those cookies are rejected on the next request
+ * because they lack `sid`, and users sign in again — which writes a row the
+ * new code path understands. `REXALGO_SESSION_MIN_IAT` is still honoured so
+ * operators can fast-forward that cutover without deploying new code.
+ *
  * Env: JWT_SECRET, ENCRYPTION_KEY (see backend/.env.example).
+ * @see backend/src/lib/schema.ts (`userSessions`)
  * @see README.md#architecture (authentication sequence diagram)
  */
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { and, eq, isNull, lte } from "drizzle-orm";
 import crypto from "crypto";
 import type { AuthUser } from "@/types";
 import { sessionJwtIssuedAtAllowed } from "@/lib/sessionPolicy";
+import { db } from "@/lib/db";
+import { userSessions, users } from "@/lib/schema";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "rexalgo-dev-secret-change-in-production-2024"
@@ -22,13 +38,13 @@ const COOKIE_NAME = "rexalgo_session";
 export const MUDREX_API_KEY_MAX_DAYS = 90;
 
 /**
- * Browser session length (JWT `exp` + cookie `maxAge`). Configurable so trading UIs can stay signed in
- * without daily re-login; cap at {@link MUDREX_API_KEY_MAX_DAYS} so we don’t promise a cookie longer
- * than a single Mudrex key lifetime.
+ * Browser session length (JWS `exp` + cookie `maxAge` + `user_sessions.expires_at`).
+ * Configurable so trading UIs can stay signed in without daily re-login; cap at
+ * {@link MUDREX_API_KEY_MAX_DAYS} so we don't promise a cookie longer than a
+ * single Mudrex key lifetime.
  */
 export function getSessionMaxAgeDays(): number {
   const raw = process.env.REXALGO_SESSION_MAX_AGE_DAYS;
-  /** Default 90 = same cap as a single Mudrex key lifetime — best for long-running strategy UIs. */
   if (raw === undefined || raw === "") return MUDREX_API_KEY_MAX_DAYS;
   const n = Number.parseInt(raw, 10);
   if (!Number.isFinite(n)) return MUDREX_API_KEY_MAX_DAYS;
@@ -39,7 +55,7 @@ export function getSessionMaxAgeSeconds(): number {
   return getSessionMaxAgeDays() * 24 * 60 * 60;
 }
 
-/** Only sent on `/api/*` so other apps on the same host (e.g. localhost:3001) don’t get this cookie. */
+/** Only sent on `/api/*` so other apps on the same host (e.g. localhost:3001) don't get this cookie. */
 export const SESSION_COOKIE_PATH =
   process.env.REXALGO_SESSION_COOKIE_PATH || "/api";
 
@@ -73,7 +89,7 @@ export function sessionCookieDomainFromEnv(): string | undefined {
   }
 }
 
-/** Standard options for setting the session JWT cookie on API responses. */
+/** Standard options for setting the session cookie on API responses. */
 export function sessionCookieWriteOptions(): {
   httpOnly: boolean;
   secure: boolean;
@@ -151,25 +167,44 @@ export function decryptApiSecret(encrypted: string): string {
   return decrypted;
 }
 
+export interface CreateSessionOptions {
+  userAgent?: string | null;
+  authProvider?: string | null;
+}
+
+/**
+ * Create a new `user_sessions` row and return the signed cookie value that
+ * references it. Callers should set this on the response via
+ * `sessionCookieWriteOptions()`.
+ *
+ * The cookie is a JWS (not a JWT): the only payload claim is `sid`; `exp` and
+ * `iat` are protected-header standard claims. Keeping claims minimal means
+ * rotating a user's display name / Mudrex link does not invalidate the cookie.
+ */
 export async function createSession(
   userId: string,
-  displayName: string,
-  apiSecretEncrypted: string | null,
-  email: string | null
+  opts: CreateSessionOptions = {}
 ): Promise<string> {
   const days = getSessionMaxAgeDays();
-  const token = await new SignJWT({
+  const sid = crypto.randomBytes(32).toString("base64url");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+  await db.insert(userSessions).values({
+    id: sid,
     userId,
-    displayName,
-    apiSecretEncrypted: apiSecretEncrypted ?? undefined,
-    email: email ?? undefined,
-  })
+    userAgent: opts.userAgent?.slice(0, 512) ?? null,
+    authProvider: opts.authProvider ?? "unknown",
+    createdAt: now,
+    lastSeenAt: now,
+    expiresAt,
+  });
+
+  return new SignJWT({ sid })
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime(`${days}d`)
     .setIssuedAt()
     .sign(JWT_SECRET);
-
-  return token;
 }
 
 const TELEGRAM_LINK_JWT_PURPOSE = "telegram_link_v1";
@@ -205,33 +240,16 @@ export async function verifyTelegramLinkIntentJwt(
   }
 }
 
-export async function verifySession(
+/** Low-level: verify the cookie and extract the session id (no DB hit). */
+export async function verifySessionCookie(
   token: string
-): Promise<{
-  userId: string;
-  displayName: string;
-  apiSecretEncrypted: string | null;
-  email: string | null;
-  sessionExpiresAt: Date | null;
-} | null> {
+): Promise<{ sid: string } | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
     if (!sessionJwtIssuedAtAllowed(payload.iat)) return null;
-    const exp =
-      typeof payload.exp === "number" && Number.isFinite(payload.exp)
-        ? new Date(payload.exp * 1000)
-        : null;
-    return {
-      userId: payload.userId as string,
-      displayName: payload.displayName as string,
-      apiSecretEncrypted:
-        typeof payload.apiSecretEncrypted === "string"
-          ? payload.apiSecretEncrypted
-          : null,
-      email:
-        typeof payload.email === "string" ? payload.email : null,
-      sessionExpiresAt: exp,
-    };
+    const sid = typeof payload.sid === "string" ? payload.sid : null;
+    if (!sid) return null;
+    return { sid };
   } catch {
     return null;
   }
@@ -240,19 +258,38 @@ export async function verifySession(
 export async function getSession(): Promise<{
   user: AuthUser;
   apiSecret: string | null;
+  sessionId: string;
   sessionExpiresAt: Date | null;
 } | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
 
-  const session = await verifySession(token);
-  if (!session) return null;
+  const verified = await verifySessionCookie(token);
+  if (!verified) return null;
+
+  const [row] = await db
+    .select({
+      id: userSessions.id,
+      userId: userSessions.userId,
+      expiresAt: userSessions.expiresAt,
+      revokedAt: userSessions.revokedAt,
+      displayName: users.displayName,
+      email: users.email,
+      apiSecretEncrypted: users.apiSecretEncrypted,
+    })
+    .from(userSessions)
+    .innerJoin(users, eq(users.id, userSessions.userId))
+    .where(eq(userSessions.id, verified.sid));
+
+  if (!row) return null;
+  if (row.revokedAt) return null;
+  if (row.expiresAt.getTime() <= Date.now()) return null;
 
   let apiSecret: string | null = null;
-  if (session.apiSecretEncrypted) {
+  if (row.apiSecretEncrypted) {
     try {
-      apiSecret = decryptApiSecret(session.apiSecretEncrypted);
+      apiSecret = decryptApiSecret(row.apiSecretEncrypted);
     } catch {
       /* key may be corrupt — session is still valid, just without Mudrex access */
     }
@@ -260,12 +297,13 @@ export async function getSession(): Promise<{
 
   return {
     user: {
-      id: session.userId,
-      displayName: session.displayName,
-      email: session.email,
+      id: row.userId,
+      displayName: row.displayName,
+      email: row.email ?? null,
     },
     apiSecret,
-    sessionExpiresAt: session.sessionExpiresAt,
+    sessionId: row.id,
+    sessionExpiresAt: row.expiresAt,
   };
 }
 
@@ -324,6 +362,32 @@ export function clearAllSessionCookies(response: NextResponse) {
       response.cookies.set(COOKIE_NAME, "", sessionCookieClearHostOnlyOptions(path));
     }
   }
+}
+
+/** Marks a single session revoked — used by `/api/auth/logout`. */
+export async function revokeSessionById(sid: string): Promise<void> {
+  await db
+    .update(userSessions)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(userSessions.id, sid), isNull(userSessions.revokedAt)));
+}
+
+/** Marks every active session for `userId` revoked. Admin + "log out everywhere". */
+export async function revokeAllSessionsForUser(userId: string): Promise<void> {
+  await db
+    .update(userSessions)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt))
+    );
+}
+
+/** Opportunistic cleanup: delete rows whose `expires_at` is in the past. */
+export async function purgeExpiredSessions(): Promise<number> {
+  const res = await db
+    .delete(userSessions)
+    .where(lte(userSessions.expiresAt, new Date()));
+  return res.rowCount ?? 0;
 }
 
 export { COOKIE_NAME };

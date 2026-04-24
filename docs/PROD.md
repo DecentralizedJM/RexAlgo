@@ -32,6 +32,7 @@ with a clear error if any required one is missing.
 | `ADMIN_EMAILS` | `jm@rexalgo.xyz,admin@rexalgo.xyz` | Comma-separated allow-list. Used by `/api/admin/*` and to surface the Admin button in the navbar. Case-insensitive match on the Google email. |
 | `PGPOOL_MAX` | `10` | Per-process Postgres pool size. Keep `PGPOOL_MAX * instance_count ≤ db.max_connections * 0.7`. |
 | `PGSSLMODE` | `disable` | Force SSL off; handy for private-network Postgres. Any other value = SSL with `rejectUnauthorized: false`. |
+| `REDIS_URL` | `rediss://:pwd@host:6380` | Shared Redis for cross-instance state (webhook rate limits today; optional session cache later). Without it each API replica enforces the 120 req/min webhook budget separately, so two replicas allow 240 req/min in aggregate. Omit in single-node dev. |
 
 ### Telegram (optional; enables login + DMs)
 
@@ -53,9 +54,10 @@ If `TELEGRAM_WEBHOOK_SECRET` is missing, the webhook refuses all updates
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `REXALGO_SESSION_MAX_AGE_DAYS` | `90` | Capped at 90 (Mudrex key lifetime). |
+| `REXALGO_SESSION_MAX_AGE_DAYS` | `90` | Capped at 90 (Mudrex key lifetime). Used for both the cookie `maxAge` and `user_sessions.expires_at`. |
 | `REXALGO_SESSION_COOKIE_PATH` | `/api` | Avoid using `/` so other apps on the same host don't see the session cookie. |
 | `REXALGO_SESSION_COOKIE_DOMAIN` | `.rexalgo.xyz` | Optional. If unset and `PUBLIC_APP_URL` is your SPA origin, the API sets `Domain` on `rexalgo_session` so the cookie is stored for that host when responses are proxied (e.g. Vercel → Railway). |
+| `REXALGO_SESSION_MIN_IAT` | unset | Emergency mass sign-out. Any session cookie whose `iat` is before this Unix time is rejected. Prefer per-session revoke via `POST /api/auth/logout` / `user_sessions.revoked_at`; use this knob only when you need to invalidate everyone in one deploy. |
 
 ### Internal knobs
 
@@ -88,6 +90,14 @@ Drizzle migrations live in `backend/drizzle/*.sql`. On every boot the API:
 1. Opens `pg.Pool`.
 2. Runs `drizzle-orm/node-postgres/migrator.migrate()` from `backend/drizzle/`.
 3. Seeds demo strategies only if the `strategies` table is empty.
+
+Migration `0008_user_sessions` introduces the server-side session table used
+by the current cookie flow. After applying it, **no manual backfill is
+needed**: old JWT cookies (which embedded `userId`/`apiSecretEncrypted`) are
+rejected on the next request because they lack the `sid` claim, and users
+sign in again — that writes a `user_sessions` row automatically. If you
+prefer to force the cutover immediately, set `REXALGO_SESSION_MIN_IAT=$(date +%s)`
+before the deploy that applies the migration.
 
 Applying migrations manually (useful for pre-deploy smoke tests):
 
@@ -260,10 +270,13 @@ Below are the changes you'll want as you climb toward 10k CCU.
 ### Must-do
 
 - [ ] **Horizontal API scaling.** Deploy ≥ 2 API instances behind a load balancer.
-      Sessions are JWT so this Just Works.
-- [ ] **Replace in-memory rate limiter with Redis.** See
-      `backend/src/lib/copyWebhookRateLimit.ts`. Use a Redis atomic counter
-      (`INCR` + `PEXPIRE`) or the official `@upstash/ratelimit`.
+      Sessions are server-backed (`user_sessions`) and the cookie carries only
+      an opaque `sid`, so replicas are interchangeable. Set `REDIS_URL` before
+      scaling past one instance (see next item).
+- [x] **Distributed webhook rate limiter.** `backend/src/lib/copyWebhookRateLimit.ts`
+      now uses Redis `INCR` + `PEXPIRE` when `REDIS_URL` is set; otherwise it
+      falls back to the in-memory map (fine for one instance). Fails OPEN on
+      Redis errors so a brief outage does not block trade signals.
 - [ ] **Mudrex circuit breaker.** Wrap `backend/src/lib/mudrex.ts` calls in a
       circuit breaker (e.g. `opossum`) so a Mudrex outage doesn't saturate the
       event loop with hung promises. Emit `code: "MUDREX_UNAVAILABLE"` and
@@ -284,8 +297,15 @@ Below are the changes you'll want as you climb toward 10k CCU.
 - [ ] **CDN in front of the SPA.** Static Vite build gets aggressive caching
       (immutable filenames). Only `/api/*` and `/index.html` need to hit the
       origin.
-- [ ] **Migrate webhooks rate limit + idempotency cache to Redis** so retries
-      across instances see the same state.
+- [ ] **Migrate the remaining per-process idempotency caches to Redis** so
+      retries across instances see the same state. Webhook rate limits are
+      already distributed; the `copy_signal_events` / `tv_webhook_events`
+      idempotency keys are already in Postgres and do not need Redis.
+- [ ] **Optional Redis session cache.** If profiling shows `getSession()` is
+      a bottleneck (a `user_sessions` row lookup on every authenticated
+      request), cache `sid → { userId, revoked, expiresAt }` in Redis with
+      a TTL aligned to the session and invalidate on revoke/logout. Skip
+      until metrics justify it.
 
 ### Nice-to-have
 
@@ -306,6 +326,10 @@ All of these require a short read-only window (≤ 30s) for safety.
 
 1. Set new value, redeploy.
 2. All users get a one-time relogin prompt. No data loss.
+3. Prefer per-session revoke for targeted sign-outs: either update
+   `user_sessions.revoked_at` for the specific `id`, or set the emergency
+   `REXALGO_SESSION_MIN_IAT` floor when you need to invalidate everyone
+   without rotating the signing key.
 
 ### `ENCRYPTION_KEY`
 
@@ -334,7 +358,7 @@ in a password manager.
 
 | Symptom | First check |
 |---------|-------------|
-| Users cannot log in | `/api/auth/me` returns 401 repeatedly? Check `JWT_SECRET` didn't change; inspect cookie domain/path. |
+| Users cannot log in | `/api/auth/me` returns 401 repeatedly? Check `JWT_SECRET` didn't change; inspect cookie domain/path. Confirm `user_sessions` row exists and `revoked_at IS NULL` for the user; also check `REXALGO_SESSION_MIN_IAT` isn't accidentally set in the future. |
 | Webhook 401s (valid client) | `ENCRYPTION_KEY` didn't change? Secret expected `whsec_` prefix. |
 | Webhook 403 `Webhook disabled` | Check `copy_webhook_config.enabled` / `tv_webhooks.enabled`. |
 | Mudrex "API key invalid" spam | User must rotate in Mudrex + re-auth; see `isMudrexCredentialError`. |

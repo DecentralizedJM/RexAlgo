@@ -70,6 +70,7 @@ function isRailwayPrivateHostname(url: string): boolean {
 
 const TRUNCATE_SQL = `
 TRUNCATE TABLE
+  "user_sessions",
   "telegram_login_tokens",
   "notifications_outbox",
   "tv_webhook_events",

@@ -83,7 +83,8 @@ function sanitizeReturnPath(raw: string | null, fallback: string): string {
 
 async function runTelegramWidgetAuth(
   body: Record<string, unknown>,
-  ctx: TelegramOauthCtx
+  ctx: TelegramOauthCtx,
+  userAgent: string | null
 ): Promise<RunTelegramAuthResult> {
   const keys = Object.keys(body).sort();
   logTelegramOauth("oauth_in", {
@@ -206,7 +207,10 @@ async function runTelegramWidgetAuth(
     });
   }
 
-  const token = await createSession(userId, displayName, encryptedKey, email);
+  const token = await createSession(userId, {
+    userAgent,
+    authProvider: "telegram_widget",
+  });
 
   logTelegramOauth("oauth_done", {
     method: ctx.method,
@@ -282,7 +286,11 @@ export async function GET(req: NextRequest) {
     returnStartsWithSettings: returnTo === "/settings" || returnTo.startsWith("/settings?") ? 1 : 0,
   });
 
-  const result = await runTelegramWidgetAuth(payload, telegramOauthCtx(req, "GET"));
+  const result = await runTelegramWidgetAuth(
+    payload,
+    telegramOauthCtx(req, "GET"),
+    req.headers.get("user-agent")
+  );
 
   if (!result.ok) {
     const errPath =
@@ -341,7 +349,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const result = await runTelegramWidgetAuth(body, telegramOauthCtx(req, "POST"));
+  const result = await runTelegramWidgetAuth(
+    body,
+    telegramOauthCtx(req, "POST"),
+    req.headers.get("user-agent")
+  );
   if (!result.ok) {
     return withTelegramOauthNoStore(
       NextResponse.json({ error: result.message }, { status: result.status })
