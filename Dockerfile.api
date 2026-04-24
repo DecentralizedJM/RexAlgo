@@ -22,6 +22,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV REXALGO_SKIP_DB_BOOT=1
 ENV PGSSLMODE=disable
 ENV DATABASE_URL=postgres://build:build@127.0.0.1:5432/rexalgo_build?sslmode=disable
+# Next evaluates server route modules during `next build` ("Collecting page data").
+# Railway (and most CI) does not inject service env vars into the *image build*
+# step — only into the running container. Without these, `requireSecretEnv` in
+# `lib/auth.ts` / `middleware.ts` throws and the build fails. These values exist
+# only in the builder stage; the `runner` image below is `FROM base` and does
+# not inherit them, so production still requires real secrets at runtime.
+ENV JWT_SECRET=0000000000000000000000000000000000000000000000000000000000000000
+ENV ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
+ENV FINGERPRINT_SECRET=0000000000000000000000000000000000000000000000000000000000000000
 RUN npm run build
 
 FROM base AS runner

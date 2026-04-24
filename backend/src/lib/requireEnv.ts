@@ -15,6 +15,23 @@
  */
 
 const DEV_FAKE_PREFIX = "dev-fake-do-not-use__";
+const BUILD_FAKE_PREFIX = "build-placeholder-do-not-use__";
+
+/**
+ * `next build` runs with `NODE_ENV=production` and loads server route modules
+ * ("Collecting page data"). CI and Docker image builds often do **not** inject
+ * production secrets at that step — only the running container does. Without a
+ * bypass, `requireSecretEnv` throws and the build fails.
+ *
+ * This path is extremely narrow: `npm` sets `npm_lifecycle_event=build` only
+ * while a package `build` script is running. The production image CMD is
+ * `node server.js`, so this is never true at runtime on Railway.
+ */
+function buildTimeTaggedPlaceholder(name: string): string | null {
+  if (process.env.npm_lifecycle_event !== "build") return null;
+  if (process.env.NODE_ENV !== "production") return null;
+  return `${BUILD_FAKE_PREFIX}${name}`;
+}
 
 /**
  * Returns the value of `process.env[name]`. Throws at call time if unset in
@@ -34,6 +51,9 @@ export function requireSecretEnv(name: string): string {
     // logs can be mistaken for a real secret.
     return `${DEV_FAKE_PREFIX}${name}`;
   }
+
+  const buildPh = buildTimeTaggedPlaceholder(name);
+  if (buildPh) return buildPh;
 
   throw new Error(
     `[requireSecretEnv] ${name} is required but not set. ` +
