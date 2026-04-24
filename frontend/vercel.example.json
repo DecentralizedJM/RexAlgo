@@ -4,6 +4,7 @@
     {
       "source": "/api/:path*",
       "destination": "https://YOUR-RAILWAY-API.up.railway.app/api/:path*"
-    }
+    },
+    { "source": "/:path*", "destination": "/index.html" }
   ]
 }

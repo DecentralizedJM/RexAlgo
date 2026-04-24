@@ -61,19 +61,18 @@ The browser only talks to **your Vercel hostname** (e.g. `https://rexalgo.xyz`).
 | Vercel **Root Directory** | Config file used | Install / build (already in repo) |
 |---------------------------|------------------|-------------------------------------|
 | *(empty — repo root)*     | [`vercel.json`](../vercel.json) | `npm ci`, `npm run build -w @rexalgo/frontend`, output `frontend/dist` |
-| `frontend`                | [`frontend/vercel.json`](../frontend/vercel.json) | `npm install`, `npm run build`, output `dist` |
+| `frontend`                | [`frontend/vercel.ts`](../frontend/vercel.ts) | `npm install`, `npm run build`, output `dist` |
 
-**Important:** If Root Directory is **`frontend`**, Vercel **does not read** the repo-root `vercel.json`. Keep [`frontend/vercel.json`](../frontend/vercel.json) in sync with root for **rewrites** (Railway URL) and **headers**.
+**Important:** If Root Directory is **`frontend`**, Vercel **does not read** the repo-root `vercel.json`. [`frontend/vercel.ts`](../frontend/vercel.ts) emits **rewrites** + **headers** at build time; set **`API_UPSTREAM`** in Vercel (Preview + Production) to your Railway API origin, **no trailing slash** (same value you used to put in JSON).
 
-**Important:** There is **no** `package-lock.json` inside `frontend/`. A Vercel **Install Command** of `npm ci` at `frontend/` will fail. The checked-in `frontend/vercel.json` uses **`npm install`** for that case. The repo-root layout uses **`npm ci`** with the root lockfile.
+**Important:** There is **no** `package-lock.json` inside `frontend/`. A Vercel **Install Command** of `npm ci` at `frontend/` will fail. [`frontend/vercel.ts`](../frontend/vercel.ts) uses **`npm install`**. The repo-root layout uses **`npm ci`** with the root lockfile.
 
 ### 3. Point `/api` at Railway
 
-In whichever `vercel.json` applies to your project, the rewrite destination must be your live Railway URL, for example:
+- **Root Directory = `frontend`:** set environment variable **`API_UPSTREAM`** (e.g. `https://rexalgo-production.up.railway.app`). [`frontend/vercel.ts`](../frontend/vercel.ts) proxies `/api/:path*` → `${API_UPSTREAM}/api/:path*`.
+- **Root Directory = repo root:** edit [`vercel.json`](../vercel.json) `rewrites` destination, or add a root `vercel.ts` mirroring the frontend pattern.
 
-`https://rexalgo-production.up.railway.app/api/:path*`
-
-If Railway changes the hostname after a redeploy, update **both** [`vercel.json`](../vercel.json) and [`frontend/vercel.json`](../frontend/vercel.json) and redeploy Vercel.
+If Railway’s public hostname changes, update **`API_UPSTREAM`** (frontend project) or the root `vercel.json` rewrite and redeploy Vercel.
 
 ### 4. Custom domain
 

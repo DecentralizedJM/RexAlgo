@@ -18,13 +18,11 @@ If your Railway project was tied to the old **`backend-railway`** branch, switch
 
 ## Fix Vercel (frontend)
 
-1. The repo includes **`frontend/vercel.json`**, which:
-   - Proxies **`/api/*`** → Railway (`https://rexalgo-production.up.railway.app` — **edit this** if your API host changes).
-   - Rewrites other paths to **`/index.html`** so React Router deep links don’t return Vercel **404 NOT_FOUND** on refresh.
+1. With **Root Directory = `frontend`**, the repo uses **[`frontend/vercel.ts`](../frontend/vercel.ts)** (build-time config):
+   - Set **`API_UPSTREAM`** in Vercel (Preview + Production) to your Railway API origin, **no trailing slash** (e.g. `https://rexalgo-production.up.railway.app`). That value is baked into **`/api/*`** rewrites at deploy time.
+   - **Rewrites** (not legacy **`routes`**) are used so **`/assets/*.js`** is still served from `dist/` — otherwise the SPA catch-all returns **HTML for JS** and you get a **blank white page**.
 
-   Or set the same rules under **Vercel → Project → Settings → Rewrites**.
-
-2. **Root Directory** for the Vercel project must be **`frontend`** so `vercel.json` is picked up. Commit/push so Vercel redeploys.
+2. **Root Directory** must be **`frontend`** so Vercel picks up `vercel.ts`. Commit/push so Vercel redeploys.
 3. In **Railway → Variables**, set  
    **`PUBLIC_APP_URL=https://rex-algo-frontend.vercel.app`**  
    so Master/Strategy studio show webhook URLs that hit Vercel → rewrite → Railway.
