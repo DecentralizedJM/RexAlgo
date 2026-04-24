@@ -1,12 +1,18 @@
 /**
  * Client-side rate limiter for outbound Mudrex traffic.
  *
- * Mudrex (v1.0.4) enforces per-API-key caps split across two tiers:
+ * Mudrex (docs v1.0.5) enforces per-API-key caps split across two tiers:
  *
  *   Enhanced  —  5 req/s,  125 req/min,  2 500 req/hour,  25 000 req/day
  *   Standard  —  2 req/s,   50 req/min,  1 000 req/hour,  10 000 req/day
  *
- * Endpoints in the Enhanced tier (per docs):
+ * Enhanced tier matches the official “selected endpoints” list (same numeric
+ * caps as v1.0.4). We map each outbound path under `/fapi/v1` to Enhanced when
+ * it corresponds to:
+ *   Create order · Cancel order · Add/reduce margin · Set/edit SL/TP (riskorder)
+ *   · Reverse · Partial close · Square off (full close) · Get/set leverage
+ *
+ * Regex mapping (path = portion after `/fapi/v1`, query stripped):
  *   POST   /futures/:id/order
  *   DELETE /futures/orders/:id
  *   POST   /futures/positions/:id/add-margin
@@ -18,7 +24,7 @@
  *   GET    /futures/:id/leverage
  *   POST   /futures/:id/leverage
  *
- * Everything else falls in the Standard tier.
+ * Everything else (wallet, asset list, open orders list, liq-price, …) is Standard.
  *
  * Design:
  * - In-memory sliding-window limiter with per-(apiKey, tier) state and a FIFO
@@ -28,7 +34,7 @@
  *   Redis-backed implementation later without touching callers.
  *
  * @see https://docs.trade.mudrex.com/docs/authentication-rate-limits
- * @see https://docs.trade.mudrex.com/docs/changelogs (v1.0.4)
+ * @see https://docs.trade.mudrex.com/docs/changelogs
  */
 
 export type MudrexTier = "enhanced" | "standard";

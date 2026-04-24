@@ -10,7 +10,7 @@ All outbound calls to `https://trade.mudrex.com/fapi/v1/...` **must** go through
 `mudrexFetch` in `src/lib/mudrex.ts`. Do not call `fetch("https://trade.mudrex.com/…")`
 directly anywhere else — the client applies the per-API-key, per-tier rate
 limiter in `src/lib/mudrexRateLimit.ts` (Enhanced vs Standard per Mudrex
-v1.0.4) and retry/backoff logic you would otherwise duplicate.
+v1.0.5) and retry/backoff logic you would otherwise duplicate.
 
 When you add a new Mudrex endpoint:
 
