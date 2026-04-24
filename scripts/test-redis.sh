@@ -63,7 +63,7 @@ const r = new Redis(url, {
   maxRetriesPerRequest: 1,
   tls,
 });
-r.on("error", () => {});
+r.on('error', () => {});
 r.ping()
   .then((p) => {
     console.log('OK — PING reply:', p);
