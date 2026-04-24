@@ -61,7 +61,12 @@ try {
   if (!x.hostname) throw new Error('missing host');
   process.exit(0);
 } catch (e) {
-  console.error('DATABASE_URL is not a valid postgres URL (check quotes, typos, and use the public host from Railway, not postgres.railway.internal from your Mac).');
+  console.error('DATABASE_URL is not a valid URL for this check.');
+  console.error('');
+  console.error('Common mistake: the port must be digits (usually 5432), not the word PORT from a copy-pasted example.');
+  console.error('Use your real Railway string: Dashboard → Postgres → Variables (DATABASE_PUBLIC_URL) or Connect.');
+  console.error('From a Mac, do not use postgres.railway.internal unless you use a tunnel.');
+  console.error('If the password has @ # % etc., URL-encode those characters.');
   process.exit(1);
 }
 "; then
