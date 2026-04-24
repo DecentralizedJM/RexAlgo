@@ -85,12 +85,36 @@ async function runBackfillLocked(
   let skipped = 0;
   for (const row of targets) {
     if (!row.apiSecretEncrypted) continue;
+    // v1 and v2 envelopes always contain ':' (iv:tag:cipher or v2:salt:...).
+    // Seed placeholders like `system-no-api` must never go through decrypt.
+    if (!row.apiSecretEncrypted.includes(":")) {
+      skipped += 1;
+      console.warn(
+        `[user-fingerprint-backfill] skipped user ${row.id}: not an encrypted envelope (placeholder?)`
+      );
+      continue;
+    }
     try {
       const plain = decryptApiSecret(row.apiSecretEncrypted);
       const fingerprint = crypto
         .createHmac("sha256", fingerprintSecret)
         .update(plain, "utf8")
         .digest("hex");
+
+      const [owner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.userSecretFingerprint, fingerprint))
+        .limit(1);
+      if (owner && owner.id !== row.id) {
+        skipped += 1;
+        console.warn(
+          `[user-fingerprint-backfill] skipped user ${row.id}: fingerprint already ` +
+            `owned by ${owner.id} (duplicate Mudrex key across accounts — resolve manually)`
+        );
+        continue;
+      }
+
       await db
         .update(users)
         .set({ userSecretFingerprint: fingerprint })
@@ -98,9 +122,14 @@ async function runBackfillLocked(
       updated += 1;
     } catch (err) {
       skipped += 1;
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? String((err as { code?: string }).code)
+          : "";
+      const msg = err instanceof Error ? err.message : String(err);
       console.warn(
-        `[user-fingerprint-backfill] skipped user ${row.id}:`,
-        err instanceof Error ? err.message : err
+        `[user-fingerprint-backfill] skipped user ${row.id}: ${msg}` +
+          (code ? ` [${code}]` : "")
       );
     }
   }

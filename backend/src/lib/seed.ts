@@ -119,7 +119,8 @@ export async function seedDatabase() {
       id: "system",
       displayName: "RexAlgo Team",
       authProvider: "legacy",
-      apiSecretEncrypted: "system-no-api",
+      /** No Mudrex key — must stay NULL so decrypt/backfill never touches this row. */
+      apiSecretEncrypted: null,
     });
   }
 

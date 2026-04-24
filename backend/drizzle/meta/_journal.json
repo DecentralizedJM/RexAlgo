@@ -71,6 +71,13 @@
       "when": 1776534400000,
       "tag": "0009_user_secret_fingerprint",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776534500000,
+      "tag": "0010_clear_system_user_fake_secret",
+      "breakpoints": true
     }
   ]
 }
