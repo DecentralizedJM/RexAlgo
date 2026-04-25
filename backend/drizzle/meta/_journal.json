@@ -99,6 +99,13 @@
       "when": 1776534800000,
       "tag": "0013_strategies_public_list_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1776534900000,
+      "tag": "0014_master_dashboard_indexes",
+      "breakpoints": true
     }
   ]
 }

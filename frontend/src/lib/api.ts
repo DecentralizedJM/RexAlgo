@@ -579,6 +579,67 @@ export async function fetchStrategy(id: string) {
   return apiFetch<{ strategy: ApiStrategy }>(`/api/strategies/${id}`);
 }
 
+// ─── Master dashboard ────────────────────────────────────────────────
+
+export type MasterDashboardSummary = {
+  totalStrategies: number;
+  activeApprovedStrategies: number;
+  activeSubscribers: number;
+  totalVolumeUsdt: string;
+  recentSignals24h: number;
+  recentMirrorErrors24h: number;
+};
+
+export type MasterDashboardStrategy = {
+  id: string;
+  name: string;
+  type: "copy_trading" | "algo";
+  symbol: string;
+  status: StrategyReviewStatus;
+  isActive: boolean;
+  createdAt: string | null;
+  activeSubscribers: number;
+  totalVolumeUsdt: string;
+  totalSignals: number;
+  signals24h: number;
+  mirrorErrors24h: number;
+  lastSignalAt: string | null;
+  webhookEnabled: boolean;
+  webhookLastDeliveryAt: string | null;
+};
+
+export type MasterDashboardActivity = {
+  signalId: string;
+  strategyId: string;
+  strategyName: string;
+  strategyType: "copy_trading" | "algo";
+  strategySymbol: string;
+  receivedAt: string | null;
+  idempotencyKey: string;
+  action: string | null;
+  symbol: string | null;
+  side: string | null;
+  triggerType: string | null;
+  processed: number;
+  ok: number;
+  errors: number;
+};
+
+export type MasterDashboardPayload = {
+  summary: MasterDashboardSummary;
+  strategies: MasterDashboardStrategy[];
+  recentActivity: MasterDashboardActivity[];
+  telegram: {
+    connected: boolean;
+    notifyEnabled: boolean;
+    username: string | null;
+  };
+};
+
+export async function fetchMasterDashboard() {
+  return apiFetch<MasterDashboardPayload>("/api/master/dashboard");
+}
+
 export async function patchStrategy(
   id: string,
   body: Partial<{

@@ -12,6 +12,7 @@ import { verifyCopyWebhookSignature } from "@/lib/copyWebhookHmac";
 import { parseCopySignalV1, executeMirror } from "@/lib/copyMirror";
 import { checkCopyWebhookRateLimit } from "@/lib/copyWebhookRateLimit";
 import { enforceBodyLimit } from "@/lib/bodyLimit";
+import { queueNotification } from "@/lib/notifications";
 
 function isUniqueViolation(err: unknown): boolean {
   return (
@@ -20,6 +21,48 @@ function isUniqueViolation(err: unknown): boolean {
     "code" in err &&
     (err as { code?: unknown }).code === "23505"
   );
+}
+
+function notifySignalAccepted(
+  creatorId: string,
+  args: {
+    strategyId: string;
+    strategyName: string;
+    signalId: string;
+    action: "open" | "close";
+    symbol: string;
+    side: "LONG" | "SHORT";
+    mirrored: boolean;
+    processed: number;
+    ok: number;
+    errors: number;
+    reason?: string;
+  }
+): void {
+  const status = args.mirrored
+    ? `Processed ${args.processed} subscribers (${args.ok} ok, ${args.errors} errors).`
+    : `Accepted but not mirrored: ${args.reason ?? "not eligible"}.`;
+
+  void queueNotification(creatorId, {
+    kind: "copy_signal_received",
+    text:
+      `Copy signal received for <b>${args.strategyName}</b>\n` +
+      `${args.action.toUpperCase()} ${args.side} ${args.symbol}\n` +
+      `${status}\n` +
+      `Signal: <code>${args.signalId}</code>`,
+    meta: {
+      strategyId: args.strategyId,
+      signalId: args.signalId,
+      action: args.action,
+      symbol: args.symbol,
+      side: args.side,
+      mirrored: args.mirrored,
+      processed: args.processed,
+      ok: args.ok,
+      errors: args.errors,
+      reason: args.reason ?? null,
+    },
+  });
 }
 
 export async function POST(
@@ -138,19 +181,43 @@ export async function POST(
     .where(eq(copyWebhookConfig.strategyId, strategyId));
 
   if (!strategy.isActive || strategy.status !== "approved") {
+    const reason =
+      strategy.status !== "approved" ? "strategy_not_approved" : "strategy_inactive";
+    notifySignalAccepted(strategy.creatorId, {
+      strategyId,
+      strategyName: strategy.name,
+      signalId,
+      action: signal.action,
+      symbol: signal.symbol,
+      side: signal.side,
+      mirrored: false,
+      processed: 0,
+      ok: 0,
+      errors: 0,
+      reason,
+    });
     return NextResponse.json({
       ok: true,
       mirrored: false,
-      reason:
-        strategy.status !== "approved"
-          ? "strategy_not_approved"
-          : "strategy_inactive",
+      reason,
       signalId,
       summary: { processed: 0, ok: 0, errors: 0 },
     });
   }
 
   const summary = await executeMirror(strategy, signal, signalId);
+  notifySignalAccepted(strategy.creatorId, {
+    strategyId,
+    strategyName: strategy.name,
+    signalId,
+    action: signal.action,
+    symbol: signal.symbol,
+    side: signal.side,
+    mirrored: true,
+    processed: summary.processed,
+    ok: summary.ok,
+    errors: summary.errors,
+  });
 
   return NextResponse.json({
     ok: true,

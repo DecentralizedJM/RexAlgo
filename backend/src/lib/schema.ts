@@ -153,20 +153,24 @@ export const strategies = pgTable("strategies", {
     .defaultNow(),
 });
 
-export const subscriptions = pgTable("subscriptions", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  strategyId: text("strategy_id")
-    .notNull()
-    .references(() => strategies.id, { onDelete: "cascade" }),
-  marginPerTrade: text("margin_per_trade").notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-    .notNull()
-    .defaultNow(),
-});
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    strategyId: text("strategy_id")
+      .notNull()
+      .references(() => strategies.id, { onDelete: "cascade" }),
+    marginPerTrade: text("margin_per_trade").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("subscriptions_strategy_active_idx").on(t.strategyId, t.isActive)]
+);
 
 /**
  * Forward-looking local ledger of every order RexAlgo placed on the user's behalf.
@@ -211,7 +215,10 @@ export const tradeLogs = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("trade_logs_user_created_idx").on(t.userId, t.createdAt)]
+  (t) => [
+    index("trade_logs_user_created_idx").on(t.userId, t.createdAt),
+    index("trade_logs_strategy_created_idx").on(t.strategyId, t.createdAt),
+  ]
 );
 
 /** Webhook signing secret (encrypted) for master’s external bot. */
@@ -248,24 +255,37 @@ export const copySignalEvents = pgTable(
       .defaultNow(),
     clientIp: text("client_ip"),
   },
-  (t) => [uniqueIndex("copy_signal_strategy_idem").on(t.strategyId, t.idempotencyKey)]
+  (t) => [
+    uniqueIndex("copy_signal_strategy_idem").on(t.strategyId, t.idempotencyKey),
+    index("copy_signal_events_strategy_received_idx").on(t.strategyId, t.receivedAt),
+  ]
 );
 
-export const copyMirrorAttempts = pgTable("copy_mirror_attempts", {
-  id: text("id").primaryKey(),
-  signalId: text("signal_id")
-    .notNull()
-    .references(() => copySignalEvents.id, { onDelete: "cascade" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  status: text("status", { enum: ["ok", "error"] }).notNull(),
-  detail: text("detail").notNull(),
-  mudrexOrderId: text("mudrex_order_id"),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-    .notNull()
-    .defaultNow(),
-});
+export const copyMirrorAttempts = pgTable(
+  "copy_mirror_attempts",
+  {
+    id: text("id").primaryKey(),
+    signalId: text("signal_id")
+      .notNull()
+      .references(() => copySignalEvents.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    status: text("status", { enum: ["ok", "error"] }).notNull(),
+    detail: text("detail").notNull(),
+    mudrexOrderId: text("mudrex_order_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("copy_mirror_attempts_signal_status_created_idx").on(
+      t.signalId,
+      t.status,
+      t.createdAt
+    ),
+  ]
+);
 
 /**
  * Master Studio access requests (Phase 2).

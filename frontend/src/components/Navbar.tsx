@@ -73,12 +73,14 @@ export default function Navbar() {
   const { mudrexKeyInvalid } = useMudrexKeyInvalid();
   const showMudrexKeyBanner =
     Boolean(user) && mudrexKeyInvalid && location.pathname !== "/auth";
+  const onMasterDashboard = location.pathname.startsWith("/master-studio/dashboard");
   const onStrategyStudio = location.pathname.startsWith("/marketplace/studio");
   const onCopyStudio = location.pathname.startsWith("/copy-trading/studio");
   const onMasterAccessRequest = location.pathname.startsWith(
     "/master-studio/request"
   );
-  const studioActive = onStrategyStudio || onCopyStudio || onMasterAccessRequest;
+  const studioActive =
+    onMasterDashboard || onStrategyStudio || onCopyStudio || onMasterAccessRequest;
   const masterApproved = user?.masterAccess === "approved" || user?.isAdmin === true;
 
   useLayoutEffect(() => {
@@ -174,6 +176,15 @@ export default function Navbar() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="w-44">
+                <DropdownMenuItem
+                  className={`flex items-center justify-between ${
+                    onMasterDashboard ? "bg-secondary text-foreground" : ""
+                  }`}
+                  onSelect={() => navigate("/master-studio/dashboard")}
+                >
+                  Dashboard
+                  {onMasterDashboard && <Check className="h-4 w-4" aria-hidden />}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   className={`flex items-center justify-between ${
                     onStrategyStudio ? "bg-secondary text-foreground" : ""
@@ -441,9 +452,21 @@ export default function Navbar() {
                   Master studio
                 </p>
                 <Link
-                  to="/marketplace/studio"
+                  to="/master-studio/dashboard"
                   onClick={() => setMobileOpen(false)}
                   className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    onMasterDashboard
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Dashboard
+                  {onMasterDashboard && <Check className="h-4 w-4" aria-hidden />}
+                </Link>
+                <Link
+                  to="/marketplace/studio"
+                  onClick={() => setMobileOpen(false)}
+                  className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     onStrategyStudio
                       ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground"

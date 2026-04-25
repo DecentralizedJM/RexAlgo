@@ -18,6 +18,7 @@ import MarketplacePage from "./pages/MarketplacePage";
 import MarketplaceStudioPage from "./pages/MarketplaceStudioPage";
 import CopyTradingPage from "./pages/CopyTradingPage";
 import CopyTradingStudioPage from "./pages/CopyTradingStudioPage";
+import MasterDashboardPage from "./pages/MasterDashboardPage";
 import MasterAccessRequestPage from "./pages/MasterAccessRequestPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import TvWebhooksPage from "./pages/TvWebhooksPage";
@@ -60,6 +61,7 @@ const App = () => (
               <Route path="/marketplace/studio" element={<MarketplaceStudioPage />} />
               <Route path="/copy-trading" element={<CopyTradingPage />} />
               <Route path="/copy-trading/studio" element={<CopyTradingStudioPage />} />
+              <Route path="/master-studio/dashboard" element={<MasterDashboardPage />} />
               <Route path="/master-studio/request" element={<MasterAccessRequestPage />} />
               <Route path="/admin" element={<AdminDashboardPage />} />
               <Route path="/tv-webhooks" element={<TvWebhooksPage />} />
