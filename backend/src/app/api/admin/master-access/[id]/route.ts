@@ -5,6 +5,7 @@ import { blockIfNotAdmin } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { masterAccessRequests } from "@/lib/schema";
 import { queueNotification } from "@/lib/notifications";
+import { logAdminAudit } from "@/lib/adminAudit";
 
 /**
  * Approve or reject a master-studio access request.
@@ -73,6 +74,24 @@ export async function POST(
           (body.note ? `\nNote: ${String(body.note).slice(0, 400)}` : ""),
   });
 
+  void logAdminAudit({
+    actorUserId: session.user.id,
+    action:
+      nextStatus === "approved"
+        ? "master_access.review.approve"
+        : "master_access.review.reject",
+    targetType: "master_access_request",
+    targetId: id,
+    detail: {
+      userId: existing.userId,
+      nextStatus,
+      note:
+        typeof body.note === "string" && body.note.trim().length > 0
+          ? body.note.trim().slice(0, 500)
+          : undefined,
+    },
+  });
+
   return NextResponse.json({ ok: true, id, status: nextStatus });
 }
 
@@ -103,6 +122,17 @@ export async function DELETE(
   }
 
   await db.delete(masterAccessRequests).where(eq(masterAccessRequests.id, id));
+
+  void logAdminAudit({
+    actorUserId: session.user.id,
+    action: "master_access.request.delete",
+    targetType: "master_access_request",
+    targetId: id,
+    detail: {
+      userId: existing.userId,
+      previousStatus: existing.status,
+    },
+  });
 
   if (existing.status === "approved") {
     void queueNotification(existing.userId, {

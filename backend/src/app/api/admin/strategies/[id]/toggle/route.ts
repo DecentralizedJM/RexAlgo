@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { blockIfNotAdmin } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { strategies } from "@/lib/schema";
+import { logAdminAudit } from "@/lib/adminAudit";
+import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 
 /**
  * Flip `strategies.is_active` (admin only). Optional body `{ active: boolean }`
@@ -45,5 +47,14 @@ export async function POST(
     .set({ isActive: nextActive })
     .where(eq(strategies.id, id));
 
+  void logAdminAudit({
+    actorUserId: session.user.id,
+    action: "strategy.toggle_active",
+    targetType: "strategy",
+    targetId: id,
+    detail: { isActive: nextActive, previousActive: existing.isActive },
+  });
+
+  revalidatePublicStrategiesList();
   return NextResponse.json({ ok: true, id, isActive: nextActive });
 }

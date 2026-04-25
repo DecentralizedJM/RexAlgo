@@ -10,6 +10,7 @@ import {
 } from "@/lib/backtest/spec";
 import { validateStrategyPatch } from "@/lib/strategyValidation";
 import { queueNotification } from "@/lib/notifications";
+import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 
 /**
  * Fields that materially change what a strategy will *do* to subscribers.
@@ -178,6 +179,7 @@ export async function PATCH(
     }
 
     await db.update(strategies).set(patch).where(eq(strategies.id, id));
+    revalidatePublicStrategiesList();
 
     const [updated] = await db
       .select()

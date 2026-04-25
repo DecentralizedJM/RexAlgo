@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
 import { v4 as uuidv4 } from "uuid";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -10,33 +11,70 @@ import {
   serializeBacktestSpec,
 } from "@/lib/backtest/spec";
 import { validateStrategyCreate } from "@/lib/strategyValidation";
+import {
+  PUBLIC_STRATEGIES_CACHE_TAG,
+  revalidatePublicStrategiesList,
+} from "@/lib/publicStrategiesCache";
+
+const PUBLIC_STRATEGIES_REVALIDATE_SEC = Math.min(
+  120,
+  Math.max(1, Number.parseInt(process.env.REXALGO_PUBLIC_STRATEGIES_CACHE_SEC ?? "5", 10))
+);
+
+const loadPublicStrategies = unstable_cache(
+  async (typeKey: string, creatorKey: string) => {
+    const conditions = [
+      eq(strategies.status, "approved" as const),
+      eq(strategies.isActive, true),
+    ];
+    if (typeKey === "copy_trading" || typeKey === "algo") {
+      conditions.push(eq(strategies.type, typeKey));
+    }
+    if (creatorKey !== "__all__" && creatorKey !== "__none__") {
+      conditions.push(eq(strategies.creatorId, creatorKey));
+    }
+    if (creatorKey === "__none__") {
+      return [] as (typeof strategies.$inferSelect)[];
+    }
+    return db
+      .select()
+      .from(strategies)
+      .where(and(...conditions))
+      .orderBy(desc(strategies.createdAt));
+  },
+  ["public-strategies-list-query"],
+  {
+    revalidate: PUBLIC_STRATEGIES_REVALIDATE_SEC,
+    tags: [PUBLIC_STRATEGIES_CACHE_TAG],
+  }
+);
+
+function listingCacheKeys(type: string | null, creatorId: string | null) {
+  const typeKey =
+    type === "copy_trading" || type === "algo" ? type : "__all__";
+  if (!creatorId) return { typeKey, creatorKey: "__all__" as const };
+  if (creatorId.length > 128 || !/^[a-zA-Z0-9_-]+$/.test(creatorId)) {
+    return { typeKey, creatorKey: "__none__" as const };
+  }
+  return { typeKey, creatorKey: creatorId };
+}
 
 export async function GET(req: NextRequest) {
   const type = req.nextUrl.searchParams.get("type");
   const creatorId = req.nextUrl.searchParams.get("creatorId");
 
   try {
-    // Push the approved-and-active gate into SQL so we don't hydrate
-    // pending/rejected drafts into Node memory. Type + creatorId narrow
-    // further at the query level instead of post-filtering in JS.
-    const conditions = [
-      eq(strategies.status, "approved" as const),
-      eq(strategies.isActive, true),
-    ];
-    if (type === "copy_trading" || type === "algo") {
-      conditions.push(eq(strategies.type, type));
-    }
-    if (creatorId) {
-      conditions.push(eq(strategies.creatorId, creatorId));
-    }
+    const { typeKey, creatorKey } = listingCacheKeys(type, creatorId);
+    const filtered = await loadPublicStrategies(typeKey, creatorKey);
 
-    const filtered = await db
-      .select()
-      .from(strategies)
-      .where(and(...conditions))
-      .orderBy(desc(strategies.createdAt));
-
-    return NextResponse.json({ strategies: filtered });
+    return NextResponse.json(
+      { strategies: filtered },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=5, stale-while-revalidate=30",
+        },
+      }
+    );
   } catch (error) {
     console.error("Strategies fetch error:", error);
     return NextResponse.json({ error: "Failed to fetch strategies" }, { status: 500 });
@@ -97,6 +135,8 @@ export async function POST(req: NextRequest) {
       .select()
       .from(strategies)
       .where(eq(strategies.id, id));
+
+    revalidatePublicStrategiesList();
 
     return NextResponse.json({ strategy: created }, { status: 201 });
   } catch (error) {

@@ -14,6 +14,8 @@
     "dev": "concurrently -k -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
     "build": "npm run build -w @rexalgo/frontend && npm run build -w @rexalgo/backend",
     "lint": "npm run lint -w @rexalgo/frontend --if-present && npm run lint -w @rexalgo/backend --if-present",
+    "load:prod-readiness": "k6 run scripts/load/production-readiness.k6.js",
+    "load:prod-readiness:smoke": "node scripts/load/production-readiness-smoke.mjs",
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f"

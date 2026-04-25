@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import MudrexKeyInvalidWatcher from "@/components/MudrexKeyInvalidWatcher";
 import { MudrexKeyInvalidProvider } from "@/contexts/MudrexKeyInvalidContext";
+import { installGlobalTelemetry } from "@/lib/telemetry";
 import LandingPage from "./pages/LandingPage";
 import AboutPage from "./pages/AboutPage";
 import AuthPage from "./pages/AuthPage";
@@ -35,6 +36,8 @@ const queryClient = new QueryClient({
 });
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+
+installGlobalTelemetry();
 
 const App = () => (
   <ErrorBoundary>

@@ -39,7 +39,6 @@ export default function CopyTradingPage() {
       const creator = (s.creatorName || "").trim().toLowerCase();
       const strategy = (s.name || "").trim().toLowerCase();
       if (creator.length < 2 || strategy.length < 2) return false;
-      if (creator === "hfhfh" || strategy === "hfhfh") return false;
       return true;
     })
     .map(mapCopyStrategy);

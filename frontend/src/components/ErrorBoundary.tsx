@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { reportClientEvent } from "@/lib/telemetry";
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
@@ -15,6 +16,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[RexAlgo]", error, info.componentStack);
+    reportClientEvent({
+      type: "react_error",
+      message: error.message,
+      data: { componentStack: info.componentStack.slice(0, 2000) },
+    });
   }
 
   render() {

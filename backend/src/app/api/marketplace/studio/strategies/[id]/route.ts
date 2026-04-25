@@ -8,6 +8,7 @@ import {
   parseBacktestSpecFromBody,
   serializeBacktestSpec,
 } from "@/lib/backtest/spec";
+import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 
 /**
  * Marketplace (algo) studio per-strategy route.
@@ -143,6 +144,7 @@ export async function PATCH(
   }
 
   await db.update(strategies).set(patch).where(eq(strategies.id, id));
+  revalidatePublicStrategiesList();
 
   const [updated] = await db.select().from(strategies).where(eq(strategies.id, id));
   return NextResponse.json({ strategy: updated });
@@ -177,6 +179,7 @@ export async function DELETE(
   }
 
   await db.delete(strategies).where(eq(strategies.id, id));
+  revalidatePublicStrategiesList();
 
   return NextResponse.json({ ok: true, id });
 }

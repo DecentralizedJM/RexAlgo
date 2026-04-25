@@ -363,16 +363,48 @@ export const notificationsOutbox = pgTable("notifications_outbox", {
   kind: text("kind").notNull(),
   channel: text("channel", { enum: ["telegram"] }).notNull().default("telegram"),
   payloadJson: text("payload_json").notNull(),
-  status: text("status", { enum: ["queued", "sent", "failed", "skipped"] })
+  status: text("status", {
+    enum: ["queued", "processing", "sent", "failed", "skipped"],
+  })
     .notNull()
     .default("queued"),
   attempts: integer("attempts").notNull().default(0),
+  /** Consecutive soft delivery failures for this row (resets on successful send). */
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  /** When set and in the future, the worker skips this row until the timestamp. */
+  nextRetryAt: timestamp("next_retry_at", { withTimezone: true, mode: "date" }),
+  /** Lease expiry for replica-safe outbox workers. */
+  processingExpiresAt: timestamp("processing_expires_at", {
+    withTimezone: true,
+    mode: "date",
+  }),
   lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),
   sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }),
 });
+
+/**
+ * Append-only log of admin mutations (strategy review, toggles, master access, etc.).
+ */
+export const adminAuditLog = pgTable(
+  "admin_audit_log",
+  {
+    id: text("id").primaryKey(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    targetType: text("target_type"),
+    targetId: text("target_id"),
+    detailJson: text("detail_json"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("admin_audit_log_created_at_idx").on(t.createdAt)]
+);
 
 /**
  * Server-side session rows for the browser cookie (`rexalgo_session`).

@@ -39,7 +39,6 @@ export default function MarketplacePage() {
     const normalizedName = (s.name || "").trim().toLowerCase();
     if (!s.isActive) return false;
     if (normalizedName.length < 2) return false;
-    if (normalizedName === "hfhfh") return false;
     return true;
   });
   const getSortValue = (

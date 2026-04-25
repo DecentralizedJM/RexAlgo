@@ -27,7 +27,7 @@ import { ArrowRight, Loader2, ShieldCheck, Clock, XCircle } from "lucide-react";
 function isValidPhone(value: string): boolean {
   const t = value.trim();
   if (t.length === 0 || t.length > 40) return false;
-  if (!/^[+\d\s()\-]+$/.test(t)) return false;
+  if (!/^[+\d\s()-]+$/.test(t)) return false;
   return t.replace(/\D/g, "").length >= 6;
 }
 

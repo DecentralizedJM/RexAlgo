@@ -8,6 +8,7 @@ import {
   StrategySlotLimitError,
   assertStrategySlotAvailable,
 } from "@/lib/quotas";
+import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 
 /**
  * POST /api/marketplace/studio/strategies/[id]/resubmit
@@ -74,6 +75,8 @@ export async function POST(
       reviewedAt: null,
     })
     .where(eq(strategies.id, id));
+
+  revalidatePublicStrategiesList();
 
   const [updated] = await db
     .select()

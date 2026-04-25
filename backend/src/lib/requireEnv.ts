@@ -62,6 +62,11 @@ export function requireSecretEnv(name: string): string {
   );
 }
 
+/** Like {@link requireSecretEnv}, but for required non-secret configuration. */
+export function requireConfiguredEnv(name: string): string {
+  return requireSecretEnv(name);
+}
+
 /** Like {@link requireSecretEnv} but returns `null` when unset (opt-in). */
 export function optionalEnv(name: string): string | null {
   const raw = process.env[name];

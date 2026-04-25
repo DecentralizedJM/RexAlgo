@@ -36,6 +36,8 @@
  * @see https://docs.trade.mudrex.com/docs/authentication-rate-limits
  * @see https://docs.trade.mudrex.com/docs/changelogs
  */
+import crypto from "crypto";
+import { getRedis } from "@/lib/redis";
 
 export type MudrexTier = "enhanced" | "standard";
 
@@ -409,6 +411,114 @@ class InMemoryMudrexRateLimiter implements MudrexRateLimiter {
   }
 }
 
+const ACQUIRE_LUA = `
+local now = tonumber(ARGV[1])
+local ttlPad = tonumber(ARGV[2])
+local maxWait = tonumber(ARGV[3])
+local maxTtl = 0
+for i = 1, #KEYS do
+  local current = tonumber(redis.call('GET', KEYS[i]) or '0')
+  local limit = tonumber(ARGV[3 + i])
+  if current >= limit then
+    local ttl = redis.call('PTTL', KEYS[i])
+    if ttl < 0 then ttl = ttlPad end
+    if ttl > maxTtl then maxTtl = ttl end
+  end
+end
+if maxTtl > 0 then
+  if maxTtl > maxWait then return {0, maxTtl} end
+  return {0, maxTtl}
+end
+for i = 1, #KEYS do
+  local ttl = tonumber(ARGV[7 + i])
+  local v = redis.call('INCR', KEYS[i])
+  if v == 1 then redis.call('PEXPIRE', KEYS[i], ttl + ttlPad) end
+end
+return {1, 0}
+`;
+
+class RedisMudrexRateLimiter implements MudrexRateLimiter {
+  constructor(private readonly config: RateLimiterConfig) {}
+
+  private keyPrefix(apiKey: string, tier: MudrexTier, now: number): {
+    keys: string[];
+    ttls: number[];
+  } {
+    const apiHash = crypto.createHash("sha256").update(apiKey).digest("hex");
+    const sec = now - (now % 1000);
+    const min = now - (now % 60_000);
+    const hour = now - (now % 3_600_000);
+    const day = now - (now % 86_400_000);
+    return {
+      keys: [
+        `rexalgo:mudrexrl:${apiHash}:${tier}:s:${sec}`,
+        `rexalgo:mudrexrl:${apiHash}:${tier}:m:${min}`,
+        `rexalgo:mudrexrl:${apiHash}:${tier}:h:${hour}`,
+        `rexalgo:mudrexrl:${apiHash}:${tier}:d:${day}`,
+      ],
+      ttls: [1000, 60_000, 3_600_000, 86_400_000],
+    };
+  }
+
+  private limits(tier: MudrexTier): TierLimits {
+    return tier === "enhanced" ? this.config.enhanced : this.config.standard;
+  }
+
+  async acquire(
+    apiKey: string,
+    tier: MudrexTier,
+    opts?: MudrexAcquireOptions
+  ): Promise<void> {
+    const redis = getRedis();
+    if (!redis) {
+      throw new MudrexRateLimitExceededError(1000);
+    }
+    const maxWait = opts?.maxWaitMs ?? this.config.maxWaitInteractiveMs;
+    const deadline = Date.now() + Math.max(0, maxWait);
+    const limits = this.limits(tier);
+    while (true) {
+      if (opts?.signal?.aborted) throw new MudrexRateLimitAbortedError();
+      const now = Date.now();
+      const { keys, ttls } = this.keyPrefix(apiKey, tier, now);
+      const result = (await redis.eval(
+        ACQUIRE_LUA,
+        keys.length,
+        ...keys,
+        String(now),
+        "1000",
+        String(Math.max(0, deadline - now)),
+        String(limits.perSec),
+        String(limits.perMin),
+        String(limits.perHour),
+        String(limits.perDay),
+        ...ttls.map(String)
+      )) as [number, number];
+      if (Number(result[0]) === 1) return;
+      const waitMs = Math.max(1, Number(result[1]) || 1000);
+      if (now + waitMs > deadline) {
+        throw new MudrexRateLimitExceededError(waitMs);
+      }
+      await sleep(Math.min(waitMs, 500));
+    }
+  }
+
+  penalise(apiKey: string, tier: MudrexTier, n: number = 1): void {
+    const redis = getRedis();
+    if (!redis) return;
+    const now = Date.now();
+    const { keys, ttls } = this.keyPrefix(apiKey, tier, now);
+    void redis
+      .multi(
+        keys.flatMap((key, i) => [
+          ["incrby", key, String(Math.max(1, n | 0))],
+          ["pexpire", key, String(ttls[i] + 1000)],
+        ])
+      )
+      .exec()
+      .catch(() => {});
+  }
+}
+
 // ─── Singleton (lazy) ────────────────────────────────────────────────
 
 type GlobalWithLimiter = typeof globalThis & {
@@ -423,7 +533,10 @@ type GlobalWithLimiter = typeof globalThis & {
 export function getMudrexRateLimiter(): MudrexRateLimiter {
   const g = globalThis as GlobalWithLimiter;
   if (!g.__mudrexRateLimiter) {
-    g.__mudrexRateLimiter = new InMemoryMudrexRateLimiter(loadConfig());
+    const cfg = loadConfig();
+    g.__mudrexRateLimiter = getRedis()
+      ? new RedisMudrexRateLimiter(cfg)
+      : new InMemoryMudrexRateLimiter(cfg);
   }
   return g.__mudrexRateLimiter;
 }

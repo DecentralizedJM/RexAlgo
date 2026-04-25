@@ -13,6 +13,15 @@ import { parseCopySignalV1, executeMirror } from "@/lib/copyMirror";
 import { checkCopyWebhookRateLimit } from "@/lib/copyWebhookRateLimit";
 import { enforceBodyLimit } from "@/lib/bodyLimit";
 
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "23505"
+  );
+}
+
 export async function POST(
   req: NextRequest,
   ctx: { params: Promise<{ strategyId: string }> }
@@ -104,13 +113,24 @@ export async function POST(
     req.headers.get("x-real-ip") ||
     "unknown";
 
-  await db.insert(copySignalEvents).values({
-    id: signalId,
-    strategyId,
-    idempotencyKey: signal.idempotency_key,
-    payloadJson: rawBody,
-    clientIp,
-  });
+  try {
+    await db.insert(copySignalEvents).values({
+      id: signalId,
+      strategyId,
+      idempotencyKey: signal.idempotency_key,
+      payloadJson: rawBody,
+      clientIp,
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      return NextResponse.json({
+        ok: true,
+        duplicate: true,
+        message: "Already processed",
+      });
+    }
+    throw err;
+  }
 
   await db
     .update(copyWebhookConfig)

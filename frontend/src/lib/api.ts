@@ -4,6 +4,8 @@
  * @see vite.config.ts | README.md#development | README.md#architecture
  */
 
+import { reportClientEvent } from "@/lib/telemetry";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -65,6 +67,12 @@ export async function apiFetch<T = unknown>(
       typeof data === "object" && data && "error" in data && data.error
         ? String(data.error)
         : res.statusText;
+    reportClientEvent({
+      type: "api_error",
+      message: msg,
+      requestId: res.headers.get("x-request-id") ?? undefined,
+      data: { path, status: res.status },
+    });
     throw new ApiError(msg, res.status, data);
   }
   return data as T;
@@ -146,9 +154,15 @@ export async function getMe(): Promise<SessionMe> {
   const data = (await res.json().catch(() => ({}))) as {
     user?: SessionUser | null;
     sessionExpiresAt?: string | null;
+    error?: string;
   };
   if (!res.ok) {
-    return { user: null, sessionExpiresAt: null };
+    if (res.status === 401) return { user: null, sessionExpiresAt: null };
+    throw new ApiError(
+      data.error ? String(data.error) : res.statusText,
+      res.status,
+      data
+    );
   }
   return {
     user: data.user ?? null,
@@ -427,6 +441,20 @@ export type AdminUserDetail = {
 
 export async function fetchAdminUserDetail(id: string) {
   return apiFetch<AdminUserDetail>(`/api/admin/users/${id}`);
+}
+
+export type AdminAuditEntry = {
+  id: string;
+  actorUserId: string;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  detail: unknown;
+  createdAt: string;
+};
+
+export async function fetchAdminAudit() {
+  return apiFetch<{ entries: AdminAuditEntry[] }>("/api/admin/audit");
 }
 
 // ─── Strategies ─────────────────────────────────────────────────────
@@ -841,6 +869,38 @@ export async function fetchPositionHistory() {
   return apiFetch<{ positions: ApiPosition[] }>(
     "/api/mudrex/positions?history=true"
   );
+}
+
+/** Body for `POST /api/mudrex/orders` (place order — not cancel). */
+export type PostMudrexPlaceOrderBody = {
+  symbol: string;
+  side: string;
+  quantity: string;
+  leverage?: string;
+  triggerType?: string;
+  price?: string;
+  stoplosPrice?: string;
+  takeprofitPrice?: string;
+  reduceOnly?: boolean;
+};
+
+/**
+ * Places a futures order via RexAlgo. Sends a fresh `Idempotency-Key` per call
+ * so double-submit / retry replays the same result for ~60s (server-side dedupe).
+ */
+export async function postMudrexPlaceOrder(body: PostMudrexPlaceOrderBody) {
+  return apiFetch<{ order: Record<string, unknown> }>("/api/mudrex/orders", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "Idempotency-Key": crypto.randomUUID() },
+  });
+}
+
+export async function postMudrexCancelOrder(orderId: string) {
+  return apiFetch<{ success: boolean }>("/api/mudrex/orders", {
+    method: "POST",
+    body: JSON.stringify({ action: "cancel", orderId }),
+  });
 }
 
 export type SubscriptionStrategySummary = {

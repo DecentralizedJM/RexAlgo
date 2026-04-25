@@ -42,7 +42,10 @@ const COOKIE_NAME = "rexalgo_session";
  *   - `Cross-Origin-Opener-Policy: same-origin` — isolates the window group
  *     so popups (e.g. Google OAuth) can't poke at our window object.
  */
-function applySecurityHeaders(res: NextResponse): NextResponse {
+function applySecurityHeaders(res: NextResponse, requestId?: string): NextResponse {
+  if (requestId) {
+    res.headers.set("X-Request-Id", requestId);
+  }
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -58,9 +61,20 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const incomingRid = req.headers.get("x-request-id")?.trim();
+  const requestId =
+    incomingRid && incomingRid.length > 0 && incomingRid.length <= 128
+      ? incomingRid
+      : globalThis.crypto.randomUUID();
+
+  const forwardHeaders = new Headers(req.headers);
+  forwardHeaders.set("x-request-id", requestId);
 
   if (pathname.startsWith("/api/strategies") && req.method === "GET") {
-    return applySecurityHeaders(NextResponse.next());
+    return applySecurityHeaders(
+      NextResponse.next({ request: { headers: forwardHeaders } }),
+      requestId
+    );
   }
 
   if (
@@ -71,28 +85,31 @@ export async function middleware(req: NextRequest) {
     const token = req.cookies.get(COOKIE_NAME)?.value;
 
     if (!token) {
-      return applySecurityHeaders(
-        NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      );
+      const res = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return applySecurityHeaders(res, requestId);
     }
 
     try {
       const { payload } = await jwtVerify(token, JWT_SECRET);
       const sid = typeof payload.sid === "string" ? payload.sid : "";
       if (!sid || !sessionJwtIssuedAtAllowed(payload.iat)) {
-        return applySecurityHeaders(
-          NextResponse.json({ error: "Session expired" }, { status: 401 })
-        );
+        const res = NextResponse.json({ error: "Session expired" }, { status: 401 });
+        return applySecurityHeaders(res, requestId);
       }
-      return applySecurityHeaders(NextResponse.next());
-    } catch {
       return applySecurityHeaders(
-        NextResponse.json({ error: "Session expired" }, { status: 401 })
+        NextResponse.next({ request: { headers: forwardHeaders } }),
+        requestId
       );
+    } catch {
+      const res = NextResponse.json({ error: "Session expired" }, { status: 401 });
+      return applySecurityHeaders(res, requestId);
     }
   }
 
-  return applySecurityHeaders(NextResponse.next());
+  return applySecurityHeaders(
+    NextResponse.next({ request: { headers: forwardHeaders } }),
+    requestId
+  );
 }
 
 export const config = {

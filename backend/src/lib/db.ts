@@ -17,6 +17,9 @@ import { Pool } from "pg";
 import path from "path";
 import * as schema from "./schema";
 import { installShutdownHandlers } from "./shutdown";
+import { validateProductionConfig } from "@/lib/productionConfig";
+
+validateProductionConfig();
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -39,10 +42,16 @@ function shouldUseSsl(url: string): boolean {
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  // Raised from 10 to 25 so a single API replica does not bottleneck the DB
-  // under 500+ concurrent users. Tune via `PGPOOL_MAX`; ensure the sum across
-  // replicas stays well under `max_connections` on Postgres.
-  max: Number.parseInt(process.env.PGPOOL_MAX ?? "25", 10),
+  // Default 50 for a single busy replica; set `PGPOOL_MAX` lower per instance
+  // when running multiple API replicas so the sum stays under Postgres
+  // `max_connections` (minus superuser / migration headroom).
+  max: Number.parseInt(process.env.PGPOOL_MAX ?? "50", 10),
+  connectionTimeoutMillis: Number.parseInt(
+    process.env.PG_CONNECTION_TIMEOUT_MS ?? "5000",
+    10
+  ),
+  idleTimeoutMillis: Number.parseInt(process.env.PG_IDLE_TIMEOUT_MS ?? "30000", 10),
+  statement_timeout: Number.parseInt(process.env.PG_STATEMENT_TIMEOUT_MS ?? "30000", 10),
   ssl: shouldUseSsl(DATABASE_URL) ? { rejectUnauthorized: false } : undefined,
 });
 
@@ -56,6 +65,22 @@ export const db: NodePgDatabase<typeof schema> = drizzle(pool, { schema });
 installShutdownHandlers(pool);
 
 let bootPromise: Promise<void> | null = null;
+
+const MIGRATION_ADVISORY_LOCK = 1_917_247_871; // stable 32-bit "rexalgo" lock id
+
+async function migrateWithAdvisoryLock(migrationsFolder: string): Promise<void> {
+  const client = await dbPool.connect();
+  try {
+    await client.query("select pg_advisory_lock($1)", [MIGRATION_ADVISORY_LOCK]);
+    await migrate(db, { migrationsFolder });
+  } finally {
+    try {
+      await client.query("select pg_advisory_unlock($1)", [MIGRATION_ADVISORY_LOCK]);
+    } finally {
+      client.release();
+    }
+  }
+}
 
 /**
  * Ensure schema is up to date + seed data exists. Safe to call many times.
@@ -72,7 +97,7 @@ export function ensureDbReady(): Promise<void> {
       // fail (e.g. missing `user_secret_fingerprint`). Running migrate here
       // self-heals. You can still run `npm run migrate` in pre-deploy as a duplicate.
       const migrationsFolder = path.join(process.cwd(), "drizzle");
-      await migrate(db, { migrationsFolder });
+      await migrateWithAdvisoryLock(migrationsFolder);
       const { seedDatabase } = await import("./seed");
       await seedDatabase();
       const { maybeAutoBackfillUserFingerprints } = await import(

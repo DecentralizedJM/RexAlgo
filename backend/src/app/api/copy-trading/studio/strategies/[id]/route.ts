@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { blockIfNoMasterAccess } from "@/lib/adminAuth";
+import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 import { db } from "@/lib/db";
 import { strategies } from "@/lib/schema";
 
@@ -138,6 +139,7 @@ export async function PATCH(
   }
 
   await db.update(strategies).set(patch).where(eq(strategies.id, id));
+  revalidatePublicStrategiesList();
 
   const [updated] = await db.select().from(strategies).where(eq(strategies.id, id));
   return NextResponse.json({ strategy: updated });
@@ -175,6 +177,7 @@ export async function DELETE(
   // subscriptions. trade_logs.strategyId is ON DELETE SET NULL so historical
   // volume stays on the ledger.
   await db.delete(strategies).where(eq(strategies.id, id));
+  revalidatePublicStrategiesList();
 
   return NextResponse.json({ ok: true, id });
 }

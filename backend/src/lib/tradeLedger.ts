@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { db } from "@/lib/db";
 import { tradeLogs } from "@/lib/schema";
 import type { MudrexOrder } from "@/types";
+import { logger } from "@/lib/logger";
 
 /**
  * Forward-looking local ledger of every order RexAlgo places on behalf of a
@@ -66,11 +67,18 @@ export async function logTrade(args: LogTradeArgs): Promise<void> {
       status: "open",
     });
   } catch (err) {
-    // Best-effort — never bubble up
-    console.error("[trade-ledger] insert failed", {
-      source: args.source,
-      userId: args.userId,
-      err: err instanceof Error ? err.message : String(err),
-    });
+    logger.error(
+      {
+        err: err instanceof Error ? err.message : String(err),
+        payload: {
+          userId: args.userId,
+          source: args.source,
+          strategyId: args.strategyId ?? null,
+          markPriceFallback: args.markPriceFallback ?? null,
+          order: args.order,
+        },
+      },
+      "[trade-ledger] insert failed"
+    );
   }
 }

@@ -11,11 +11,12 @@ import {
   checkAuthRateLimit,
   clientIpFromRequest,
 } from "@/lib/authRateLimit";
+import { requireConfiguredEnv } from "@/lib/requireEnv";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_ID = requireConfiguredEnv("GOOGLE_CLIENT_ID");
 
 interface GoogleTokenInfo {
   aud: string;
@@ -36,7 +37,7 @@ async function verifyGoogleToken(
     );
     if (!res.ok) return null;
     const data = (await res.json()) as GoogleTokenInfo;
-    if (GOOGLE_CLIENT_ID && data.aud !== GOOGLE_CLIENT_ID) return null;
+    if (data.aud !== GOOGLE_CLIENT_ID) return null;
     if (data.email_verified !== "true") return null;
     if (!data.email) return null;
     return data;

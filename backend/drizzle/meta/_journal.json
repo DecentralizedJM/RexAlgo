@@ -78,6 +78,27 @@
       "when": 1776534500000,
       "tag": "0010_clear_system_user_fake_secret",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776534600000,
+      "tag": "0011_notifications_backoff_admin_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1776534700000,
+      "tag": "0012_production_readiness",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1776534800000,
+      "tag": "0013_strategies_public_list_idx",
+      "breakpoints": true
     }
   ]
 }

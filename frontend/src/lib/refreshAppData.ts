@@ -13,6 +13,7 @@ export async function refreshAppData(queryClient: QueryClient): Promise<void> {
         k === "strategy" ||
         k === "marketplace-studio" ||
         k === "copy-studio" ||
+        k === "tv-webhooks" ||
         (k === "session" && q.queryKey[1] === "me")
       );
     },

@@ -5,6 +5,8 @@ import { blockIfNotAdmin } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { strategies, copyWebhookConfig } from "@/lib/schema";
 import { queueNotification } from "@/lib/notifications";
+import { logAdminAudit } from "@/lib/adminAudit";
+import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 
 const MAX_REASON = 500;
 
@@ -85,6 +87,15 @@ export async function POST(
       text: `✅ <b>${existing.name}</b> was approved and is now visible on the marketplace. Enable the webhook from the studio when you are ready to accept signals.`,
     });
 
+    void logAdminAudit({
+      actorUserId: reviewerId,
+      action: "strategy.review.approve",
+      targetType: "strategy",
+      targetId: id,
+      detail: { strategyName: existing.name, creatorId: existing.creatorId },
+    });
+
+    revalidatePublicStrategiesList();
     return NextResponse.json({ ok: true, id, status: "approved" });
   }
 
@@ -118,5 +129,18 @@ export async function POST(
       `\nEdit the listing and resubmit for review from the studio.`,
   });
 
+  void logAdminAudit({
+    actorUserId: reviewerId,
+    action: "strategy.review.reject",
+    targetType: "strategy",
+    targetId: id,
+    detail: {
+      strategyName: existing.name,
+      creatorId: existing.creatorId,
+      reason,
+    },
+  });
+
+  revalidatePublicStrategiesList();
   return NextResponse.json({ ok: true, id, status: "rejected", reason });
 }

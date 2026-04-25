@@ -48,6 +48,7 @@ import {
   deleteAdminStrategy,
   fetchAdminUsers,
   fetchAdminUserDetail,
+  fetchAdminAudit,
   reviewAdminStrategy,
   type AdminMasterAccessRow,
   type AdminStrategyRow,
@@ -115,6 +116,7 @@ export default function AdminDashboardPage() {
             <TabsTrigger value="master-access">Master access</TabsTrigger>
             <TabsTrigger value="strategies">Strategies</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="audit">Audit</TabsTrigger>
           </TabsList>
 
           <TabsContent value="master-access">
@@ -126,9 +128,70 @@ export default function AdminDashboardPage() {
           <TabsContent value="users">
             <UsersTab />
           </TabsContent>
+          <TabsContent value="audit">
+            <AuditTab />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
+  );
+}
+
+function AuditTab() {
+  const q = useQuery({
+    queryKey: ["admin", "audit"],
+    queryFn: fetchAdminAudit,
+    staleTime: 15_000,
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Admin audit log</CardTitle>
+        <CardDescription>
+          Last 100 admin mutations, newest first. Use this for operator review
+          and incident reconstruction.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {q.isLoading && <EmptyNote>Loading audit entries...</EmptyNote>}
+        {q.isError && (
+          <EmptyNote>
+            {q.error instanceof Error ? q.error.message : "Failed to load audit log"}
+          </EmptyNote>
+        )}
+        {q.data?.entries.length === 0 && <EmptyNote>No audit entries yet.</EmptyNote>}
+        {q.data && q.data.entries.length > 0 && (
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Target</TableHead>
+                  <TableHead>Actor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {q.data.entries.map((e) => (
+                  <TableRow key={e.id}>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {new Date(e.createdAt).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{e.action}</TableCell>
+                    <TableCell className="text-xs">
+                      {e.targetType ?? "—"}
+                      {e.targetId ? `:${e.targetId}` : ""}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{e.actorUserId}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
