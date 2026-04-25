@@ -1,9 +1,120 @@
 # Changelog
 
-This changelog tracks the major RexAlgo product, platform, security, and
-deployment changes. Dates use the repository working timezone unless noted.
+This file is the **canonical project history** for RexAlgo: dated milestones,
+major features, security work, and deployment notes. For legal terms see
+[LICENSE](LICENSE). For how to contribute see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## 2026-04-25
+## History at a glance
+
+| Period | Themes |
+|--------|--------|
+| **2026-03** | Monorepo bootstrap, Mudrex integration, Master Studio (strategy + copy), signed webhooks and mirroring, subscriptions, Vercel/Railway wiring, landing and auth UX, CI, early security headers |
+| **2026-04-01 – 2026-04-05** | Routine maintenance commits on the recorded timeline |
+| **2026-04-06 – 2026-04-17** | No commits appear in `git log` for this window on `main` |
+| **2026-04-18** | Postgres cutover, Master Studio access control, admin flows, Telegram groundwork, production documentation |
+| **2026-04-19** | Public listings UX, deploy hardening, dashboard diagnostics, TradingView mark integration (later refined) |
+| **2026-04-20** | Admin v2, TradingView webhooks, quotas, trade ledger, Mudrex tiered rate limiting, Telegram operator scripts |
+| **2026-04-21** | Telegram OAuth and HMAC fixes, session cookie scoping for Vercel→Railway, logout correctness |
+| **2026-04-22 – 2026-04-23** | No commits appear in `git log` for these calendar dates on `main` |
+| **2026-04-24** | Bot-first Telegram login, server-backed sessions, Redis-backed webhook limits, security audit phases, docs refresh |
+| **2026-04-25** | Production readiness bundle, load-test tooling, Master Dashboard, proprietary license and documentation refresh |
+
+---
+
+## 2026-03-21 — Monorepo bootstrap
+
+- Introduced the **Vite + React** frontend with **Next.js** API workspace layout.
+- Added **Mudrex** REST integration, wallet/positions/orders surfaces, and early
+  **dashboard** wiring.
+- Added **copy-trading and algo studios**, **signed copy webhooks**, subscriber
+  mirroring path, and documentation.
+- Added **subscriptions** management, funding warnings, and deploy notes.
+- Wired **Vercel** `frontend/vercel.json` to proxy **`/api`** toward Railway.
+- Added **Mudrex** retry/backoff and wallet staggering for rate-limit resilience.
+- Improved **auth** ergonomics: session length configuration, `/me` session
+  metadata, Mudrex key rotation banner, and clearer sign-in copy.
+- Established **CI** hygiene (`npm ci`, lockfile checks) and fixed ESLint across
+  workspaces.
+- Fixed **Mermaid** diagram compatibility for GitHub rendering.
+- Standardized local dev on **Vite :8080** with built-in **`/api` proxy** to
+  Next **:3000** (replacing earlier gateway experiments).
+
+## 2026-03-22 — 2026-03-31 — Product iteration
+
+- **Landing**: Bybit linear ticker strip, WebSocket fallbacks, footer and stats
+  polish, Framer Motion experiments (later partially reverted for stability).
+- **Market data**: neutral ticker APIs, calmer polling, pill layout tuning.
+- **Auth**: protected-route gating, Google SSO + stable identity, premium Google
+  button styling, cookie clearing improvements.
+- **Brand**: RexAlgo wordmark rollout, favicon PNG, gradient mark assets.
+- **Marketplace**: strategy-bound **backtest** (OHLC + studio UI).
+- **Deploy**: Railway on **`main`**, root **`railway.toml`** + **`Dockerfile.api`**
+  to avoid Railpack ambiguity; Docker standalone layout fixes.
+- **Security**: backend hardening iterations (headers/rate limit/key caching),
+  later refined with reverts where needed; streak log housekeeping entries.
+
+---
+
+## 2026-04-01 — 2026-04-05
+
+- Maintenance cadence commits recorded on these dates (see `git log` for the
+  exact sequence).
+
+## 2026-04-06 — 2026-04-17
+
+- No commits are present in `git log` on `main` across this calendar range.
+
+---
+
+## 2026-04-18 — Postgres and production-shaped platform
+
+- Migrated the product to **PostgreSQL** as the primary datastore; removed
+  SQLite assumptions from Docker deploy path.
+- Tightened **Master Studio** access gating and expanded **admin** capabilities.
+- Added **TradingView webhook** foundations and **Telegram** operator-facing
+  documentation.
+- Improved API **boot** behavior around migrations and production builds.
+
+## 2026-04-19 — UX, deploy polish, TradingView mark
+
+- Refined public listings copy and admin-only diagnostics on the dashboard.
+- Improved Vercel/Railway documentation, cache headers, and SPA build stamp.
+- Iterated on **TradingView** geometric mark rendering (SVG → `img` square box)
+  to avoid distortion across themes.
+
+## 2026-04-20 — Admin v2, TV webhooks, ledger, Mudrex limits
+
+- Shipped **admin v2**, **TradingView webhooks**, strategy **quotas**, and a
+  forward-looking **`trade_logs`** ledger for volume analytics.
+- Added **tiered Mudrex rate limiting** extensions and notification kinds for
+  strategy review outcomes.
+- Added **Telegram verification** operator script and deploy checklist updates.
+
+## 2026-04-21 — Telegram OAuth and session cookies
+
+- Stabilized Telegram login widget behavior across re-renders and redirect flows.
+- Fixed OAuth/HMAC edge cases for Vercel↔Railway hosting split.
+- Scoped **`rexalgo_session`** cookie `Domain` for proxied deployments and
+  improved logout behavior across cookie variants.
+
+## 2026-04-22 — 2026-04-23
+
+- No commits are present in `git log` on `main` for these calendar dates.
+
+---
+
+## 2026-04-24 — Bot-first Telegram, sessions, Redis limits, audits
+
+- Replaced fragile Telegram widget flows with **bot-first deep link** login and
+  webhook completion.
+- Landed **server-backed sessions** (`user_sessions`) and **Redis-backed**
+  distributed webhook rate limiting for multi-instance safety.
+- Added guarded **`db:flush`** tooling and Railway DB helper scripts with strict
+  URL validation (reject internal Railway hostnames for local tooling).
+- Refreshed README for Postgres/Redis topology and completed **security audit**
+  phases 1–2.
+
+## 2026-04-25 — Production readiness, Master Dashboard, docs
 
 ### Master Studio dashboard
 
@@ -77,53 +188,25 @@ deployment changes. Dates use the repository working timezone unless noted.
 - Improved error boundary and refresh behavior.
 - Added frontend telemetry for client-side failures.
 
-### Deployment
+### Deployment and licensing
 
 - Verified Railway production deployment and Vercel frontend/API rewrite health.
-- Installed and ran k6 against the Railway production API.
-- Triggered git-based production redeploys from `main`.
+- Ran k6 against the Railway production API and iterated on hot-path performance.
+- Switched the repository license to **proprietary, all rights reserved** and
+  aligned CONTRIBUTING/SECURITY documentation with PostgreSQL/Redis reality.
 
-## 2026-04-24
+---
 
-### Frontend deployment stability
+## Verification
 
-- Fixed Vercel SPA rewrites so `/assets/*` and public image assets are not
-  captured by the app fallback route.
-- Switched Vercel routing to rewrite-based SPA delivery for stable refreshes and
-  deep links.
-- Added the official RexAlgo mark asset and corrected broken logo references.
+To inspect the raw commit sequence at any time:
 
-### Auth and database hardening
+```bash
+git log --oneline --reverse
+```
 
-- Added user secret fingerprint backfill support.
-- Added duplicate-key guards for fingerprint migration paths.
-- Ensured Drizzle migrations run on API boot to self-heal schema drift.
-- Allowed production builds to complete without runtime Railway secrets while
-  preserving runtime validation.
+For month-level counts on `main`:
 
-## 2026-04-21
-
-### Master access and marketplace moderation
-
-- Added Master Studio approval workflow for strategy creators.
-- Added admin strategy approval/rejection controls.
-- Added public listing gates so only approved and active strategies are visible.
-- Added resubmission flows for rejected strategy and copy-trading listings.
-
-## 2026-04-18
-
-### Initial platform foundation
-
-- Added Vite React frontend and Next.js API backend.
-- Added PostgreSQL schema for users, strategies, subscriptions, copy webhooks,
-  copy signal events, trade logs, Telegram auth, notifications, and admin audit
-  structures.
-- Added Mudrex wallet, positions, orders, and strategy subscription flows.
-- Added copy-trading webhook infrastructure with HMAC signatures.
-- Added Docker and local development scripts.
-
-## Licensing Note
-
-RexAlgo is proprietary software. See [LICENSE](LICENSE). No use, copying,
-forking, modification, deployment, or redistribution is permitted without
-written consent from DecentralizedJM.
+```bash
+git log --format=%cs --reverse | awk '{print substr($1,1,7)}' | uniq -c
+```

@@ -17,7 +17,8 @@
   <a href="#docker-full-stack">Docker</a> ·
   <a href="#scripts">Scripts</a> ·
   <a href="#roadmap">Roadmap</a> ·
-  <a href="#policies--links">Policies</a>
+  <a href="#policies--links">Policies</a> ·
+  <a href="#changelog">Changelog</a>
 </p>
 
 ---
@@ -548,8 +549,23 @@ Structured copy: **`repo/project.json`**.
 
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — private contribution workflow
 - **[SECURITY.md](SECURITY.md)** — secrets, disclosure
-- **[CHANGELOG.md](CHANGELOG.md)** — implementation timeline and release notes
 - **[LICENSE](LICENSE)** — proprietary, all rights reserved
+
+---
+
+## Changelog
+
+The full project timeline (from the **first commit on 2026-03-21** through the
+latest work on `main`) lives in **[CHANGELOG.md](CHANGELOG.md)**. That file is
+the source of truth for dated milestones, security phases, migrations, and
+deployment notes so the README stays readable.
+
+| Period | What shipped (summary) |
+|--------|-------------------------|
+| **2026-03** | Monorepo, Mudrex, studios + signed webhooks, subscriptions, Vercel/Railway wiring, landing/auth UX, CI |
+| **2026-04-18 – 04-21** | Postgres cutover, admin/TV/Telegram expansion, session + OAuth fixes |
+| **2026-04-24** | Bot-first Telegram login, server-backed sessions, Redis webhook limits, security audits |
+| **2026-04-25** | Production readiness, Master Dashboard, load tests, proprietary license + docs |
 
 ---
 
