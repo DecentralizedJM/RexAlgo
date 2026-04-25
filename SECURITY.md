@@ -6,13 +6,13 @@ RexAlgo handles **Mudrex API secrets** and **session tokens**. Treat this like p
 
 - **Never commit** `backend/.env.local`, `.env`, or real Mudrex keys. Templates: `backend/.env.example`, root `.env.example` (Docker).
 - **Production**: Use long random values for `JWT_SECRET` and `ENCRYPTION_KEY` (see `.env.example`). Rotate if leaked.
-- **Database**: SQLite file permissions; in Docker, use a named volume and restrict host access.
+- **Database**: PostgreSQL stores sessions, encrypted secrets, strategies, trade ledger rows, notifications, and audit data. Restrict network access and use managed backups/snapshots in production.
 
 ## Current model (high level)
 
-- Mudrex API secret is securely encrypted in storage, and **JWT** is held in an **HttpOnly** cookie for session management.
+- Mudrex API secret is securely encrypted in storage, and a server-backed session cookie is held in an **HttpOnly** cookie for session management.
 - API routes that touch Mudrex should remain **authenticated** where appropriate (see `backend/src/middleware.ts`).
-- **Copy-trading webhooks** (`POST /api/webhooks/copy-trading/*`) are **unauthenticated** but **HMAC-signed** (see `backend/src/lib/copyWebhookHmac.ts`). Signing secrets are encrypted in SQLite like user secrets. Rotate a leaked secret from **Copy trading studio** (open it from **Master studio** in the top nav). A simple **per-strategy rate limit** applies in-process (`backend/src/lib/copyWebhookRateLimit.ts`); add gateway rate limits in production.
+- **Copy-trading webhooks** (`POST /api/webhooks/copy-trading/*`) are **unauthenticated** but **HMAC-signed** (see `backend/src/lib/copyWebhookHmac.ts`). Signing secrets are encrypted in PostgreSQL like user secrets. Rotate a leaked secret from **Copy trading studio** (open it from **Master studio** in the top nav). Redis-backed per-strategy rate limits are used when configured for multi-instance production.
 
 ## Copy-trading mirroring risk
 

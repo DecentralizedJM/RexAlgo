@@ -117,7 +117,6 @@ The **web** image defaults to `API_UPSTREAM=http://api:3000` (Compose service na
 | `DATABASE_URL` | API | Postgres connection. Migrations run on boot; `user_sessions` is created by `0008_user_sessions`. |
 | `REDIS_URL` | API (optional, recommended in prod) | Shared Redis for cross-instance state. Required once you run more than one API replica so the 120 req/min webhook rate limit is enforced globally instead of per process. |
 | `PUBLIC_APP_URL` | API | Full webhook URLs in studio UIs (no trailing slash). **Vercel UI + Railway API:** set to your SPA origin (e.g. `https://rexalgo.xyz`) so Telegram OAuth redirects return to the same host the browser uses (fallback when `X-Forwarded-Host` is missing). |
-| `REXALGO_DB_PATH` | API | SQLite path; use `/data/rexalgo.db` + volume on Railway |
 | `API_UPSTREAM` | Web (nginx) | Full URL of Next API for `proxy_pass` |
 | `NODE_ENV=production` | API | `Secure` cookies |
 | `REXALGO_OHLC_API_BASE` | API (optional) | Internal base URL for historical candle fetches used by `POST /api/strategies/[id]/backtest` (default built-in). Operators only — not shown in product UI. |
@@ -202,8 +201,12 @@ So `PUBLIC_APP_URL` must be a URL that resolves to a path nginx (or Vercel rewri
 
 ---
 
-## SQLite on PaaS
+## Database on PaaS
 
-Without a **persistent volume**, SQLite is wiped on each deploy. Configure Railway’s volume for `/data` (or set `REXALGO_DB_PATH` to that mount path).
+RexAlgo uses **PostgreSQL** in production. On Railway, attach the API service to
+Railway Postgres (or provide another managed Postgres URL) and set
+`DATABASE_URL`.
 
-For multi-instance horizontal scaling, SQLite is a poor fit; you’d migrate to Postgres later.
+Redis is recommended for shared rate limits and multi-instance production
+behavior. Set `REDIS_URL` when the deployment has more than one API replica or
+when you want rate-limit state shared across restarts.

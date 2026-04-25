@@ -1,9 +1,15 @@
 # Contributing to RexAlgo
 
-Thanks for your interest. This repo combines:
+RexAlgo is proprietary software. Contributions are accepted only from people or
+organizations explicitly authorized by DecentralizedJM.
+
+Do not fork, copy, clone, modify, publish, deploy, or redistribute this
+repository unless DecentralizedJM has granted you written permission.
+
+This repo combines:
 
 - **`frontend/`** — Vite + React + shadcn UI (iterable via [Lovable](https://lovable.dev))
-- **`backend/`** — Next.js API for Mudrex, auth, SQLite
+- **`backend/`** — Next.js API for Mudrex, auth, PostgreSQL, Redis-backed production hardening
 
 ## Local setup
 
@@ -19,9 +25,10 @@ See the root **[README.md](README.md#development)** (development + troubleshooti
 
 ## Pull requests
 
-1. Fork / branch from `main`
-2. Run `npm run lint` and `npm run build` where applicable
-3. Describe UI vs API changes in the PR body
+1. Work from an authorized private branch.
+2. Run `npm run lint` and `npm run build` where applicable.
+3. Describe UI vs API changes in the PR body.
+4. Do not include secrets, credentials, customer data, or copied third-party code.
 
 ## Design (Lovable)
 
@@ -29,8 +36,15 @@ Frontend changes can be prototyped in Lovable and synced into `frontend/` (or de
 
 ## Third-party code & licenses
 
-- RexAlgo is **MIT**. Contributions must be **MIT-compatible** (avoid pasting in code that forces AGPL or other copyleft on this repo without maintainer approval).
+- RexAlgo is **proprietary, all rights reserved**.
+- Contributions must not introduce license terms that force public disclosure,
+  redistribution rights, or copyleft obligations on this repository without
+  written approval from DecentralizedJM.
+- By contributing, you confirm you have the right to submit the work and assign
+  or license it to DecentralizedJM for use in RexAlgo.
 
 ## Roadmap & larger features
 
-See **[README.md#roadmap](README.md#roadmap)** and **`repo/project.json`** (`roadmap`). For substantial features, open an issue with a short design first.
+See **[README.md#roadmap](README.md#roadmap)**, **[CHANGELOG.md](CHANGELOG.md)**,
+and **`repo/project.json`** (`roadmap`). For substantial features, open an issue
+with a short design first.

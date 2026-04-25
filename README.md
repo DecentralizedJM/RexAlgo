@@ -2,6 +2,8 @@
 
 **RexAlgo** is a full-stack platform for **algorithmic strategies** and **copy trading**, built on the [**Mudrex Futures API**](https://docs.trade.mudrex.com/docs/overview). It pairs a **Vite + React** UI (shadcn, Tailwind) with a **Next.js** API, **PostgreSQL** (Drizzle), optional **Redis** (distributed limits), and **Docker**-ready deployment.
 
+> **Source-available, not open source:** RexAlgo is proprietary software. You may not use, copy, fork, modify, deploy, or redistribute this repository without written consent from DecentralizedJM. See [LICENSE](LICENSE).
+
 <p align="center">
   <a href="#features">Features</a> ·
   <a href="#repository-layout">Layout</a> ·
@@ -15,7 +17,7 @@
   <a href="#docker-full-stack">Docker</a> ·
   <a href="#scripts">Scripts</a> ·
   <a href="#roadmap">Roadmap</a> ·
-  <a href="#credits">Credits</a>
+  <a href="#policies--links">Policies</a>
 </p>
 
 ---
@@ -32,7 +34,7 @@
 | **Algo marketplace** | Browse & subscribe to `algo` strategies with **margin per trade** |
 | **Strategy studio** | Masters create **algo** listings, **signed webhooks** — **`/marketplace/studio`** via **Master studio → Strategy** |
 | **Copy trading** | Browse `copy_trading` strategies, subscribe; studio at **`/copy-trading/studio`** |
-| **Master studio** | Top-nav dropdown: **Strategy** and **Copy trading** (master access + admin gates) |
+| **Master studio** | Approved masters get **Strategy**, **Copy trading**, and **Dashboard** views (master access + admin gates). Dashboard shows aggregate subscribers, volume, signals, and Telegram delivery state without subscriber PII. |
 | **Copy webhook** | `POST /api/webhooks/copy-trading/{strategyId}` with **HMAC** → mirror **open/close** to subscribers |
 | **TradingView** | User-owned **`/tv-webhooks`**, `POST /api/webhooks/tv/{id}` adapter, media-kit square mark in UI |
 | **Admin** | **`/admin`** when your email is in **`ADMIN_EMAILS`** (master access, strategies, users) |
@@ -61,7 +63,8 @@ RexAlgo/
 ├── package.json           # npm workspaces
 ├── CONTRIBUTING.md
 ├── SECURITY.md
-└── LICENSE                # MIT
+├── CHANGELOG.md
+└── LICENSE                # proprietary, all rights reserved
 ```
 
 Diagram source (same graphs as below, for editors): **`repo/architecture.mmd`**.
@@ -88,7 +91,9 @@ All diagrams use **Mermaid** (renders on GitHub).
 
 End state: **one browser URL** (**127.0.0.1:8080**) for the UI; the API runs on **127.0.0.1:3000** behind Vite’s proxy.
 
-### 1. Clone & install
+### 1. Authorized checkout & install
+
+Only authorized users may clone or work with this repository.
 
 ```bash
 git clone https://github.com/DecentralizedJM/RexAlgo.git
@@ -541,8 +546,10 @@ Structured copy: **`repo/project.json`**.
 
 ## Policies & links
 
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — PRs, workflow, licenses  
-- **[SECURITY.md](SECURITY.md)** — secrets, disclosure  
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — private contribution workflow
+- **[SECURITY.md](SECURITY.md)** — secrets, disclosure
+- **[CHANGELOG.md](CHANGELOG.md)** — implementation timeline and release notes
+- **[LICENSE](LICENSE)** — proprietary, all rights reserved
 
 ---
 
@@ -554,4 +561,4 @@ RexAlgo is **not** official Mudrex software. Crypto futures trading involves **s
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Proprietary, all rights reserved — see [LICENSE](LICENSE). No use, copying, forking, modification, deployment, or redistribution is permitted without written consent from DecentralizedJM.

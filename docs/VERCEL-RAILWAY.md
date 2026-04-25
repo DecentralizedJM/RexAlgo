@@ -11,8 +11,12 @@
 2. **Recommended:** leave **Root Directory empty** (repo root). The repo includes **[`railway.toml`](../railway.toml)** + **[`Dockerfile.api`](../Dockerfile.api)** so Railway uses **Docker**, not Railpack — no workspace/start-command guessing.
 3. **Alternative:** set **Root Directory** to **`backend`** — then Railway uses [`backend/Dockerfile`](../backend/Dockerfile) and [`backend/railway.toml`](../backend/railway.toml).
 4. Do **not** rely on Railpack at the monorepo root without one of the above — it will not find a single-package start command.
-5. Attach a **volume** on **`/data`** for SQLite (`REXALGO_DB_PATH=/data/rexalgo.db` is the default in the image).
-6. Set variables: **`JWT_SECRET`**, **`ENCRYPTION_KEY`**, **`PUBLIC_APP_URL`** (see below).
+5. Attach **Railway Postgres** or set `DATABASE_URL` to a managed PostgreSQL
+   database. Migrations run on API boot.
+6. Attach **Railway Redis** or set `REDIS_URL` when running more than one API
+   replica, or when you want shared production rate limits.
+7. Set variables: **`JWT_SECRET`**, **`ENCRYPTION_KEY`**, **`DATABASE_URL`**,
+   **`PUBLIC_APP_URL`** (see below).
 
 If your Railway project was tied to the old **`backend-railway`** branch, switch the service to **`main`**, clear **Root Directory** (or set it to **`backend`** as above), then redeploy.
 
