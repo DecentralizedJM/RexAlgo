@@ -15,7 +15,8 @@ major features, security work, and deployment notes. For legal terms see
 | **2026-04-19** | Public listings UX, deploy hardening, dashboard diagnostics, TradingView mark integration (later refined) |
 | **2026-04-20** | Admin v2, TradingView webhooks, quotas, trade ledger, Mudrex tiered rate limiting, Telegram operator scripts |
 | **2026-04-21** | Telegram OAuth and HMAC fixes, session cookie scoping for Vercel→Railway, logout correctness |
-| **2026-04-22 – 2026-04-23** | No commits appear in `git log` for these calendar dates on `main` |
+| **2026-04-22** | Toolchain housekeeping: Node engines field, typecheck script, branch naming docs, Redis fallback docs |
+| **2026-04-23** | Docs polish: .node-version, SECURITY checklist refresh, webhook skew knob, SameSite=Strict fix |
 | **2026-04-24** | Bot-first Telegram login, server-backed sessions, Redis-backed webhook limits, security audit phases, docs refresh |
 | **2026-04-25** | Production readiness bundle, load-test tooling, Master Dashboard, proprietary license and documentation refresh |
 
@@ -97,9 +98,30 @@ major features, security work, and deployment notes. For legal terms see
 - Scoped **`rexalgo_session`** cookie `Domain` for proxied deployments and
   improved logout behavior across cookie variants.
 
-## 2026-04-22 — 2026-04-23
+## 2026-04-22 — Maintenance and toolchain housekeeping
 
-- No commits are present in `git log` on `main` for these calendar dates.
+- Added `"engines": {"node": ">=20"}` to `backend/package.json` to make the
+  Node version requirement explicit for CI and local tooling.
+- Added `typecheck` script (`tsc --noEmit`) to `backend/package.json` for
+  faster type-only CI checks without a full build.
+- Expanded **`CONTRIBUTING.md`** with a branch naming convention section
+  (`feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/`, `security/`).
+- Documented `REXALGO_ALLOW_DEV_SECRETS` and the **Redis memory-fallback**
+  behaviour in `docs/PROD.md`: without `REDIS_URL`, rate limits fall back to
+  per-replica in-memory state (fail-open) — acceptable for single-instance dev,
+  not for multi-replica production.
+
+## 2026-04-23 — Docs polish and deploy notes
+
+- Added `.node-version` file (`20`) at repo root for toolchain pinning via
+  `nvm`, `fnm`, and similar version managers.
+- Updated the **`SECURITY.md`** hardening checklist to reflect controls that
+  have shipped: per-IP auth rate limiting, security headers in middleware,
+  `SameSite=Strict` session cookies, and the admin audit log.
+- Documented `REXALGO_WEBHOOK_MAX_SKEW_SEC` in `docs/PROD.md` (default `60`,
+  clamped 30–900 — tightens the copy-webhook replay window).
+- Fixed stale `SameSite=Lax` references in `docs/DEPLOY.md` to reflect the
+  current `SameSite=Strict` cookie policy.
 
 ---
 
