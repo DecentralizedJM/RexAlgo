@@ -4,7 +4,6 @@ import {
   Activity,
   AlertTriangle,
   Bell,
-  Bot,
   CheckCircle2,
   Clock3,
   RefreshCw,
@@ -30,6 +29,22 @@ import {
   type MasterDashboardStrategy,
 } from "@/lib/api";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
+
+function TelegramPlaneIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path d="M9.78 18.65l.75-3.54 8.05-7.38c.36-.33-.08-.5-.52-.2L7.74 16.3 3.64 14.7c-.88-.39-.86-.85.19-1.29l14.68-5.66c.88-.41 1.65-.2 1.38 1.19l-2.48 11.69c-.27 1.26-.92 1.56-1.87.97l-5.22-3.86-2.52 2.43c-.3.29-.54.53-1.08.54z" />
+    </svg>
+  );
+}
 
 function formatUsdt(value: string): string {
   const n = Number.parseFloat(value);
@@ -291,7 +306,7 @@ export default function MasterDashboardPage() {
                 </p>
                 <Link to="/settings">
                   <Button variant="outline" size="sm">
-                    <Bot className="mr-2 h-4 w-4" />
+                    <TelegramPlaneIcon className="mr-2 h-4 w-4" />
                     Telegram settings
                   </Button>
                 </Link>

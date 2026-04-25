@@ -178,15 +178,6 @@ export default function Navbar() {
               <DropdownMenuContent align="center" className="w-44">
                 <DropdownMenuItem
                   className={`flex items-center justify-between ${
-                    onMasterDashboard ? "bg-secondary text-foreground" : ""
-                  }`}
-                  onSelect={() => navigate("/master-studio/dashboard")}
-                >
-                  Dashboard
-                  {onMasterDashboard && <Check className="h-4 w-4" aria-hidden />}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className={`flex items-center justify-between ${
                     onStrategyStudio ? "bg-secondary text-foreground" : ""
                   }`}
                   onSelect={() => navigate("/marketplace/studio")}
@@ -202,6 +193,15 @@ export default function Navbar() {
                 >
                   Copy trading
                   {onCopyStudio && <Check className="h-4 w-4" aria-hidden />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className={`flex items-center justify-between ${
+                    onMasterDashboard ? "bg-secondary text-foreground" : ""
+                  }`}
+                  onSelect={() => navigate("/master-studio/dashboard")}
+                >
+                  Dashboard
+                  {onMasterDashboard && <Check className="h-4 w-4" aria-hidden />}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -452,21 +452,9 @@ export default function Navbar() {
                   Master studio
                 </p>
                 <Link
-                  to="/master-studio/dashboard"
-                  onClick={() => setMobileOpen(false)}
-                  className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    onMasterDashboard
-                      ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Dashboard
-                  {onMasterDashboard && <Check className="h-4 w-4" aria-hidden />}
-                </Link>
-                <Link
                   to="/marketplace/studio"
                   onClick={() => setMobileOpen(false)}
-                  className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     onStrategyStudio
                       ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground"
@@ -486,6 +474,18 @@ export default function Navbar() {
                 >
                   Copy trading
                   {onCopyStudio && <Check className="h-4 w-4" aria-hidden />}
+                </Link>
+                <Link
+                  to="/master-studio/dashboard"
+                  onClick={() => setMobileOpen(false)}
+                  className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    onMasterDashboard
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Dashboard
+                  {onMasterDashboard && <Check className="h-4 w-4" aria-hidden />}
                 </Link>
               </div>
             )}
