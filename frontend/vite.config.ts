@@ -1,7 +1,6 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
 
 /** Injects git SHA (Vercel/Railway) or ISO time into `index.html` for “did my deploy land?” checks. */
 function rexalgoBuildStamp(): Plugin {
@@ -40,11 +39,7 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  plugins: [
-    rexalgoBuildStamp(),
-    react(),
-    mode === "development" && componentTagger(),
-  ].filter(Boolean),
+  plugins: [rexalgoBuildStamp(), react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

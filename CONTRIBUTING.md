@@ -8,7 +8,7 @@ repository unless DecentralizedJM has granted you written permission.
 
 This repo combines:
 
-- **`frontend/`** — Vite + React + shadcn UI (iterable via [Lovable](https://lovable.dev))
+- **`frontend/`** — Vite + React + shadcn UI
 - **`backend/`** — Next.js API for Mudrex, auth, PostgreSQL, Redis-backed production hardening
 
 ## Local setup
@@ -36,10 +36,6 @@ Examples: `feat/telegram-login`, `fix/session-cookie-domain`, `chore/deps-bump`.
 2. Run `npm run lint` and `npm run build` where applicable.
 3. Describe UI vs API changes in the PR body.
 4. Do not include secrets, credentials, customer data, or copied third-party code.
-
-## Design (Lovable)
-
-Frontend changes can be prototyped in Lovable and synced into `frontend/` (or developed directly in this repo). Keep `src/lib/api.ts` aligned with backend routes.
 
 ## Third-party code & licenses
 

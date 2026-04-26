@@ -6,7 +6,7 @@ export function organizationSchema() {
     "@type": "Organization",
     name: "RexAlgo",
     url: SITE_URL,
-    logo: `${SITE_URL}/rexalgo-logo.png`,
+    logo: `${SITE_URL}/rexalgo-mark.png`,
     description:
       "Algorithmic and copy-trading platform for Mudrex Futures. No code needed.",
   };

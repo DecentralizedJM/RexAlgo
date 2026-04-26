@@ -1,4 +1,4 @@
-# Premium Vite UI (Lovable) + nginx → proxies /api to Next (same-origin cookies).
+# RexAlgo Vite UI + nginx → proxies /api to Next (same-origin cookies).
 # Set API_UPSTREAM when the API is not Docker service "api:3000" (e.g. Railway).
 # Build context MUST be ./frontend (see docker-compose `web.build.context`); do not build from repo root here.
 FROM node:20-bookworm-slim AS builder

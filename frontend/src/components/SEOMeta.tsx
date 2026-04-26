@@ -28,6 +28,9 @@ export default function SEOMeta({
       <meta name="description" content={description} />
       {noindex && <meta name="robots" content="noindex, nofollow" />}
       <link rel="canonical" href={resolvedCanonical} />
+      <link rel="icon" href="/favicon.ico" sizes="any" />
+      <link rel="icon" type="image/png" href="/rexalgo-mark.png" sizes="512x512" />
+      <link rel="apple-touch-icon" href="/rexalgo-mark.png" />
 
       {/* Open Graph */}
       <meta property="og:type" content="website" />

@@ -1,6 +1,6 @@
 # RexAlgo — Backend (API only)
 
-**Next.js 16** App Router — **REST API + minimal root page**. All user-facing UI is in **`../frontend`** (Lovable).
+**Next.js 16** App Router — **REST API + minimal root page**. All user-facing UI is in **`../frontend`** (Vite SPA).
 
 - Mudrex REST client (`src/lib/mudrex.ts`)
 - Auth + encrypted API secret (`src/lib/auth.ts`)

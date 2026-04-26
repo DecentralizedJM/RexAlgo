@@ -37,7 +37,7 @@ if (upstream) {
  */
 rewrites.push({
   source:
-    "/((?!assets/|rexalgo-mark\\.png|rexalgo-logo\\.png|mudrex-logo\\.png|favicon\\.ico|robots\\.txt|placeholder\\.svg).*)",
+    "/((?!assets/|rexalgo-mark\\.png|rexalgo-logo\\.png|mudrex-logo\\.png|favicon\\.ico|robots\\.txt|sitemap\\.xml|og-default\\.png).*)",
   destination: "/index.html",
 });
 
