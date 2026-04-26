@@ -8,6 +8,7 @@ import { fetchStrategies, type ApiStrategy } from "@/lib/api";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import SEOMeta from "@/components/SEOMeta";
 import { SITE_URL } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/jsonLd";
 
 const riskFilters = ["all", "low", "medium", "high"] as const;
 
@@ -64,6 +65,10 @@ export default function MarketplacePage() {
         title="Crypto Strategy Marketplace — RexAlgo"
         description="Browse 850+ algorithmic and copy-trading strategies on Mudrex Futures. Filter by risk level, win rate, and ROI. Subscribe with your margin per trade."
         canonical={`${SITE_URL}/marketplace`}
+        jsonLd={breadcrumbSchema([
+          { name: "Home", url: SITE_URL },
+          { name: "Marketplace", url: `${SITE_URL}/marketplace` },
+        ])}
       />
       <Navbar />
       <div className="container mx-auto px-4 main-nav-pad pb-16">

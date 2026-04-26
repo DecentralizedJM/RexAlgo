@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import SEOMeta from "@/components/SEOMeta";
 import { strategyMeta, SEO_DEFAULTS } from "@/lib/seo";
+import { strategyProductSchema, breadcrumbSchema } from "@/lib/jsonLd";
+import { SITE_URL } from "@/lib/seo";
 import Navbar from "@/components/Navbar";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import AllocationModal from "@/components/AllocationModal";
@@ -164,6 +166,25 @@ export default function StrategyDetailPage() {
   }
 
   const seoMeta = strategy ? strategyMeta(strategy) : null;
+  const backCrumbLabel = fromCopy || strategy?.type === "copy_trading" ? "Copy Trading" : "Marketplace";
+  const backCrumbUrl = fromCopy || strategy?.type === "copy_trading" ? `${SITE_URL}/copy-trading` : `${SITE_URL}/marketplace`;
+  const jsonLd = strategy
+    ? [
+        breadcrumbSchema([
+          { name: "Home", url: SITE_URL },
+          { name: backCrumbLabel, url: backCrumbUrl },
+          { name: strategy.name, url: seoMeta?.canonical ?? "" },
+        ]),
+        strategyProductSchema({
+          id: strategy.id,
+          name: strategy.name,
+          description: strategy.description,
+          winRate: strategy.winRate,
+          totalTrades: strategy.totalTrades,
+          symbol: strategy.symbol,
+        }),
+      ]
+    : undefined;
 
   return (
     <div className="min-h-screen bg-background">
@@ -172,6 +193,7 @@ export default function StrategyDetailPage() {
         description={seoMeta?.description ?? SEO_DEFAULTS.description}
         canonical={seoMeta?.canonical}
         image={seoMeta?.image}
+        jsonLd={jsonLd}
       />
       <Navbar />
       <div className="container mx-auto px-4 main-nav-pad pb-16 max-w-4xl">

@@ -7,6 +7,7 @@ import {
 } from "framer-motion";
 import SEOMeta from "@/components/SEOMeta";
 import { SITE_URL } from "@/lib/seo";
+import { organizationSchema, webAppSchema } from "@/lib/jsonLd";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import {
@@ -185,6 +186,7 @@ export default function LandingPage() {
         title="RexAlgo — Algorithmic & Copy Trading on Mudrex Futures"
         description="Run algorithmic strategies and copy-trade top traders on Mudrex Futures. No code needed. Browse 850+ strategies, backtest in minutes."
         canonical={SITE_URL}
+        jsonLd={[organizationSchema(), webAppSchema()]}
       />
       <Navbar />
 
@@ -389,17 +391,9 @@ export default function LandingPage() {
               <RexAlgoLogo size={28} className="rounded-md" />
               <RexAlgoWordmark className="text-sm font-semibold" />
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 sm:justify-start">
-              <span className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-300">
-                Made with love
-              </span>
-              <span className="text-sm font-semibold text-[#8B0000]" aria-label="deep red heart">
-                ❤️
-              </span>
-              <span className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-300">
-                for Mudrex community
-              </span>
-            </div>
+            <p className="text-center text-[11px] sm:text-left sm:text-xs text-neutral-600 dark:text-neutral-300">
+              Made with ❤️ for Mudrex community
+            </p>
           </div>
           <div className="flex flex-col items-center gap-2 text-center sm:items-end sm:text-right">
             <a

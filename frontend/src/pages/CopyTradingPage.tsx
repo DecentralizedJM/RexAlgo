@@ -9,6 +9,7 @@ import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { initials } from "@/lib/format";
 import SEOMeta from "@/components/SEOMeta";
 import { SITE_URL } from "@/lib/seo";
+import { breadcrumbSchema } from "@/lib/jsonLd";
 
 function mapCopyStrategy(s: ApiStrategy) {
   const maxDd = s.stoplossPct != null ? Math.min(30, s.stoplossPct * 2) : 12;
@@ -60,6 +61,10 @@ export default function CopyTradingPage() {
         title="Crypto Copy Trading — Follow Top Traders on Mudrex Futures"
         description="Copy the best Mudrex Futures traders automatically. Set your margin, follow signals, and track performance across Bitcoin, Ethereum, and more."
         canonical={`${SITE_URL}/copy-trading`}
+        jsonLd={breadcrumbSchema([
+          { name: "Home", url: SITE_URL },
+          { name: "Copy Trading", url: `${SITE_URL}/copy-trading` },
+        ])}
       />
       <Navbar />
       <div className="container mx-auto px-4 main-nav-pad pb-16">
