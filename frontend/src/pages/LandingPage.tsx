@@ -56,7 +56,7 @@ const features = [
   },
 ];
 
-const HERO_PRIMARY = "Algo crypto trading, ";
+const HERO_PRIMARY = "Algo crypto trading,";
 const HERO_ACCENT = "simplified.";
 
 const inView = {
@@ -71,8 +71,14 @@ function KineticHeroHeadline({ className }: { className?: string }) {
   let waveIndex = 0;
 
   return (
-    <h1 className={`group/kinetic ${className ?? ""}`} aria-label={`${HERO_PRIMARY}${HERO_ACCENT}`}>
-      <span aria-hidden className="inline-flex flex-wrap justify-center gap-x-[0.03em] gap-y-1 sm:gap-y-0">
+    <h1
+      className={`group/kinetic flex flex-col items-center gap-1 sm:gap-1.5 ${className ?? ""}`}
+      aria-label={`${HERO_PRIMARY} ${HERO_ACCENT}`}
+    >
+      <span
+        aria-hidden
+        className="inline-flex flex-wrap justify-center gap-x-[0.03em] gap-y-1 leading-none sm:gap-y-0"
+      >
         {primaryChars.map((ch, i) => {
           const di = waveIndex++;
           return (
@@ -85,6 +91,8 @@ function KineticHeroHeadline({ className }: { className?: string }) {
             </span>
           );
         })}
+      </span>
+      <span aria-hidden className="inline-flex whitespace-nowrap leading-none">
         {accentChars.map((ch, i) => {
           const di = waveIndex++;
           return (
