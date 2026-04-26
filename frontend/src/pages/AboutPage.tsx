@@ -3,6 +3,8 @@ import Navbar from "@/components/Navbar";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { Shield, Target, Code, Globe } from "lucide-react";
+import SEOMeta from "@/components/SEOMeta";
+import { SITE_URL } from "@/lib/seo";
 
 const values: { icon: typeof Shield; title: string; desc: ReactNode }[] = [
   {
@@ -27,6 +29,11 @@ const values: { icon: typeof Shield; title: string; desc: ReactNode }[] = [
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
+      <SEOMeta
+        title="About RexAlgo — Algo & Copy Trading Platform"
+        description="RexAlgo brings algorithmic strategies, copy trading, and subscriptions together in one workspace on Mudrex Futures. No custody. Execution lives on Mudrex."
+        canonical={`${SITE_URL}/about`}
+      />
       <Navbar />
       <div className="container mx-auto px-4 main-nav-pad-loose pb-20 max-w-3xl">
         <div className="animate-fade-up">

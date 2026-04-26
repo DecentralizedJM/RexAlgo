@@ -51,7 +51,7 @@ import {
   setLeverage,
 } from "@/lib/mudrex";
 import { computeFollowerQuantity } from "@/lib/copyMirror";
-import { logTrade } from "@/lib/tradeLedger";
+import { logTrade, markRexAlgoTradesClosed } from "@/lib/tradeLedger";
 
 async function recordEvent(
   webhookId: string,
@@ -409,6 +409,15 @@ export async function POST(
       text: `⚠️ TradingView webhook <b>${wh.name}</b> failed to execute: ${result.detail}`,
     });
     return NextResponse.json({ ok: false, error: result.detail }, { status: 502 });
+  }
+
+  if (parsed.route.action === "close") {
+    void markRexAlgoTradesClosed({
+      userId: wh.userId,
+      symbol: parsed.route.symbol,
+      side: parsed.route.side,
+      positionId: result.orderId,
+    });
   }
 
   void queueNotification(wh.userId, {

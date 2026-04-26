@@ -11,6 +11,7 @@ export async function refreshAppData(queryClient: QueryClient): Promise<void> {
         k === "subscriptions" ||
         k === "strategies" ||
         k === "strategy" ||
+        k === "rexalgo-trade-activity" ||
         k === "marketplace-studio" ||
         k === "copy-studio" ||
         k === "tv-webhooks" ||

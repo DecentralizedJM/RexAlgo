@@ -154,6 +154,30 @@ export async function activateKillSwitch() {
   }>("/api/account/kill-switch", { method: "POST" });
 }
 
+export type RexAlgoTradeActivity = {
+  id: string;
+  source: "manual" | "copy" | "tv";
+  strategyId: string | null;
+  orderId: string | null;
+  positionId: string | null;
+  symbol: string;
+  side: string;
+  quantity: string;
+  entryPrice: string | null;
+  exitPrice: string | null;
+  pnl: string | null;
+  notionalUsdt: string | null;
+  status: "open" | "closed" | "cancelled";
+  closedAt: string | null;
+  createdAt: string;
+};
+
+export async function fetchRexAlgoTradeActivity() {
+  return apiFetch<{ trades: RexAlgoTradeActivity[] }>(
+    "/api/account/trade-activity"
+  );
+}
+
 /** @deprecated Use loginWithGoogle instead. Kept for legacy API-key-only login. */
 export async function login(apiSecret: string, displayName?: string) {
   return apiFetch<{ success: boolean; user: { id: string; displayName: string } }>(

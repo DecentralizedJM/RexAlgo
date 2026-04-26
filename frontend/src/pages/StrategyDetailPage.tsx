@@ -1,6 +1,8 @@
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import SEOMeta from "@/components/SEOMeta";
+import { strategyMeta, SEO_DEFAULTS } from "@/lib/seo";
 import Navbar from "@/components/Navbar";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import AllocationModal from "@/components/AllocationModal";
@@ -161,8 +163,16 @@ export default function StrategyDetailPage() {
     );
   }
 
+  const seoMeta = strategy ? strategyMeta(strategy) : null;
+
   return (
     <div className="min-h-screen bg-background">
+      <SEOMeta
+        title={seoMeta?.title ?? SEO_DEFAULTS.title}
+        description={seoMeta?.description ?? SEO_DEFAULTS.description}
+        canonical={seoMeta?.canonical}
+        image={seoMeta?.image}
+      />
       <Navbar />
       <div className="container mx-auto px-4 main-nav-pad pb-16 max-w-4xl">
         <Link

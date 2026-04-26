@@ -19,7 +19,7 @@ import {
   getAsset,
   setLeverage,
 } from "@/lib/mudrex";
-import { logTrade } from "@/lib/tradeLedger";
+import { logTrade, markRexAlgoTradesClosed } from "@/lib/tradeLedger";
 
 export type CopySignalV1 = {
   idempotency_key: string;
@@ -267,6 +267,14 @@ async function processSubscriber(
       : await mirrorClose(signal, apiSecret);
 
   if (result.ok) {
+    if (signal.action === "close") {
+      void markRexAlgoTradesClosed({
+        userId: sub.userId,
+        symbol: signal.symbol,
+        side: signal.side,
+        positionId: result.orderId,
+      });
+    }
     await db.insert(copyMirrorAttempts).values({
       id: uuidv4(),
       signalId: signalEventId,

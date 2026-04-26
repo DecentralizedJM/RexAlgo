@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { strategies, subscriptions, tradeLogs, users } from "@/lib/schema";
 import { cancelOrder, closePosition, listOpenOrders, listOpenPositions } from "@/lib/mudrex";
+import { markRexAlgoTradesClosed } from "@/lib/tradeLedger";
 
 type CloseResult = {
   symbol: string;
@@ -163,19 +164,15 @@ export async function POST() {
       .filter((result) => result.status === "closed")
       .map((result) => positionKey(result.symbol, result.side))
   );
-  const closedLedgerIds = openLedgerRows
-    .filter((row) => closedPositionKeys.has(positionKey(row.symbol, row.side)))
-    .map((row) => row.id);
-  if (closedLedgerIds.length > 0) {
-    await db
-      .update(tradeLogs)
-      .set({ status: "closed" })
-      .where(
-        and(
-          eq(tradeLogs.userId, session.user.id),
-          inArray(tradeLogs.id, closedLedgerIds)
-        )
-      );
+  if (closedPositionKeys.size > 0) {
+    for (const result of closeResults.filter((r) => r.status === "closed")) {
+      await markRexAlgoTradesClosed({
+        userId: session.user.id,
+        symbol: result.symbol,
+        side: result.side,
+        positionId: result.positionId,
+      });
+    }
   }
 
   if (activeSubs.length > 0) {

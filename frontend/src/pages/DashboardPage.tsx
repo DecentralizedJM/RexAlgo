@@ -26,12 +26,14 @@ import {
   fetchWallet,
   fetchPositions,
   fetchPositionHistory,
+  fetchRexAlgoTradeActivity,
   fetchSubscriptions,
   linkMudrexKey,
   ApiError,
   getApiErrorCode,
   isMudrexCredentialError,
   type ApiPosition,
+  type RexAlgoTradeActivity,
 } from "@/lib/api";
 import { formatPair } from "@/lib/format";
 import { useRequireAuth } from "@/hooks/useAuth";
@@ -137,6 +139,86 @@ function formatSessionExpiry(iso: string | null | undefined): string | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+type PositionScope = "all" | "rexalgo";
+
+function positionKey(symbol: string, side: string): string {
+  return `${symbol.trim().toUpperCase()}:${side.trim().toUpperCase()}`;
+}
+
+function ScopePills({
+  value,
+  onChange,
+}: {
+  value: PositionScope;
+  onChange: (value: PositionScope) => void;
+}) {
+  const options: Array<{ value: PositionScope; label: string }> = [
+    { value: "all", label: "All Mudrex" },
+    { value: "rexalgo", label: "RexAlgo" },
+  ];
+
+  return (
+    <div className="inline-flex rounded-full border border-primary/25 bg-background/80 p-1 shadow-sm">
+      {options.map((option) => {
+        const active = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              active
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            aria-pressed={active}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function isRexAlgoOpenPosition(
+  position: ApiPosition,
+  trades: RexAlgoTradeActivity[]
+): boolean {
+  const exactIds = new Set(
+    trades
+      .map((trade) => trade.positionId)
+      .filter((positionId): positionId is string => Boolean(positionId))
+  );
+  if (position.position_id && exactIds.has(position.position_id)) return true;
+
+  const openKeys = new Set(
+    trades
+      .filter((trade) => trade.status === "open")
+      .map((trade) => positionKey(trade.symbol, trade.side))
+  );
+  return openKeys.has(positionKey(position.symbol, position.side));
+}
+
+function isRexAlgoHistoryPosition(
+  position: ApiPosition,
+  trades: RexAlgoTradeActivity[]
+): boolean {
+  const exactIds = new Set(
+    trades
+      .map((trade) => trade.positionId)
+      .filter((positionId): positionId is string => Boolean(positionId))
+  );
+  if (position.position_id && exactIds.has(position.position_id)) return true;
+
+  const closedKeys = new Set(
+    trades
+      .filter((trade) => trade.status === "closed")
+      .map((trade) => positionKey(trade.symbol, trade.side))
+  );
+  return closedKeys.has(positionKey(position.symbol, position.side));
 }
 
 function MudrexBrandMark() {
@@ -292,6 +374,9 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const refreshingRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pnlScope, setPnlScope] = useState<PositionScope>("all");
+  const [openScope, setOpenScope] = useState<PositionScope>("all");
+  const [historyScope, setHistoryScope] = useState<PositionScope>("all");
   const sessionAuthed = authQ.authed;
   const user = authQ.data?.user;
   const hasMudrexKey = user?.hasMudrexKey ?? false;
@@ -324,6 +409,14 @@ export default function DashboardPage() {
   const historyQ = useQuery({
     queryKey: ["positions", "history"],
     queryFn: fetchPositionHistory,
+    enabled: sessionAuthed && hasMudrexKey,
+    ...liveDataQueryOptions,
+    retry: 2,
+    retryDelay: (n) => Math.min(1500 * (n + 1), 5000),
+  });
+  const activityQ = useQuery({
+    queryKey: ["rexalgo-trade-activity"],
+    queryFn: fetchRexAlgoTradeActivity,
     enabled: sessionAuthed && hasMudrexKey,
     ...liveDataQueryOptions,
     retry: 2,
@@ -370,7 +463,11 @@ export default function DashboardPage() {
   const posStatPending = posQ.isPending && posQ.data === undefined;
   const openPositionsLoading = posQ.isPending && posQ.data === undefined;
   const futures = walletQ.data?.futures;
-  const positions = posQ.data?.positions ?? [];
+  const positions = useMemo(() => posQ.data?.positions ?? [], [posQ.data?.positions]);
+  const rexAlgoTrades = useMemo(
+    () => activityQ.data?.trades ?? [],
+    [activityQ.data?.trades]
+  );
   const subs = subQ.data?.subscriptions?.filter((s) => s.isActive) ?? [];
   const futAvailable = futuresAvailableUsdt(walletQ.data);
   const underfundedSubs = subs.filter((s) => {
@@ -382,6 +479,23 @@ export default function DashboardPage() {
     () => sortClosedHistoryDescending(historyQ.data?.positions ?? []),
     [historyQ.data?.positions]
   );
+  const rexAlgoOpenPositions = useMemo(
+    () => positions.filter((position) => isRexAlgoOpenPosition(position, rexAlgoTrades)),
+    [positions, rexAlgoTrades]
+  );
+  const rexAlgoHistorySorted = useMemo(
+    () =>
+      closedHistorySorted.filter((position) =>
+        isRexAlgoHistoryPosition(position, rexAlgoTrades)
+      ),
+    [closedHistorySorted, rexAlgoTrades]
+  );
+  const displayedOpenPositions =
+    openScope === "rexalgo" ? rexAlgoOpenPositions : positions;
+  const displayedHistory =
+    historyScope === "rexalgo" ? rexAlgoHistorySorted : closedHistorySorted;
+  const chartPositions =
+    pnlScope === "rexalgo" ? rexAlgoHistorySorted : historyQ.data?.positions ?? [];
 
   const fetchIssues: FetchIssue[] = [
     ...(walletQ.error ? [{ label: "Futures wallet (Mudrex)", err: walletQ.error }] : []),
@@ -413,7 +527,8 @@ export default function DashboardPage() {
   };
 
   const futBal = parseFloat(futures?.balance ?? "0");
-  const chartData = buildRealizedPnlCurve(historyQ.data?.positions ?? []);
+  const lockedMargin = parseFloat(futures?.locked_amount ?? "0");
+  const chartData = buildRealizedPnlCurve(chartPositions);
 
   if (!authQ.authResolved) {
     return <AuthGateSplash />;
@@ -424,22 +539,28 @@ export default function DashboardPage() {
 
   const statCards = [
     {
-      label: "Futures wallet",
+      label: "Futures Wallet",
       pending: walletStatPending || walletUserHold,
       value: `$${futBal.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
       icon: Wallet,
     },
     {
-      label: "Active subscriptions",
-      pending: subsStatPending || subsUserHold,
-      value: subs.length.toString(),
-      icon: BarChart3,
+      label: "Locked margin",
+      pending: walletStatPending || walletUserHold,
+      value: `$${lockedMargin.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+      icon: Lock,
     },
     {
       label: "Open positions",
       pending: posStatPending || posUserHold,
       value: positions.length.toString(),
       icon: Users,
+    },
+    {
+      label: "Active subscriptions",
+      pending: subsStatPending || subsUserHold,
+      value: subs.length.toString(),
+      icon: BarChart3,
     },
   ];
 
@@ -606,7 +727,7 @@ export default function DashboardPage() {
         {!hasMudrexKey ? null : (
         <>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {statCards.map((s, i) => {
             const card = (
               <div className="flex items-center gap-3">
@@ -655,14 +776,21 @@ export default function DashboardPage() {
 
         {/* Performance chart */}
         <div className="glass rounded-xl p-6 mb-8 animate-fade-up-delay-3">
-          <h2 className="font-semibold mb-1 flex items-center gap-2">
-            <LineChart className="w-4 h-4 text-primary" />
-            Realized P&amp;L (closed positions)
-          </h2>
-          <p className="text-xs text-muted-foreground mb-4">
-            From Mudrex closed-trade history (latest page). For taxes, use Mudrex statements.
-          </p>
-          {historyQ.isPending ? (
+          <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-semibold mb-1 flex items-center gap-2">
+                <LineChart className="w-4 h-4 text-primary" />
+                Realized P&amp;L (closed positions)
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {pnlScope === "rexalgo"
+                  ? "RexAlgo mode tracks trades placed through RexAlgo. Older trades before exact position-id attribution may be incomplete."
+                  : "From Mudrex closed-trade history (latest page). For taxes, use Mudrex statements."}
+              </p>
+            </div>
+            <ScopePills value={pnlScope} onChange={setPnlScope} />
+          </div>
+          {historyQ.isPending || (pnlScope === "rexalgo" && activityQ.isPending) ? (
             <p className="text-sm text-muted-foreground py-12 text-center">Loading history from Mudrex…</p>
           ) : historyQ.isError && !isAdmin ? (
             <p className="text-sm text-muted-foreground py-12 text-center leading-relaxed max-w-md mx-auto">
@@ -671,7 +799,9 @@ export default function DashboardPage() {
             </p>
           ) : chartData.length === 0 ? (
             <p className="text-sm text-muted-foreground py-12 text-center">
-              No closed P&amp;L in this window yet. Open P&amp;L is above.
+              {pnlScope === "rexalgo"
+                ? "No RexAlgo closed P&L matched this history window yet."
+                : "No closed P&L in this window yet. Open P&L is above."}
             </p>
           ) : (
             <PerformanceChart data={chartData} valueLabel="Cumulative realized P&amp;L" />
@@ -681,16 +811,27 @@ export default function DashboardPage() {
         {/* Below chart: open positions + position history */}
         <div className="glass rounded-xl p-6 animate-fade-up-delay-4 space-y-10">
           <div>
-            <h2 className="font-semibold mb-1 flex items-center gap-2">
-              <Users className="w-4 h-4 text-primary" />
-              Open positions
-            </h2>
-            <p className="text-xs text-muted-foreground mb-4">Open futures on your Mudrex account.</p>
-            {openPositionsSectionLoading ? (
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="font-semibold mb-1 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" />
+                  Open positions
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {openScope === "rexalgo"
+                    ? "RexAlgo mode shows open positions matched to trades placed through RexAlgo."
+                    : "Open futures on your Mudrex account."}
+                </p>
+              </div>
+              <ScopePills value={openScope} onChange={setOpenScope} />
+            </div>
+            {openPositionsSectionLoading || (openScope === "rexalgo" && activityQ.isPending) ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
-            ) : positions.length === 0 ? (
+            ) : displayedOpenPositions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed border-border/60 bg-secondary/20">
-                No open positions. Fund futures and trade on Mudrex, or subscribe to a strategy.
+                {openScope === "rexalgo"
+                  ? "No open RexAlgo positions matched your current Mudrex positions."
+                  : "No open positions. Fund futures and trade on Mudrex, or subscribe to a strategy."}
               </p>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-border/60">
@@ -706,7 +847,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {positions.map((p) => {
+                    {displayedOpenPositions.map((p) => {
                       const entry = parseFloat(p.entry_price ?? "0");
                       const mark = parseFloat(p.mark_price ?? "0");
                       return (
@@ -746,24 +887,32 @@ export default function DashboardPage() {
           </div>
 
           <div className="border-t border-border/60 pt-8">
-            <h2 className="font-semibold mb-1 flex items-center gap-2">
-              <History className="w-4 h-4 text-primary" />
-              Position history
-            </h2>
-            <p className="text-xs text-muted-foreground mb-4">
-              Recent closes from Mudrex (newest first). P&amp;L uses exchange data when available; otherwise
-              we estimate from prices and size (fees not included).
-            </p>
-            {historyQ.isPending ? (
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="font-semibold mb-1 flex items-center gap-2">
+                  <History className="w-4 h-4 text-primary" />
+                  Position history
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {historyScope === "rexalgo"
+                    ? "RexAlgo mode filters recent closes to trades placed through RexAlgo. Older trades before exact position-id attribution may be incomplete."
+                    : "Recent closes from Mudrex (newest first). P&L uses exchange data when available; otherwise we estimate from prices and size (fees not included)."}
+                </p>
+              </div>
+              <ScopePills value={historyScope} onChange={setHistoryScope} />
+            </div>
+            {historyQ.isPending || (historyScope === "rexalgo" && activityQ.isPending) ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Loading position history…</p>
             ) : historyQ.isError && !isAdmin ? (
               <p className="text-sm text-muted-foreground py-8 text-center leading-relaxed max-w-md mx-auto">
                 Trade history will appear here after your account data loads. Use the dashboard{" "}
                 <span className="font-medium text-foreground">Refresh</span> button to retry.
               </p>
-            ) : closedHistorySorted.length === 0 ? (
+            ) : displayedHistory.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed border-border/60 bg-secondary/20">
-                No closed positions in this history window yet.
+                {historyScope === "rexalgo"
+                  ? "No RexAlgo closed positions matched this history window yet."
+                  : "No closed positions in this history window yet."}
               </p>
             ) : (
               <div className="overflow-x-auto max-h-[min(28rem,50vh)] overflow-y-auto rounded-lg border border-border/60">
@@ -781,7 +930,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {closedHistorySorted.map((p) => {
+                    {displayedHistory.map((p) => {
                       const realized = parseFloat(p.realized_pnl ?? "0");
                       const entry = parseFloat(p.entry_price ?? "0");
                       const mark = parseFloat(p.mark_price ?? "0");

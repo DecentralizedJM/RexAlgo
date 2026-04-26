@@ -6,6 +6,8 @@ import StrategyCard from "@/components/StrategyCard";
 import { PublicListingsPlaceholder } from "@/components/PublicListingsPlaceholder";
 import { fetchStrategies, type ApiStrategy } from "@/lib/api";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
+import SEOMeta from "@/components/SEOMeta";
+import { SITE_URL } from "@/lib/seo";
 
 const riskFilters = ["all", "low", "medium", "high"] as const;
 
@@ -58,12 +60,17 @@ export default function MarketplacePage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEOMeta
+        title="Crypto Strategy Marketplace — RexAlgo"
+        description="Browse 850+ algorithmic and copy-trading strategies on Mudrex Futures. Filter by risk level, win rate, and ROI. Subscribe with your margin per trade."
+        canonical={`${SITE_URL}/marketplace`}
+      />
       <Navbar />
       <div className="container mx-auto px-4 main-nav-pad pb-16">
         <div className="mb-8 animate-fade-up">
-          <h1 className="text-2xl font-bold mb-1">Strategy marketplace</h1>
+          <h1 className="text-2xl font-bold mb-1">Crypto Strategy Marketplace</h1>
           <p className="text-sm text-muted-foreground">
-            Algo listings. Subscribe with your margin per trade.
+            Algorithmic strategies on Mudrex Futures. Subscribe with your margin per trade.
           </p>
         </div>
 

@@ -196,6 +196,7 @@ export const tradeLogs = pgTable(
       onDelete: "set null",
     }),
     orderId: text("order_id"),
+    positionId: text("position_id"),
     symbol: text("symbol").notNull(),
     side: text("side").notNull(),
     quantity: text("quantity").notNull(),
@@ -211,6 +212,7 @@ export const tradeLogs = pgTable(
     status: text("status", { enum: ["open", "closed", "cancelled"] })
       .notNull()
       .default("open"),
+    closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -218,6 +220,7 @@ export const tradeLogs = pgTable(
   (t) => [
     index("trade_logs_user_created_idx").on(t.userId, t.createdAt),
     index("trade_logs_strategy_created_idx").on(t.strategyId, t.createdAt),
+    index("trade_logs_user_position_idx").on(t.userId, t.positionId),
   ]
 );
 

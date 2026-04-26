@@ -7,6 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchStrategies, type ApiStrategy } from "@/lib/api";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { initials } from "@/lib/format";
+import SEOMeta from "@/components/SEOMeta";
+import { SITE_URL } from "@/lib/seo";
 
 function mapCopyStrategy(s: ApiStrategy) {
   const maxDd = s.stoplossPct != null ? Math.min(30, s.stoplossPct * 2) : 12;
@@ -54,12 +56,17 @@ export default function CopyTradingPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEOMeta
+        title="Crypto Copy Trading — Follow Top Traders on Mudrex Futures"
+        description="Copy the best Mudrex Futures traders automatically. Set your margin, follow signals, and track performance across Bitcoin, Ethereum, and more."
+        canonical={`${SITE_URL}/copy-trading`}
+      />
       <Navbar />
       <div className="container mx-auto px-4 main-nav-pad pb-16">
         <div className="mb-8 animate-fade-up">
-          <h1 className="text-2xl font-bold mb-1">Copy trading</h1>
+          <h1 className="text-2xl font-bold mb-1">Crypto Copy Trading</h1>
           <p className="text-sm text-muted-foreground">
-            Copy-trading listings. Open one to subscribe with your margin.
+            Follow expert Mudrex Futures traders. Open a listing to subscribe with your margin.
           </p>
         </div>
 

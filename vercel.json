@@ -29,7 +29,11 @@
       "destination": "https://rexalgo-production.up.railway.app/api/:path*"
     },
     {
-      "source": "/((?!assets/|rexalgo-mark\\.png|rexalgo-logo\\.png|mudrex-logo\\.png|favicon\\.ico|robots\\.txt|placeholder\\.svg).*)",
+      "source": "/sitemap.xml",
+      "destination": "https://rexalgo-production.up.railway.app/api/sitemap"
+    },
+    {
+      "source": "/((?!assets/|rexalgo-mark\\.png|rexalgo-logo\\.png|mudrex-logo\\.png|favicon\\.ico|robots\\.txt|placeholder\\.svg|sitemap\\.xml|og-default\\.png).*)",
       "destination": "/index.html"
     }
   ]

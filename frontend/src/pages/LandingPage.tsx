@@ -5,6 +5,8 @@ import {
   useScroll,
   useTransform,
 } from "framer-motion";
+import SEOMeta from "@/components/SEOMeta";
+import { SITE_URL } from "@/lib/seo";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import {
@@ -15,7 +17,6 @@ import {
   Users,
   Bot,
   LifeBuoy,
-  Github,
   LayoutDashboard,
 } from "lucide-react";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
@@ -180,6 +181,11 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEOMeta
+        title="RexAlgo — Algorithmic & Copy Trading on Mudrex Futures"
+        description="Run algorithmic strategies and copy-trade top traders on Mudrex Futures. No code needed. Browse 850+ strategies, backtest in minutes."
+        canonical={SITE_URL}
+      />
       <Navbar />
 
       <motion.section
@@ -385,18 +391,14 @@ export default function LandingPage() {
             </div>
             <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 sm:justify-start">
               <span className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-300">
-                Developed by
+                Made with love
               </span>
-              <a
-                href="https://github.com/DecentralizedJM"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/85 transition-colors"
-                aria-label="Jithin Mohandas on GitHub"
-              >
-                <Github className="h-4 w-4 shrink-0" aria-hidden />
-                Jithin Mohandas
-              </a>
+              <span className="text-sm font-semibold text-[#8B0000]" aria-label="deep red heart">
+                ❤️
+              </span>
+              <span className="text-[11px] sm:text-xs text-neutral-600 dark:text-neutral-300">
+                for Mudrex community
+              </span>
             </div>
           </div>
           <div className="flex flex-col items-center gap-2 text-center sm:items-end sm:text-right">

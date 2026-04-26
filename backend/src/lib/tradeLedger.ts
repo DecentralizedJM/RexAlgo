@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { tradeLogs } from "@/lib/schema";
 import type { MudrexOrder } from "@/types";
@@ -25,6 +26,8 @@ export type LogTradeArgs = {
   order: Pick<MudrexOrder, "order_id" | "symbol" | "order_type" | "quantity" | "price">;
   /** Optional strategy link (copy/tv route_to_strategy paths). */
   strategyId?: string | null;
+  /** Mudrex position id when the caller has it (usually close paths). */
+  positionId?: string | null;
   /**
    * Optional mark price fallback when the order response does not include a
    * filled price (e.g. MARKET orders on some exchanges return `price = "0"`
@@ -58,6 +61,7 @@ export async function logTrade(args: LogTradeArgs): Promise<void> {
       userId: args.userId,
       strategyId: args.strategyId ?? null,
       orderId: args.order.order_id ?? null,
+      positionId: args.positionId ?? null,
       symbol: args.order.symbol,
       side: args.order.order_type,
       quantity: args.order.quantity,
@@ -79,6 +83,43 @@ export async function logTrade(args: LogTradeArgs): Promise<void> {
         },
       },
       "[trade-ledger] insert failed"
+    );
+  }
+}
+
+export async function markRexAlgoTradesClosed(args: {
+  userId: string;
+  symbol: string;
+  side: string;
+  positionId?: string | null;
+  closedAt?: Date;
+}): Promise<void> {
+  try {
+    await db
+      .update(tradeLogs)
+      .set({
+        status: "closed",
+        positionId: args.positionId ?? null,
+        closedAt: args.closedAt ?? new Date(),
+      })
+      .where(
+        // Prefer exact position id when available, but also fill it onto older
+        // matching open rows created before we stored position ids. The user,
+        // symbol, side, and open-status guard prevents cross-account updates.
+        and(
+          eq(tradeLogs.userId, args.userId),
+          eq(tradeLogs.symbol, args.symbol),
+          eq(tradeLogs.side, args.side),
+          eq(tradeLogs.status, "open")
+        )
+      );
+  } catch (err) {
+    logger.error(
+      {
+        err: err instanceof Error ? err.message : String(err),
+        payload: args,
+      },
+      "[trade-ledger] close update failed"
     );
   }
 }
