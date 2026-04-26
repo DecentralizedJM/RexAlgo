@@ -105,8 +105,17 @@
     @apply border-border;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  #root {
+    min-width: 0;
+  }
+
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply min-w-0 bg-background text-foreground font-sans antialiased;
   }
 
   h1, h2, h3, h4 {
@@ -124,6 +133,12 @@
   }
   .hero-with-nav-pad {
     padding-top: calc(var(--app-nav-offset, 4rem) + 5rem);
+  }
+
+  /** Horizontal page gutter + notch / home-indicator safe area (use on fixed nav + full-bleed sections). */
+  .px-page {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
   }
 
   /* Landing: Bybit ticker marquee (two identical halves; -50% = one loop). */

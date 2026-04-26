@@ -114,7 +114,7 @@ export default function Navbar() {
 
   return (
     <nav ref={navRef} className="fixed top-0 left-0 right-0 z-50 glass flex flex-col">
-      <div className="container mx-auto flex h-16 shrink-0 items-center gap-4 px-4 md:gap-6 lg:gap-8">
+      <div className="container mx-auto flex h-16 shrink-0 items-center gap-2 px-page sm:gap-4 md:gap-6 lg:gap-8">
         <Link to="/" className="group flex shrink-0 items-center gap-2">
           <RexAlgoLogo size={32} className="rounded-lg" />
           <RexAlgoWordmark className="text-lg" />
@@ -292,7 +292,7 @@ export default function Navbar() {
       </div>
 
       {showMudrexKeyBanner && (
-        <div className="border-t border-loss/35 bg-loss/10 px-4 py-2.5 shrink-0">
+        <div className="border-t border-loss/35 bg-loss/10 px-page py-2.5 shrink-0">
           <div className="container mx-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 text-sm">
             <div className="flex gap-2 items-start min-w-0">
               <KeyRound className="w-4 h-4 text-loss shrink-0 mt-0.5" aria-hidden />
@@ -351,7 +351,7 @@ export default function Navbar() {
 
       {mobileOpen && (
         <div className="md:hidden glass border-t border-border">
-          <div className="container mx-auto px-4 py-4 flex flex-col gap-2">
+          <div className="container mx-auto flex flex-col gap-2 px-page py-4">
             {navLinks.map((link) => (
               <Link
                 key={link.to}
