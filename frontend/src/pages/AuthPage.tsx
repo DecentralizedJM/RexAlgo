@@ -8,6 +8,7 @@ import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
 import { loginWithGoogle, ApiError } from "@/lib/api";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
 import SEOMeta from "@/components/SEOMeta";
+import { SITE_URL } from "@/lib/seo";
 
 type AuthState = "idle" | "loading" | "error";
 
@@ -66,7 +67,12 @@ export default function AuthPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-background px-4 py-10">
-      <SEOMeta title="Sign In — RexAlgo" description="Sign in to RexAlgo." noindex />
+      <SEOMeta
+        title="Sign In — RexAlgo"
+        description="Sign in to RexAlgo."
+        canonical={`${SITE_URL}/auth`}
+        noindex
+      />
       <Link
         to="/"
         className="absolute left-4 top-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary sm:left-6 sm:top-6"

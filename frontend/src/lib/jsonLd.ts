@@ -47,13 +47,10 @@ export interface StrategySchemaOpts {
   id: string;
   name: string;
   description: string;
-  winRate: number;
-  totalTrades: number;
   symbol: string;
 }
 
 export function strategyProductSchema(s: StrategySchemaOpts) {
-  const ratingValue = Math.max(1, Math.min(5, (s.winRate / 100) * 5));
   return {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -65,15 +62,5 @@ export function strategyProductSchema(s: StrategySchemaOpts) {
       "@type": "Brand",
       name: "RexAlgo",
     },
-    aggregateRating:
-      s.totalTrades > 0
-        ? {
-            "@type": "AggregateRating",
-            ratingValue: ratingValue.toFixed(1),
-            bestRating: "5",
-            worstRating: "1",
-            reviewCount: String(s.totalTrades),
-          }
-        : undefined,
   };
 }

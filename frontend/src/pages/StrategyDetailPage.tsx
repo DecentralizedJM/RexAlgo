@@ -179,8 +179,6 @@ export default function StrategyDetailPage() {
           id: strategy.id,
           name: strategy.name,
           description: strategy.description,
-          winRate: strategy.winRate,
-          totalTrades: strategy.totalTrades,
           symbol: strategy.symbol,
         }),
       ]
