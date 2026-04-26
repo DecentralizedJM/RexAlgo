@@ -314,9 +314,9 @@ export default function LandingPage() {
           viewport={inView}
         >
           <motion.div variants={v.item} className="text-center mb-16">
-            <h2 className="text-3xl font-bold mb-4">What you get</h2>
+            <h2 className="text-3xl font-bold mb-4">Copy-trade top Mudrex Futures traders</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Algos, copy trading, and subs in one flow on top of Mudrex.
+              Algorithmic strategies, copy trading, and subscriptions in one flow — no code needed.
             </p>
           </motion.div>
 
