@@ -401,11 +401,11 @@ export default function LandingPage() {
           </div>
           <div className="flex flex-col items-center gap-2 text-center sm:items-end sm:text-right">
             <a
-              href="mailto:help@mudrex.com?subject=RexAlgo%20support"
+              href="mailto:help@rexalgo.xyz?subject=RexAlgo%20support"
               className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
             >
               <LifeBuoy className="w-3.5 h-3.5 shrink-0" />
-              help@mudrex.com
+              help@rexalgo.xyz
             </a>
             <p className="text-xs text-muted-foreground">
               © 2026{" "}

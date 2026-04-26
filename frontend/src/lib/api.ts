@@ -126,6 +126,34 @@ export async function unlinkMudrexKey() {
   );
 }
 
+export type KillSwitchSummary = {
+  subscriptionsStopped: number;
+  rexAlgoOpenTradesFound: number;
+  ordersCancelled: number;
+  positionsClosed: number;
+  failures: number;
+  orderResults: Array<{
+    orderId: string;
+    status: "cancelled" | "failed";
+    detail?: string;
+  }>;
+  positionResults: Array<{
+    symbol: string;
+    side: string;
+    positionId: string;
+    status: "closed" | "failed";
+    detail?: string;
+  }>;
+};
+
+export async function activateKillSwitch() {
+  return apiFetch<{
+    success: boolean;
+    user: SessionUser;
+    summary: KillSwitchSummary;
+  }>("/api/account/kill-switch", { method: "POST" });
+}
+
 /** @deprecated Use loginWithGoogle instead. Kept for legacy API-key-only login. */
 export async function login(apiSecret: string, displayName?: string) {
   return apiFetch<{ success: boolean; user: { id: string; displayName: string } }>(

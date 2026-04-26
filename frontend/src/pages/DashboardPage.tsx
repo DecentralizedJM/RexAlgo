@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
@@ -6,16 +6,6 @@ import Navbar from "@/components/Navbar";
 import PerformanceChart from "@/components/PerformanceChart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import {
   BarChart3,
   Users,
@@ -30,7 +20,7 @@ import {
   ExternalLink,
   Shield,
   Lock,
-  Unplug,
+  RefreshCw,
 } from "lucide-react";
 import {
   fetchWallet,
@@ -38,7 +28,6 @@ import {
   fetchPositionHistory,
   fetchSubscriptions,
   linkMudrexKey,
-  unlinkMudrexKey,
   ApiError,
   getApiErrorCode,
   isMudrexCredentialError,
@@ -53,6 +42,7 @@ import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
 import { toast } from "sonner";
+import { refreshAppData } from "@/lib/refreshAppData";
 
 /** Cumulative realized P&L from Mudrex position history (one API page). */
 function buildRealizedPnlCurve(positions: ApiPosition[]): { date: string; value: number }[] {
@@ -108,7 +98,7 @@ function mudrexUpstreamHint(issues: FetchIssue[]): string | null {
       return "Mudrex rejected the API secret we have on file (often after ~90 days). Open Sign in and paste a new key from Mudrex Pro Trading.";
     }
     if (err instanceof ApiError && getApiErrorCode(err) === "MUDREX_RATE_LIMIT") {
-      return "Mudrex rate-limited these requests. Wait a minute, then use Retry or Refresh in the header.";
+      return "Mudrex rate-limited these requests. Wait a minute, then use Retry or the dashboard Refresh button.";
     }
     if (err instanceof ApiError && getApiErrorCode(err) === "MUDREX_UNAVAILABLE") {
       return "Mudrex returned an overload or maintenance response. Retry shortly.";
@@ -296,86 +286,12 @@ function ConnectMudrexCard() {
   );
 }
 
-function DisconnectMudrexControl() {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const queryClient = useQueryClient();
-
-  const onConfirm = async () => {
-    setBusy(true);
-    try {
-      const result = await unlinkMudrexKey();
-      queryClient.setQueryData(["session", "me"], {
-        user: result.user,
-        sessionExpiresAt: null,
-      });
-      await queryClient.refetchQueries({ queryKey: ["session", "me"] });
-      void queryClient.invalidateQueries({ queryKey: ["wallet"] });
-      void queryClient.invalidateQueries({ queryKey: ["positions"] });
-      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
-      void queryClient.invalidateQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY });
-      setOpen(false);
-      toast.success("Mudrex disconnected from RexAlgo");
-    } catch (err) {
-      toast.error(
-        err instanceof ApiError ? err.message : "Could not disconnect. Try again."
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="gap-1.5 border-loss/35 text-loss hover:bg-loss/10 hover:text-loss">
-          <Unplug className="h-4 w-4" />
-          Disconnect Mudrex
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Disconnect Mudrex?</AlertDialogTitle>
-          <AlertDialogDescription className="space-y-3">
-            <span className="block">
-              RexAlgo will remove your stored API secret. Balances, positions, and subscriptions will disappear
-              here until you connect again.
-            </span>
-            <span className="block text-foreground/90">
-              To rotate or revoke the key on Mudrex&apos;s side, use their API keys page, then connect a new
-              secret here if you need to.
-            </span>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end sm:gap-2">
-          <Button variant="hero" className="w-full sm:w-auto" asChild>
-            <a href={MUDREX_PRO_TRADING_URL} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4" />
-              Visit Mudrex
-            </a>
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            className="w-full sm:w-auto"
-            disabled={busy}
-            onClick={() => void onConfirm()}
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Disconnect"}
-          </Button>
-          <AlertDialogCancel className="mt-0 w-full sm:w-auto" disabled={busy}>
-            Cancel
-          </AlertDialogCancel>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
-
 export default function DashboardPage() {
   const authQ = useRequireAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const refreshingRef = useRef(false);
+  const [refreshing, setRefreshing] = useState(false);
   const sessionAuthed = authQ.authed;
   const user = authQ.data?.user;
   const hasMudrexKey = user?.hasMudrexKey ?? false;
@@ -414,6 +330,23 @@ export default function DashboardPage() {
     retryDelay: (n) => Math.min(1500 * (n + 1), 5000),
   });
 
+  const refreshDashboardData = useCallback(
+    async (showErrorToast = false) => {
+      if (refreshingRef.current) return;
+      refreshingRef.current = true;
+      setRefreshing(true);
+      try {
+        await refreshAppData(queryClient);
+      } catch {
+        if (showErrorToast) toast.error("Could not refresh dashboard");
+      } finally {
+        refreshingRef.current = false;
+        setRefreshing(false);
+      }
+    },
+    [queryClient]
+  );
+
   useEffect(() => {
     const err = walletQ.error || posQ.error || subQ.error || historyQ.error;
     if (!(err instanceof ApiError) || err.status !== 401) return;
@@ -421,6 +354,15 @@ export default function DashboardPage() {
     if (isMudrexCredentialError(err)) return;
     navigate("/auth", { replace: true });
   }, [walletQ.error, posQ.error, subQ.error, historyQ.error, navigate]);
+
+  useEffect(() => {
+    if (!sessionAuthed || !hasMudrexKey) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void refreshDashboardData();
+    }, 15_000);
+    return () => window.clearInterval(id);
+  }, [hasMudrexKey, refreshDashboardData, sessionAuthed]);
 
   /** Each Mudrex endpoint can lag independently — do not gate every stat on the slowest query. */
   const walletStatPending = walletQ.isPending && walletQ.data === undefined;
@@ -516,12 +458,25 @@ export default function DashboardPage() {
                 />
                 {hasMudrexKey ? "Mudrex Key Active" : "Mudrex key not linked"}
               </div>
+              {hasMudrexKey && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  disabled={refreshing}
+                  onClick={() => void refreshDashboardData(true)}
+                  aria-label="Refresh dashboard data"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               {hasMudrexKey ? (
                 <>
-                  Balances and positions from Mudrex. Refreshes when you focus this tab or use Refresh in the
-                  header.
+                  Balances and positions from Mudrex. Auto-refreshes every 15 seconds while this tab is active.
                 </>
               ) : (
                 <>Connect your Mudrex API key below to load balances, positions, and trading data.</>
@@ -539,7 +494,6 @@ export default function DashboardPage() {
           </div>
           {(hasMudrexKey || (user && !user.telegramId)) && (
             <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 shrink-0">
-              {hasMudrexKey && <DisconnectMudrexControl />}
               {user && !user.telegramId && (
                 <TelegramLoginButton
                   mode="link"
@@ -564,7 +518,7 @@ export default function DashboardPage() {
               requests, list or delete strategies, view users.
             </p>
             <Button variant="outline" size="sm" className="shrink-0" asChild>
-              <Link to="/admin">Open /admin</Link>
+              <Link to="/admin">Open</Link>
             </Button>
           </div>
         )}
@@ -617,8 +571,8 @@ export default function DashboardPage() {
                   positions. This usually finishes within a few seconds.
                 </p>
                 <p className="text-xs text-muted-foreground/90 leading-relaxed">
-                  If numbers do not appear after a short wait, use <span className="font-medium text-foreground">Refresh</span>{" "}
-                  in the header, or try again in a moment.
+                  If numbers do not appear after a short wait, use the dashboard{" "}
+                  <span className="font-medium text-foreground">Refresh</span> button, or try again in a moment.
                 </p>
                 <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={retryDashboardQueries}>
                   Try again
@@ -712,8 +666,8 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground py-12 text-center">Loading history from Mudrex…</p>
           ) : historyQ.isError && !isAdmin ? (
             <p className="text-sm text-muted-foreground py-12 text-center leading-relaxed max-w-md mx-auto">
-              Performance history will show here once your data finishes syncing. Use{" "}
-              <span className="font-medium text-foreground">Refresh</span> in the header or try again in a moment.
+              Performance history will show here once your data finishes syncing. Use the dashboard{" "}
+              <span className="font-medium text-foreground">Refresh</span> button or try again in a moment.
             </p>
           ) : chartData.length === 0 ? (
             <p className="text-sm text-muted-foreground py-12 text-center">
@@ -804,8 +758,8 @@ export default function DashboardPage() {
               <p className="text-sm text-muted-foreground py-8 text-center">Loading position history…</p>
             ) : historyQ.isError && !isAdmin ? (
               <p className="text-sm text-muted-foreground py-8 text-center leading-relaxed max-w-md mx-auto">
-                Trade history will appear here after your account data loads. You can use{" "}
-                <span className="font-medium text-foreground">Refresh</span> in the header to retry.
+                Trade history will appear here after your account data loads. Use the dashboard{" "}
+                <span className="font-medium text-foreground">Refresh</span> button to retry.
               </p>
             ) : closedHistorySorted.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center rounded-lg border border-dashed border-border/60 bg-secondary/20">

@@ -7,8 +7,6 @@ import {
   X,
   LogOut,
   BookmarkCheck,
-  LifeBuoy,
-  RefreshCw,
   KeyRound,
   ExternalLink,
   ChevronDown,
@@ -25,9 +23,7 @@ import { logout } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { RexAlgoLogo } from "@/components/RexAlgoLogo";
 import { RexAlgoWordmark } from "@/components/RexAlgoWordmark";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { TradingViewMark } from "@/components/TradingViewMark";
-import { refreshAppData } from "@/lib/refreshAppData";
 import { toast } from "sonner";
 import { useMudrexKeyInvalid } from "@/contexts/MudrexKeyInvalidContext";
 import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
@@ -37,8 +33,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const SUPPORT_EMAIL = "help@mudrex.com";
 
 type NavIcon = ComponentType<{ className?: string }>;
 
@@ -66,7 +60,6 @@ export default function Navbar() {
   const queryClient = useQueryClient();
   const navRef = useRef<HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const isLanding = location.pathname === "/";
   const { data: session } = useSession();
   const user = session?.user;
@@ -117,18 +110,6 @@ export default function Navbar() {
     await queryClient.invalidateQueries({ queryKey: ["session", "me"] });
     navigate("/");
     setMobileOpen(false);
-  }
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    try {
-      await refreshAppData(queryClient);
-    } catch {
-      toast.error("Could not refresh");
-    } finally {
-      setRefreshing(false);
-      setMobileOpen(false);
-    }
   }
 
   return (
@@ -230,37 +211,6 @@ export default function Navbar() {
 
         <div className="flex flex-1 items-center justify-end gap-2 md:flex-none md:gap-3">
           <div className="hidden items-center gap-2 md:flex md:gap-3">
-          <ThemeToggle />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                href={`mailto:${SUPPORT_EMAIL}?subject=RexAlgo%20support`}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
-                aria-label={`Email ${SUPPORT_EMAIL}`}
-              >
-                <LifeBuoy className="h-4 w-4" />
-              </a>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Support: {SUPPORT_EMAIL}</TooltipContent>
-          </Tooltip>
-          {user && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="shrink-0 h-9 w-9"
-                  disabled={refreshing}
-                  onClick={() => void handleRefresh()}
-                  aria-label="Refresh balances and positions"
-                >
-                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Pull latest from Mudrex</TooltipContent>
-            </Tooltip>
-          )}
           {isLanding && !user ? (
             <>
               <Link to="/about">
@@ -402,30 +352,6 @@ export default function Navbar() {
       {mobileOpen && (
         <div className="md:hidden glass border-t border-border">
           <div className="container mx-auto px-4 py-4 flex flex-col gap-2">
-            <div className="flex items-center justify-between py-2 border-b border-border/60 mb-1">
-              <span className="text-xs font-medium text-muted-foreground">Theme</span>
-              <ThemeToggle />
-            </div>
-            <a
-              href={`mailto:${SUPPORT_EMAIL}?subject=RexAlgo%20support`}
-              className="flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground"
-              onClick={() => setMobileOpen(false)}
-            >
-              <LifeBuoy className="w-4 h-4" />
-              Support ({SUPPORT_EMAIL})
-            </a>
-            {user && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2"
-                disabled={refreshing}
-                onClick={() => void handleRefresh()}
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-                Refresh data
-              </Button>
-            )}
             {navLinks.map((link) => (
               <Link
                 key={link.to}

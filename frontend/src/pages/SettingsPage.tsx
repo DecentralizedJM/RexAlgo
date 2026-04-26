@@ -1,17 +1,29 @@
 /**
- * Settings: Telegram linking + notification toggle (Phase 6).
+ * Settings: account-level controls that should not live in the main navbar.
  *
  * Kept narrow on purpose — this page only covers account-level preferences
- * that don't fit on the dashboard or auth screen. Mudrex key rotation lives on
- * the auth flow; strategy settings live in the respective studios.
+ * that don't fit on the dashboard or auth screen. Strategy settings live in
+ * the respective studios.
  */
 import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, BellOff, BellRing, Loader2, Unlink } from "lucide-react";
+import {
+  ArrowLeft,
+  BellOff,
+  BellRing,
+  Copy,
+  LifeBuoy,
+  Loader2,
+  Mail,
+  PowerOff,
+  SunMoon,
+  Unlink,
+} from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { AuthGateSplash } from "@/components/AuthGateSplash";
 import { useRequireAuth } from "@/hooks/useAuth";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Card,
   CardContent,
@@ -20,13 +32,221 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 import {
   ApiError,
+  activateKillSwitch,
   setTelegramNotifyEnabled,
   unlinkTelegram,
 } from "@/lib/api";
+import { refreshAppData } from "@/lib/refreshAppData";
+import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
 import { toast } from "sonner";
+
+const SUPPORT_EMAIL = "help@rexalgo.xyz";
+
+function AppearanceCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <SunMoon className="h-4 w-4 text-primary" aria-hidden />
+          Appearance
+        </CardTitle>
+        <CardDescription>
+          Choose the theme RexAlgo uses on this browser.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center justify-between rounded-lg border border-border p-4">
+          <div>
+            <p className="text-sm font-medium">Light / dark mode</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Switch between the focused dark trading view and a lighter account view.
+            </p>
+          </div>
+          <ThemeToggle />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SupportCard() {
+  const copyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(SUPPORT_EMAIL);
+      toast.success("Support email copied");
+    } catch {
+      toast.error("Could not copy support email");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <LifeBuoy className="h-4 w-4 text-primary" aria-hidden />
+          Support
+        </CardTitle>
+        <CardDescription>
+          Need help with your RexAlgo account, subscriptions, or Mudrex connection?
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border border-border p-4">
+          <p className="text-sm font-medium">Email support</p>
+          <p className="mt-1 font-mono text-sm text-foreground">{SUPPORT_EMAIL}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Include your account email and what you were trying to do.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="hero" asChild>
+            <a href={`mailto:${SUPPORT_EMAIL}?subject=RexAlgo%20support`}>
+              <Mail className="h-4 w-4" />
+              Email support
+            </a>
+          </Button>
+          <Button type="button" variant="outline" onClick={() => void copyEmail()}>
+            <Copy className="h-4 w-4" />
+            Copy email
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function KillSwitchCard({ hasMudrexKey }: { hasMudrexKey: boolean }) {
+  const queryClient = useQueryClient();
+
+  const killSwitchMut = useMutation({
+    mutationFn: activateKillSwitch,
+    onSuccess: async (data) => {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["session", "me"] }),
+        queryClient.invalidateQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY }),
+        refreshAppData(queryClient),
+      ]);
+
+      const { summary } = data;
+      const base =
+        `Stopped ${summary.subscriptionsStopped} subscription` +
+        `${summary.subscriptionsStopped === 1 ? "" : "s"}, ` +
+        `cancelled ${summary.ordersCancelled} order` +
+        `${summary.ordersCancelled === 1 ? "" : "s"}, and closed ` +
+        `${summary.positionsClosed} RexAlgo position` +
+        `${summary.positionsClosed === 1 ? "" : "s"}.`;
+
+      if (summary.failures > 0) {
+        toast.warning(`${base} ${summary.failures} item(s) need manual review.`);
+      } else {
+        toast.success(`Kill switch activated. ${base}`);
+      }
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Kill switch failed");
+    },
+  });
+
+  return (
+    <Card className="border-loss/30">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-loss">
+          <PowerOff className="h-4 w-4" aria-hidden />
+          Kill switch
+        </CardTitle>
+        <CardDescription>
+          Emergency stop for RexAlgo automation on this account.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border border-loss/30 bg-loss/5 p-4">
+          <p className="text-sm font-medium text-foreground">
+            Activating this will stop future RexAlgo automation.
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed text-muted-foreground">
+            <li>Stops all active algo and copy-trading subscriptions.</li>
+            <li>Attempts to cancel open RexAlgo-created Mudrex orders.</li>
+            <li>Attempts to close currently open Mudrex positions created by RexAlgo.</li>
+            <li>Disconnects the stored Mudrex API key from RexAlgo.</li>
+            <li>Does not intentionally close positions you opened directly on Mudrex.</li>
+          </ul>
+          {!hasMudrexKey && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              No Mudrex key is currently connected, so RexAlgo can only stop local subscriptions.
+            </p>
+          )}
+        </div>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={killSwitchMut.isPending}
+            >
+              {killSwitchMut.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <PowerOff className="h-4 w-4" />
+              )}
+              Activate kill switch
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Activate kill switch?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-3">
+                <span className="block">
+                  RexAlgo will stop all active strategy and copy-trading subscriptions, then disconnect your stored
+                  Mudrex API key.
+                </span>
+                <span className="block">
+                  Before disconnecting the key, RexAlgo will try to cancel open orders and close open positions it
+                  created. Positions opened directly on Mudrex are not targeted.
+                </span>
+                <span className="block text-foreground/90">
+                  If Mudrex rejects any close or cancel request, RexAlgo will report it and leave that item for manual
+                  review in Mudrex.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={killSwitchMut.isPending}>
+                Cancel
+              </AlertDialogCancel>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={killSwitchMut.isPending}
+                onClick={() => killSwitchMut.mutate()}
+              >
+                {killSwitchMut.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <PowerOff className="h-4 w-4" />
+                )}
+                Yes, activate kill switch
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function SettingsPage() {
   const authQ = useRequireAuth();
@@ -100,10 +320,11 @@ export default function SettingsPage() {
           </Link>
           <h1 className="text-2xl font-bold">Account settings</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Control how RexAlgo reaches you outside the app.
+            Control account preferences, support, and emergency trading controls.
           </p>
         </div>
 
+        <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Telegram</CardTitle>
@@ -174,6 +395,10 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+        <AppearanceCard />
+        <SupportCard />
+        <KillSwitchCard hasMudrexKey={Boolean(user.hasMudrexKey)} />
+        </div>
       </div>
     </div>
   );

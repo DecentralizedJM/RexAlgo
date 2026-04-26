@@ -7,7 +7,7 @@
  *   - `link`:  signed-in user connects alerts. Success → `onLinked`.
  *
  * `layout="card"` — full-width, tall (settings card).
- * `layout="inline"` — compact (dashboard header next to Mudrex disconnect).
+ * `layout="inline"` — compact (dashboard header).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
