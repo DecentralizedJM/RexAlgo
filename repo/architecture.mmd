@@ -93,7 +93,7 @@ flowchart TB
 
 %% --- Copy webhook signal path ---
 flowchart LR
-  BOT[Signal bot] -->|POST + HMAC| WH[/api/webhooks/copy-trading/id]
+  BOT[Signal bot] -->|POST + HMAC| WH[/api/webhooks/strategy/id]
   WH --> RL[Redis rate limit\noptional]
   WH --> CM[copyMirror]
   CM --> MR[Mudrex per subscriber]
@@ -118,7 +118,7 @@ flowchart TB
     P3[/api/mudrex/*]
   end
   subgraph webhooks [Webhooks]
-    W1[/api/webhooks/copy-trading/*]
+    W1[/api/webhooks/strategy/*]
     W2[/api/webhooks/tv/*]
   end
   subgraph admin [Admin]

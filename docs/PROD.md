@@ -169,7 +169,7 @@ and queues a Telegram notification.
 
 | Kind | Shape |
 |------|-------|
-| Copy-trade | `{PUBLIC_API_URL}/api/webhooks/copy-trading/{strategyId}` |
+| Strategy signals | `{PUBLIC_API_URL}/api/webhooks/strategy/{strategyId}` (legacy `/copy-trading/`) |
 | TradingView | `{PUBLIC_API_URL}/api/webhooks/tv/{webhookId}` |
 
 Always prefer `PUBLIC_API_URL` over `PUBLIC_APP_URL` — the studio UI shows

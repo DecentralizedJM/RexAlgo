@@ -1,7 +1,7 @@
 /**
  * Fast gate for authenticated /api/* routes. No HTML UI on this server —
  * always JSON 401. Public: GET /api/strategies (and GET /api/strategies/[id]).
- * Public (HMAC): POST /api/webhooks/copy-trading/* — not matched here.
+ * Public (HMAC): POST /api/webhooks/strategy/* (and legacy /copy-trading/*) — not matched here.
  *
  * Runtime: Edge (default for Next middleware). We **only** verify the JWS
  * signature + expiry + (optional) session floor. The full revocation check

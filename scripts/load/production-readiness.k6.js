@@ -46,7 +46,7 @@ export function browse() {
 
 export function unsignedWebhookProbe() {
   const res = http.post(
-    `${BASE_URL}/api/webhooks/copy-trading/probe`,
+    `${BASE_URL}/api/webhooks/strategy/probe`,
     JSON.stringify({ idempotency_key: `probe-${__VU}-${__ITER}` }),
     { headers: { "Content-Type": "application/json" }, tags: { type: "abuse" } }
   );

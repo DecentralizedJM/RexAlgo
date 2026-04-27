@@ -11,6 +11,7 @@ import {
   serializeBacktestSpec,
 } from "@/lib/backtest/spec";
 import { publicApiBase } from "@/lib/publicUrl";
+import { strategySignalWebhookPath } from "@/lib/strategyWebhookPath";
 import {
   parseAssetSelection,
   parseSymbolsJson,
@@ -18,10 +19,10 @@ import {
   validateMudrexSymbols,
 } from "@/lib/strategyAssets";
 import {
-  STRATEGY_SLOT_LIMIT,
   StrategySlotLimitError,
   assertStrategySlotAvailable,
   countStrategySlots,
+  getStrategySlotLimit,
 } from "@/lib/quotas";
 
 export async function GET() {
@@ -50,7 +51,7 @@ export async function GET() {
 
   const out = rows.map((s) => {
     const w = whMap.get(s.id);
-    const path = `/api/webhooks/copy-trading/${s.id}`;
+    const path = strategySignalWebhookPath(s.id);
     return {
       ...s,
       symbols: parseSymbolsJson(s.symbolsJson, s.symbol),
@@ -64,11 +65,12 @@ export async function GET() {
   });
 
   const used = await countStrategySlots(session.user.id, "algo");
+  const limit = await getStrategySlotLimit(session.user.id, "algo");
 
   return NextResponse.json({
     strategies: out,
     publicBaseUrl: base || null,
-    slots: { used, limit: STRATEGY_SLOT_LIMIT },
+    slots: { used, limit },
   });
 }
 
@@ -167,7 +169,7 @@ export async function POST(req: NextRequest) {
       .where(eq(strategies.id, id));
 
     const base = publicApiBase();
-    const path = `/api/webhooks/copy-trading/${id}`;
+    const path = strategySignalWebhookPath(id);
 
     return NextResponse.json(
       {

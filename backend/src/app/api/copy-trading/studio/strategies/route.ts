@@ -6,11 +6,12 @@ import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { strategies, copyWebhookConfig } from "@/lib/schema";
 import { publicApiBase } from "@/lib/publicUrl";
+import { strategySignalWebhookPath } from "@/lib/strategyWebhookPath";
 import {
-  STRATEGY_SLOT_LIMIT,
   StrategySlotLimitError,
   assertStrategySlotAvailable,
   countStrategySlots,
+  getStrategySlotLimit,
 } from "@/lib/quotas";
 
 export async function GET() {
@@ -39,7 +40,7 @@ export async function GET() {
 
   const out = rows.map((s) => {
     const w = whMap.get(s.id);
-    const path = `/api/webhooks/copy-trading/${s.id}`;
+    const path = strategySignalWebhookPath(s.id);
     return {
       ...s,
       webhookEnabled: w?.enabled ?? false,
@@ -52,11 +53,12 @@ export async function GET() {
   });
 
   const used = await countStrategySlots(session.user.id, "copy_trading");
+  const limit = await getStrategySlotLimit(session.user.id, "copy_trading");
 
   return NextResponse.json({
     strategies: out,
     publicBaseUrl: base || null,
-    slots: { used, limit: STRATEGY_SLOT_LIMIT },
+    slots: { used, limit },
   });
 }
 
@@ -128,7 +130,7 @@ export async function POST(req: NextRequest) {
       .where(eq(strategies.id, id));
 
     const base = publicApiBase();
-    const path = `/api/webhooks/copy-trading/${id}`;
+    const path = strategySignalWebhookPath(id);
 
     return NextResponse.json(
       {

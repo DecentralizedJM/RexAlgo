@@ -12,7 +12,7 @@ RexAlgo handles **Mudrex API secrets** and **session tokens**. Treat this like p
 
 - Mudrex API secret is securely encrypted in storage, and a server-backed session cookie is held in an **HttpOnly** cookie for session management.
 - API routes that touch Mudrex should remain **authenticated** where appropriate (see `backend/src/middleware.ts`).
-- **Copy-trading webhooks** (`POST /api/webhooks/copy-trading/*`) are **unauthenticated** but **HMAC-signed** (see `backend/src/lib/copyWebhookHmac.ts`). Signing secrets are encrypted in PostgreSQL like user secrets. Rotate a leaked secret from **Copy trading studio** (open it from **Master studio** in the top nav). Redis-backed per-strategy rate limits are used when configured for multi-instance production.
+- **Strategy signal webhooks** (`POST /api/webhooks/strategy/*`; legacy `POST /api/webhooks/copy-trading/*`) are **unauthenticated** but **HMAC-signed or body-secret** (see `backend/src/lib/copyWebhookHmac.ts`). Signing secrets are encrypted in PostgreSQL like user secrets. Rotate a leaked secret from **Strategy studio** or **Copy trading studio**. Redis-backed per-strategy rate limits are used when configured for multi-instance production.
 
 ## Copy-trading mirroring risk
 

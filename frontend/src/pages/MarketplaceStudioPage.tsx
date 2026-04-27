@@ -62,6 +62,7 @@ import {
 import StrategyBacktestPanel from "@/components/StrategyBacktestPanel";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { copyText } from "@/lib/clipboard";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -104,6 +105,23 @@ function buildWebhookUrl(
 ): string {
   const base = (publicBase || originFallback).replace(/\/$/, "");
   return `${base}${path}`;
+}
+
+/** Studio APIs now return `/api/webhooks/strategy/:id`; normalize older saved paths. */
+function canonicalStrategyWebhookPath(strategyId: string, path: string): string {
+  if (path.includes("/api/webhooks/copy-trading/")) {
+    return `/api/webhooks/strategy/${strategyId}`;
+  }
+  return path;
+}
+
+function defaultProviderWebhookHostname(fullUrl: string): boolean {
+  try {
+    const h = new URL(fullUrl).hostname;
+    return /\.railway\.app$/i.test(h) || /\.vercel\.app$/i.test(h);
+  } catch {
+    return false;
+  }
 }
 
 function formatRelative(iso: string): string {
@@ -219,13 +237,19 @@ export default function MarketplaceStudioPage() {
       id: string;
       action: "enable" | "disable" | "rotate";
     }) => setMarketplaceStrategyWebhook(id, action),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["marketplace-studio", "strategies"] });
       if (data.secretPlain) {
         setSecretFlash(data.secretPlain);
         setSecretVisible(false);
       }
       setWebhookConfirm(null);
+      if (variables.action === "enable") {
+        toast.success("Webhook enabled", {
+          description:
+            "Copy the URL and one-time signing secret into your bot. Treat both like passwords — anyone with them can send signals for this strategy.",
+        });
+      }
     },
     onError: (e) => {
       if (e instanceof ApiError && e.body && typeof e.body === "object" && (e.body as { code?: string }).code === "RECENT_LOGIN_REQUIRED") {
@@ -326,8 +350,11 @@ export default function MarketplaceStudioPage() {
     },
   });
 
+  const webhookDisplayPath = selected
+    ? canonicalStrategyWebhookPath(selected.id, selected.webhookPath)
+    : "";
   const webhookDisplayUrl = selected
-    ? buildWebhookUrl(publicBase, selected.webhookPath, originFallback)
+    ? buildWebhookUrl(publicBase, webhookDisplayPath, originFallback)
     : "";
   const pendingSlotRequest = (slotRequestsQ.data?.requests ?? []).find(
     (r) => r.status === "pending"
@@ -458,7 +485,8 @@ with urllib.request.urlopen(req, timeout=30) as res:
           <div className="mb-6 p-4 rounded-xl border border-warning/30 bg-warning/10 text-sm">
             <p className="font-medium text-warning mb-2">Signing secret (copy now; one-time display)</p>
             <p className="mb-3 text-xs text-muted-foreground">
-              Keep this safe. If leaked, anyone with this secret can send signals that manage this strategy.
+              Confidential — do not share. If this leaks, anyone can POST signed signals and manage this strategy
+              on your behalf.
             </p>
             <div className="flex gap-2 items-center">
               <code className="text-xs break-all flex-1 font-mono bg-background/80 p-2 rounded">
@@ -469,8 +497,13 @@ with urllib.request.urlopen(req, timeout=30) as res:
                 size="sm"
                 variant="outline"
                 onClick={() => setSecretVisible((v) => !v)}
+                aria-label={secretVisible ? "Hide signing secret" : "Reveal signing secret"}
               >
-                {secretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {secretVisible ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className={cn("w-4 h-4 animate-pulse")} aria-hidden />
+                )}
               </Button>
               <Button
                 type="button"
@@ -661,6 +694,16 @@ with urllib.request.urlopen(req, timeout=30) as res:
                       )}
                     </div>
 
+                    <div className="border-t border-border pt-4 space-y-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">Your signal webhook</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Generated for this strategy only. After you enable it, use the URL and signing secret in
+                          your bot or TradingView — keep both private.
+                        </p>
+                      </div>
+                    </div>
+
                     <div>
                       <Label className="text-xs text-muted-foreground">
                         Webhook name
@@ -788,13 +831,23 @@ with urllib.request.urlopen(req, timeout=30) as res:
                           size="icon"
                           variant="outline"
                           onClick={() => void copyText(webhookDisplayUrl, "Webhook URL copied")}
+                          aria-label="Copy webhook URL"
                         >
                           <Copy className="w-4 h-4" />
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Same endpoint as copy trading: <code className="text-foreground/80">/api/webhooks/copy-trading/&lt;id&gt;</code>
-                      </p>
+                      {!selected.webhookEnabled && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Enable the webhook after approval to activate this URL and receive your signing secret.
+                        </p>
+                      )}
+                      {webhookDisplayUrl && defaultProviderWebhookHostname(webhookDisplayUrl) && (
+                        <p className="text-xs text-muted-foreground mt-2 rounded-md border border-border/80 bg-muted/40 p-2">
+                          The hostname comes from your API&apos;s{" "}
+                          <code className="text-foreground/90">PUBLIC_API_URL</code> (or legacy env fallbacks). Set it
+                          to your own API domain so copied links don&apos;t show a default hosting URL.
+                        </p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

@@ -195,7 +195,7 @@ Enabling in production (operator task):
 
 Bots must `POST` to:
 
-`{PUBLIC_APP_URL}/api/webhooks/copy-trading/{strategyId}`
+`{PUBLIC_API_URL}/api/webhooks/strategy/{strategyId}` (legacy: `/api/webhooks/copy-trading/...`)
 
 So `PUBLIC_APP_URL` must be a URL that resolves to a path nginx (or Vercel rewrite) forwards to Next. Use **HTTPS** in production.
 

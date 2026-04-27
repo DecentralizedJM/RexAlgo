@@ -109,6 +109,22 @@ function buildWebhookUrl(
   return `${base}${path}`;
 }
 
+function canonicalStrategyWebhookPath(strategyId: string, path: string): string {
+  if (path.includes("/api/webhooks/copy-trading/")) {
+    return `/api/webhooks/strategy/${strategyId}`;
+  }
+  return path;
+}
+
+function defaultProviderWebhookHostname(fullUrl: string): boolean {
+  try {
+    const h = new URL(fullUrl).hostname;
+    return /\.railway\.app$/i.test(h) || /\.vercel\.app$/i.test(h);
+  } catch {
+    return false;
+  }
+}
+
 /** Compact relative timestamp for webhook last-delivery hints (e.g. "3m ago"). */
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -262,8 +278,11 @@ export default function CopyTradingStudioPage() {
     },
   });
 
+  const webhookDisplayPath = selected
+    ? canonicalStrategyWebhookPath(selected.id, selected.webhookPath)
+    : "";
   const webhookDisplayUrl = selected
-    ? buildWebhookUrl(publicBase, selected.webhookPath, originFallback)
+    ? buildWebhookUrl(publicBase, webhookDisplayPath, originFallback)
     : "";
 
   const pythonSnippet = selected
@@ -674,6 +693,13 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         Dev tip: expose <code className="text-foreground/80">127.0.0.1:3000</code> with
                         ngrok; bots cannot call Vite on 8080 unless you proxy webhooks there too.
                       </p>
+                      {webhookDisplayUrl && defaultProviderWebhookHostname(webhookDisplayUrl) && (
+                        <p className="text-xs text-muted-foreground mt-2 rounded-md border border-border/80 bg-muted/40 p-2">
+                          Production: set <code className="text-foreground/90">PUBLIC_API_URL</code> to your branded
+                          API host so this URL does not show a default <code className="text-foreground/90">*.railway.app</code>{" "}
+                          (or similar) hostname.
+                        </p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

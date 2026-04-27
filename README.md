@@ -36,7 +36,7 @@
 | **Strategy studio** | Masters create **algo** listings, **signed webhooks** — **`/marketplace/studio`** via **Master studio → Strategy** |
 | **Copy trading** | Browse `copy_trading` strategies, subscribe; studio at **`/copy-trading/studio`** |
 | **Master studio** | Approved masters get **Strategy**, **Copy trading**, and **Dashboard** views (master access + admin gates). Dashboard shows aggregate subscribers, volume, signals, and Telegram delivery state without subscriber PII. |
-| **Copy webhook** | `POST /api/webhooks/copy-trading/{strategyId}` with **HMAC** → mirror **open/close** to subscribers |
+| **Strategy signal webhook** | `POST /api/webhooks/strategy/{strategyId}` (legacy: `/api/webhooks/copy-trading/...`) with **HMAC or body `secret`** → mirror **open/close** to subscribers |
 | **TradingView** | User-owned **`/tv-webhooks`**, `POST /api/webhooks/tv/{id}` adapter, media-kit square mark in UI |
 | **Admin** | **`/admin`** when your email is in **`ADMIN_EMAILS`** (master access, strategies, users) |
 | **Single UI** | Product screens in **`frontend/`**; **`backend/`** is API-only (+ health). |
@@ -186,7 +186,7 @@ npm run dev -w @rexalgo/frontend
 ### Copy trading & algo studios (signed webhooks)
 
 1. Sign in → **Master studio** → **Copy trading** or **Strategy** → enable webhook → copy **signing secret** (once).
-2. External bot: **`POST /api/webhooks/copy-trading/{strategyId}`** with header **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** where **`v1`** = HMAC-SHA256 of **`${t}.${rawBody}`** (UTF-8) using the secret as key.
+2. External bot: **`POST /api/webhooks/strategy/{strategyId}`** (legacy path **`/api/webhooks/copy-trading/...`** still works) with header **`X-RexAlgo-Signature: t=<unix>,v1=<hex>`** where **`v1`** = HMAC-SHA256 of **`${t}.${rawBody}`** (UTF-8) using the secret as key, or include **`secret`** in the JSON body.
 3. Subscribers get mirrored **open** / **close** on Mudrex using **their** stored API secrets.
 4. **Logout** clears the browser cookie; mirroring still uses **encrypted DB secrets** until keys expire.
 
@@ -245,7 +245,7 @@ flowchart TB
 flowchart LR
   subgraph copy [Copy-trading signal]
     BOT[Your bot]
-    WH1["/api/webhooks/copy-trading/{id}"]
+    WH1["/api/webhooks/strategy/{id}"]
     RL1[(Redis\noptional)]
     CM[copyMirror]
     MR1[Mudrex\nper subscriber]
@@ -398,7 +398,7 @@ flowchart TB
     M3["/api/mudrex/*"]
   end
   subgraph hooks [Webhooks]
-    W1["/api/webhooks/copy-trading/*"]
+    W1["/api/webhooks/strategy/*"]
     W2["/api/webhooks/tv/*"]
   end
   subgraph admin [Admin + master]

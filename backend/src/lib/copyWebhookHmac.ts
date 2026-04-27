@@ -1,5 +1,5 @@
 /**
- * HMAC verification for copy-trading webhooks (master’s external bot).
+ * HMAC verification for strategy signal webhooks (master’s external bot).
  * Header: X-RexAlgo-Signature: t=<unixSeconds>,v1=<hex>
  * Signed payload: `${t}.${rawBody}`
  *
