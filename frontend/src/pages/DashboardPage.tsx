@@ -375,6 +375,7 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const refreshingRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [mudrexSharedKeyPopoverOpen, setMudrexSharedKeyPopoverOpen] = useState(false);
   const [pnlScope, setPnlScope] = useState<PositionScope>("all");
   const [openScope, setOpenScope] = useState<PositionScope>("all");
   const [historyScope, setHistoryScope] = useState<PositionScope>("all");
@@ -576,19 +577,22 @@ export default function DashboardPage() {
               <h1 className="text-2xl font-bold">Dashboard</h1>
               <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
                 {hasMudrexKey && mudrexKeySharedAcrossAccounts ? (
-                  <Popover>
+                  <Popover
+                    open={mudrexSharedKeyPopoverOpen}
+                    onOpenChange={setMudrexSharedKeyPopoverOpen}
+                  >
                     <PopoverTrigger asChild>
                       <button
                         type="button"
                         className="inline-flex items-center gap-2 rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        aria-label="Mudrex API key security notice — open details"
+                        aria-label="Mudrex API key — action required, open details"
                       >
                         <AlertTriangle
                           className="h-3.5 w-3.5 shrink-0 text-warning animate-alert-attention"
                           aria-hidden
                         />
                         <span className="text-warning font-medium text-foreground/90">
-                          Mudrex key — review
+                          Mudrex Key - Action Required
                         </span>
                       </button>
                     </PopoverTrigger>
@@ -596,11 +600,33 @@ export default function DashboardPage() {
                       <p className="font-semibold text-foreground leading-snug mb-2">
                         This API key is on more than one RexAlgo account
                       </p>
-                      <p className="text-muted-foreground leading-relaxed">
+                      <p className="text-muted-foreground leading-relaxed mb-4">
                         The same Mudrex secret is linked to another RexAlgo sign-in. If you did not set that up,
                         revoke this key in Mudrex immediately, create a new API secret, and reconnect only on the
                         account you trust.
                       </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 min-w-[6rem]"
+                          onClick={() => setMudrexSharedKeyPopoverOpen(false)}
+                        >
+                          It&apos;s ok
+                        </Button>
+                        <Button variant="hero" size="sm" className="flex-1 min-w-[8rem]" asChild>
+                          <a
+                            href={MUDREX_PRO_TRADING_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center gap-1.5"
+                          >
+                            Rotate API Secret
+                            <ExternalLink className="h-3.5 w-3.5 opacity-80" aria-hidden />
+                          </a>
+                        </Button>
+                      </div>
                     </PopoverContent>
                   </Popover>
                 ) : (
