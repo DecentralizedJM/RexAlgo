@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
@@ -39,6 +39,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { useRequireMasterAccess } from "@/hooks/useAuth";
 import { AuthGateSplash } from "@/components/AuthGateSplash";
 import {
@@ -79,6 +88,7 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
+  ChevronsUpDown,
   X,
 } from "lucide-react";
 
@@ -1114,19 +1124,33 @@ function SymbolSelector({
   setSymbols: (v: string[]) => void;
 }) {
   const [manual, setManual] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const assetsQ = useQuery({
     queryKey: ["mudrex", "assets", "studio"],
     queryFn: () => fetchMudrexAssets(),
     staleTime: 5 * 60_000,
   });
   const assets = (assetsQ.data?.assets ?? []).filter((a) => a.is_active !== false);
+  const sortedAssets = useMemo(
+    () => [...assets].sort((a, b) => a.symbol.localeCompare(b.symbol)),
+    [assets]
+  );
 
-  function addSymbol(symbol: string) {
-    const s = symbol.trim().toUpperCase();
-    if (!s) return;
-    setSymbols(Array.from(new Set(assetMode === "single" ? [s] : [...symbols, s])));
-    setManual("");
-  }
+  const addSymbol = useCallback(
+    (symbol: string) => {
+      const s = symbol.trim().toUpperCase();
+      if (!s) return;
+      setSymbols(Array.from(new Set(assetMode === "single" ? [s] : [...symbols, s])));
+      setManual("");
+      if (assetMode === "single") setPickerOpen(false);
+    },
+    [assetMode, setSymbols, symbols]
+  );
+
+  const triggerLabel =
+    assetMode === "single"
+      ? symbols[0] ?? "Search or choose symbol…"
+      : "Search symbols to add…";
 
   return (
     <div className="space-y-3 rounded-lg border border-border/60 p-3">
@@ -1149,19 +1173,96 @@ function SymbolSelector({
 
       <div className="space-y-2">
         <Label>Mudrex symbols</Label>
-        {assets.length > 0 ? (
-          <Select value="" onValueChange={addSymbol}>
-            <SelectTrigger>
-              <SelectValue placeholder={assetMode === "single" ? "Choose symbol" : "Add symbol"} />
-            </SelectTrigger>
-            <SelectContent>
-              {assets.slice(0, 250).map((a: MudrexAsset) => (
-                <SelectItem key={a.symbol} value={a.symbol}>
-                  {a.symbol}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {assetsQ.isLoading && assets.length === 0 ? (
+          <div className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+            Loading symbols…
+          </div>
+        ) : assets.length > 0 ? (
+          <div className="space-y-2">
+            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={pickerOpen}
+                  className="w-full justify-between font-normal min-h-10 h-auto py-2"
+                >
+                  <span
+                    className={cn(
+                      "truncate text-left",
+                      assetMode === "single" && symbols[0] ? "font-mono text-foreground" : "text-muted-foreground"
+                    )}
+                  >
+                    {triggerLabel}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[var(--radix-popover-trigger-width)] p-0 min-w-[min(100vw-2rem,22rem)] max-w-[min(100vw-2rem,28rem)]"
+                align="start"
+              >
+                <Command shouldFilter>
+                  <CommandInput placeholder="Search by symbol (e.g. BTC, ETH)…" className="font-mono" />
+                  <CommandList>
+                    <CommandEmpty>No matching symbol.</CommandEmpty>
+                    <CommandGroup>
+                      {sortedAssets.map((a: MudrexAsset) => {
+                        const selected = symbols.includes(a.symbol);
+                        const disabled = assetMode === "multi" && selected;
+                        return (
+                          <CommandItem
+                            key={a.symbol}
+                            value={a.symbol}
+                            keywords={[
+                              a.base_currency,
+                              a.quote_currency,
+                              `${a.base_currency}${a.quote_currency}`,
+                            ].filter((x): x is string => Boolean(x && String(x).trim()))}
+                            disabled={disabled}
+                            className="font-mono"
+                            onSelect={() => {
+                              if (!disabled) addSymbol(a.symbol);
+                            }}
+                          >
+                            <span className="flex-1 truncate">{a.symbol}</span>
+                            {assetMode === "single" && symbols[0] === a.symbol ? (
+                              <Check className="h-4 w-4 shrink-0 text-primary" />
+                            ) : null}
+                            {assetMode === "multi" && selected ? (
+                              <span className="text-xs text-muted-foreground shrink-0">added</span>
+                            ) : null}
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <p className="text-xs text-muted-foreground">
+              Open the picker to search the full Mudrex list, or type a symbol below.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={manual}
+                onChange={(e) => setManual(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addSymbol(manual);
+                  }
+                }}
+                placeholder="Type symbol (e.g. BTCUSDT)"
+                className="font-mono"
+              />
+              <Button type="button" variant="outline" onClick={() => addSymbol(manual)}>
+                {assetMode === "single" ? "Set" : "Add"}
+              </Button>
+            </div>
+          </div>
         ) : (
           <div className="flex gap-2">
             <Input
