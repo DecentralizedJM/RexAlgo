@@ -88,6 +88,7 @@ function strategyStatusBadgeVariant(
 ): "default" | "destructive" | "secondary" {
   if (status === "approved") return "default";
   if (status === "rejected") return "destructive";
+  if (status === "draft") return "outline";
   return "secondary";
 }
 
@@ -97,12 +98,15 @@ type StrategyStateInput = {
 };
 
 function strategyListingState(row: StrategyStateInput): {
-  label: "Active" | "Paused" | "Pending review" | "Rejected";
+  label: "Active" | "Paused" | "Pending review" | "Rejected" | "Setup";
   variant: "default" | "destructive" | "secondary" | "outline";
   marketplaceVisible: boolean;
 } {
   if (row.status === "rejected") {
     return { label: "Rejected", variant: "destructive", marketplaceVisible: false };
+  }
+  if (row.status === "draft") {
+    return { label: "Setup", variant: "outline", marketplaceVisible: false };
   }
   if (row.status === "pending") {
     return { label: "Pending review", variant: "secondary", marketplaceVisible: false };
@@ -709,6 +713,7 @@ function StrategiesTab() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="draft">Setup (draft)</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
@@ -744,7 +749,7 @@ function StrategiesTab() {
                 <TableHead>Creator</TableHead>
                 <TableHead>State</TableHead>
                 <TableHead>Subs</TableHead>
-                <TableHead>Webhook</TableHead>
+                <TableHead>Webhook / verified</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -804,9 +809,17 @@ function StrategiesTab() {
                     </TableCell>
                     <TableCell>{s.subscriberCount}</TableCell>
                     <TableCell>
-                      <Badge variant={s.webhookEnabled ? "default" : "outline"}>
-                        {s.webhookEnabled ? "On" : "Off"}
-                      </Badge>
+                      <div className="space-y-1">
+                        <Badge variant={s.webhookEnabled ? "default" : "outline"}>
+                          {s.webhookEnabled ? "On" : "Off"}
+                        </Badge>
+                        <div className="text-[11px] text-muted-foreground">
+                          Last test:{" "}
+                          {s.webhookLastDeliveryAt
+                            ? new Date(s.webhookLastDeliveryAt).toLocaleString()
+                            : "—"}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex flex-wrap justify-end gap-2">
@@ -888,8 +901,8 @@ function StrategiesTab() {
               <span className="font-medium text-foreground">
                 {toReject?.name}
               </span>{" "}
-              will disable its webhook and notify the creator. They can edit and
-              reapply from their studio.
+              will disable its webhook and notify the creator. They can edit, verify
+              the webhook again, and submit from their studio.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

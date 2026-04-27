@@ -136,17 +136,17 @@ export const strategies = pgTable("strategies", {
   isActive: boolean("is_active").notNull().default(true),
   /**
    * Per-strategy admin review state.
-   *   pending  → default for new and re-submitted listings. Hidden from public
-   *              listings; webhook deliveries are rejected.
-   *   approved → public listing enabled; webhook may be enabled by owner.
+   *   draft    → owner setup: not in the admin review queue; may enable webhook
+   *              and send test signals; hidden from public marketplace.
+   *   pending  → submitted for admin review (after verified webhook test).
+   *   approved → public listing when active; mirrors live signals to subscribers.
    *   rejected → hidden from public; owner may edit, resubmit, or delete.
-   * Existing pre-v2 rows were migrated to `pending` on deployment.
    */
   status: text("status", {
-    enum: ["pending", "approved", "rejected"],
+    enum: ["draft", "pending", "approved", "rejected"],
   })
     .notNull()
-    .default("pending"),
+    .default("draft"),
   rejectionReason: text("rejection_reason"),
   reviewedBy: text("reviewed_by").references(() => users.id, {
     onDelete: "set null",

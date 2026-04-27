@@ -10,7 +10,7 @@ import { strategies } from "@/lib/schema";
  * Copy-trading studio per-strategy route.
  *
  * Supports edit (PATCH) and delete (DELETE) of a user's own copy-trading
- * listing. Editing is only permitted while the listing is `pending` or
+ * listing. Editing is only permitted while the listing is `draft`, `pending`, or
  * `rejected` — approved listings are locked to prevent silent drift of the
  * parameters subscribers signed up for. Deleting is only permitted for
  * non-approved listings for the same reason. Moving a `rejected` listing

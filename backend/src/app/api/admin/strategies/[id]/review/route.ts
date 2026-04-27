@@ -16,14 +16,14 @@ const MAX_REASON = 500;
  * Body: `{ action: "approve" | "reject", reason?: string }`
  *
  *   - `approve` — flips status to `approved`, records reviewer, and leaves
- *     the webhook untouched (owner may enable it via the studio).
+ *     the webhook as-is (owner may already have it enabled from draft setup).
  *   - `reject`  — flips status to `rejected` with the given reason, and
  *     proactively disables any existing webhook config so a rejected strategy
  *     can never accept live traffic. Owner sees the reason in the studio and
  *     may edit / resubmit / delete.
  *
  * Only already-pending strategies may be reviewed — re-reviewing an approved
- * or rejected row requires the owner to resubmit (back to pending) first.
+ * or rejected row requires the owner to return to draft and submit again.
  */
 export async function POST(
   req: NextRequest,
@@ -84,7 +84,7 @@ export async function POST(
 
     void queueNotification(existing.creatorId, {
       kind: "strategy_approved",
-      text: `✅ <b>${existing.name}</b> was approved and is now visible on the marketplace. Enable the webhook from the studio when you are ready to accept signals.`,
+      text: `✅ <b>${existing.name}</b> was approved. When the listing is active, subscribers can mirror signals; your webhook setup in the studio is unchanged.`,
     });
 
     void logAdminAudit({

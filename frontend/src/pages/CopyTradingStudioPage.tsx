@@ -48,6 +48,7 @@ import {
   updateCopyStudioStrategy,
   deleteCopyStudioStrategy,
   resubmitCopyStudioStrategy,
+  submitCopyStudioStrategyForReview,
   type StudioStrategyRow,
   type StrategyReviewStatus,
   ApiError,
@@ -80,6 +81,10 @@ import {
  */
 function StatusBadge({ status }: { status: StrategyReviewStatus }) {
   const map: Record<StrategyReviewStatus, { label: string; cls: string }> = {
+    draft: {
+      label: "Setup",
+      cls: "bg-secondary text-muted-foreground",
+    },
     pending: {
       label: "Pending review",
       cls: "bg-warning/15 text-warning",
@@ -263,10 +268,23 @@ export default function CopyTradingStudioPage() {
       void queryClient.invalidateQueries({
         queryKey: ["copy-studio", "strategies"],
       });
-      toast.success("Submitted for re-review");
+      toast.success("Returned to setup — verify webhook, then submit for review");
     },
     onError: (e) => {
       toast.error(e instanceof ApiError ? e.message : "Resubmit failed");
+    },
+  });
+
+  const submitReviewMut = useMutation({
+    mutationFn: (id: string) => submitCopyStudioStrategyForReview(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["copy-studio", "strategies"],
+      });
+      toast.success("Submitted for admin review");
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Submit failed");
     },
   });
 
@@ -299,6 +317,16 @@ export default function CopyTradingStudioPage() {
     selectedGeneratedSecret && !secretVisible
       ? maskWebhookSecretUrl(webhookDisplayUrl)
       : webhookDisplayUrl;
+
+  const canSubmitForAdminReview = useMemo(
+    () =>
+      Boolean(
+        selected?.status === "draft" &&
+          selected.webhookEnabled &&
+          selected.webhookLastDeliveryAt
+      ),
+    [selected?.status, selected?.webhookEnabled, selected?.webhookLastDeliveryAt]
+  );
 
   const copyExampleSymbol = selected?.symbol?.trim().toUpperCase() || "BTCUSDT";
   const pythonSnippet = selected
@@ -370,7 +398,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   disabled={!hasMudrexKey || slotsFull}
                   title={
                     slotsFull
-                      ? "You've hit the 5-listing limit. Delete a rejected or pending listing to free a slot."
+                      ? "You've hit the 5-listing limit. Delete a rejected listing or finish or remove a draft/pending listing to free a slot."
                       : undefined
                   }
                 >
@@ -485,6 +513,26 @@ with urllib.request.urlopen(req, timeout=30) as res:
                             <Send className="w-4 h-4 mr-1" /> Reapply
                           </Button>
                         )}
+                        {selected.status === "draft" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={submitReviewMut.isPending || !canSubmitForAdminReview}
+                            title={
+                              !canSubmitForAdminReview
+                                ? "Create the webhook URL, send a test signal, then submit."
+                                : undefined
+                            }
+                            onClick={() => submitReviewMut.mutate(selected.id)}
+                          >
+                            {submitReviewMut.isPending ? (
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            ) : (
+                              <Send className="w-4 h-4 mr-1" />
+                            )}
+                            Submit for admin review
+                          </Button>
+                        )}
                         {selected.status !== "approved" && (
                           <Button
                             type="button"
@@ -500,12 +548,22 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {selected.status === "draft" && (
+                      <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm">
+                        <p className="font-medium text-foreground">Setup: verify your webhook</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Create the webhook URL, connect TradingView or your bot, and send a test signal. After we
+                          record a delivery, use <strong>Submit for admin review</strong>. Subscriber mirroring stays
+                          off until approved.
+                        </p>
+                      </div>
+                    )}
                     {selected.status === "pending" && (
                       <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
                         <p className="font-medium text-warning">Awaiting admin review</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Your listing is hidden from subscribers and the webhook cannot
-                          accept deliveries until it&apos;s approved.
+                          Your listing is hidden from subscribers until an admin approves it. Test traffic is on file;
+                          live mirroring only runs once the listing is approved.
                         </p>
                       </div>
                     )}
@@ -621,11 +679,11 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         disabled={
                           webhookMut.isPending ||
                           selected.webhookEnabled ||
-                          selected.status !== "approved"
+                          selected.status === "rejected"
                         }
                         title={
-                          selected.status !== "approved"
-                            ? "Webhook can only be enabled after admin approval."
+                          selected.status === "rejected"
+                            ? "Resubmit from the studio before enabling the webhook."
                             : undefined
                         }
                         onClick={() => webhookMut.mutate({ id: selected.id, action: "enable" })}
@@ -647,12 +705,10 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={
-                          webhookMut.isPending || selected.status !== "approved"
-                        }
+                        disabled={webhookMut.isPending || selected.status === "rejected"}
                         title={
-                          selected.status !== "approved"
-                            ? "Webhook can only be rotated for approved listings."
+                          selected.status === "rejected"
+                            ? "Resubmit from the studio before rotating the webhook."
                             : undefined
                         }
                         onClick={() => webhookMut.mutate({ id: selected.id, action: "rotate" })}

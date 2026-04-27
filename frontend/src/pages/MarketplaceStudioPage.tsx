@@ -60,6 +60,7 @@ import {
   updateMarketplaceStudioStrategy,
   deleteMarketplaceStudioStrategy,
   resubmitMarketplaceStudioStrategy,
+  submitMarketplaceStudioStrategyForReview,
   fetchMudrexAssets,
   fetchMarketplaceSlotRequests,
   requestMarketplaceSlots,
@@ -94,6 +95,7 @@ import {
 
 function StatusBadge({ status }: { status: StrategyReviewStatus }) {
   const map: Record<StrategyReviewStatus, { label: string; cls: string }> = {
+    draft: { label: "Setup", cls: "bg-secondary text-muted-foreground" },
     pending: { label: "Pending review", cls: "bg-warning/15 text-warning" },
     approved: { label: "Approved", cls: "bg-profit/15 text-profit" },
     rejected: { label: "Rejected", cls: "bg-loss/15 text-loss" },
@@ -339,10 +341,24 @@ export default function MarketplaceStudioPage() {
       void queryClient.invalidateQueries({
         queryKey: ["marketplace-studio", "strategies"],
       });
-      toast.success("Submitted for re-review");
+      toast.success("Returned to setup — verify webhook, then submit for review");
     },
     onError: (e) => {
       toast.error(e instanceof ApiError ? e.message : "Resubmit failed");
+    },
+  });
+
+  const submitReviewMut = useMutation({
+    mutationFn: (id: string) => submitMarketplaceStudioStrategyForReview(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["marketplace-studio", "strategies"],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
+      toast.success("Submitted for admin review");
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Submit failed");
     },
   });
 
@@ -376,6 +392,17 @@ export default function MarketplaceStudioPage() {
     selectedGeneratedSecret && !secretVisible
       ? maskWebhookSecretUrl(webhookDisplayUrl)
       : webhookDisplayUrl;
+
+  const canSubmitForAdminReview = useMemo(
+    () =>
+      Boolean(
+        selected?.status === "draft" &&
+          selected.webhookEnabled &&
+          selected.webhookLastDeliveryAt
+      ),
+    [selected?.status, selected?.webhookEnabled, selected?.webhookLastDeliveryAt]
+  );
+
   const pendingSlotRequest = (slotRequestsQ.data?.requests ?? []).find(
     (r) => r.status === "pending"
   );
@@ -451,7 +478,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   disabled={!hasMudrexKey || slotsFull}
                   title={
                     slotsFull
-                      ? "You've hit the 5-listing limit. Delete a rejected or pending listing to free a slot."
+                      ? "You've hit the 5-listing limit. Delete a rejected listing or finish or remove a draft/pending listing to free a slot."
                       : undefined
                   }
                 >
@@ -592,6 +619,26 @@ with urllib.request.urlopen(req, timeout=30) as res:
                             <Send className="w-4 h-4 mr-1" /> Reapply
                           </Button>
                         )}
+                        {selected.status === "draft" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={submitReviewMut.isPending || !canSubmitForAdminReview}
+                            title={
+                              !canSubmitForAdminReview
+                                ? "Create the webhook URL, send a test signal, then submit."
+                                : undefined
+                            }
+                            onClick={() => submitReviewMut.mutate(selected.id)}
+                          >
+                            {submitReviewMut.isPending ? (
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            ) : (
+                              <Send className="w-4 h-4 mr-1" />
+                            )}
+                            Submit for admin review
+                          </Button>
+                        )}
                         <Button
                           type="button"
                           size="sm"
@@ -605,12 +652,23 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {selected.status === "draft" && (
+                      <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm">
+                        <p className="font-medium text-foreground">Setup: verify your webhook</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Create the webhook URL, paste it into TradingView or your bot, and send a test signal.
+                          We record a delivery timestamp — then use <strong>Submit for admin review</strong> so the
+                          team can approve your listing. Subscriber mirroring stays off until approved.
+                        </p>
+                      </div>
+                    )}
                     {selected.status === "pending" && (
                       <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
                         <p className="font-medium text-warning">Awaiting admin review</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Your listing is hidden from shoppers and the webhook cannot
-                          accept deliveries until it&apos;s approved.
+                          Your listing is hidden from shoppers until an admin approves it. Webhook test traffic is
+                          already on file; live mirroring to subscribers only runs once the listing is approved and
+                          active.
                         </p>
                       </div>
                     )}
@@ -758,11 +816,11 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         disabled={
                           webhookMut.isPending ||
                           selected.webhookEnabled ||
-                          selected.status !== "approved"
+                          selected.status === "rejected"
                         }
                         title={
-                          selected.status !== "approved"
-                            ? "Webhook can only be enabled after admin approval."
+                          selected.status === "rejected"
+                            ? "Resubmit from the studio before enabling the webhook."
                             : undefined
                         }
                         onClick={() => setWebhookConfirm({ id: selected.id, action: "enable" })}
@@ -784,12 +842,10 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         type="button"
                         size="sm"
                         variant="outline"
-                        disabled={
-                          webhookMut.isPending || selected.status !== "approved"
-                        }
+                        disabled={webhookMut.isPending || selected.status === "rejected"}
                         title={
-                          selected.status !== "approved"
-                            ? "Webhook can only be rotated for approved listings."
+                          selected.status === "rejected"
+                            ? "Resubmit from the studio before rotating the webhook."
                             : undefined
                         }
                         onClick={() => setWebhookConfirm({ id: selected.id, action: "rotate" })}
@@ -828,9 +884,10 @@ with urllib.request.urlopen(req, timeout=30) as res:
                           <Copy className="w-4 h-4" />
                         </Button>
                       </div>
-                      {!selected.webhookEnabled && (
+                      {!selected.webhookEnabled && selected.status !== "rejected" && (
                         <p className="text-xs text-muted-foreground mt-2">
-                          Create the webhook URL after approval to activate it.
+                          Create the webhook URL to get a secret link, then send a test signal. After we show a last
+                          delivery time, submit for admin review from the header.
                         </p>
                       )}
                       <p className="text-xs text-warning mt-2">
@@ -1017,9 +1074,9 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     <AlertDialogHeader>
                       <AlertDialogTitle>Edit approved strategy?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Saving changes to an approved strategy will move it back to pending admin review.
-                        It will be hidden from the marketplace and webhook mirroring will pause until it is
-                        approved again.
+                        Saving changes to an approved strategy returns it to setup (draft) and disables the webhook.
+                        Send a test signal again, then submit for admin review. It stays hidden from the marketplace
+                        until re-approved.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

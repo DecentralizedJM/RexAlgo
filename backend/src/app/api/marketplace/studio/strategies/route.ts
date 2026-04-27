@@ -140,8 +140,8 @@ export async function POST(req: NextRequest) {
       riskLevel: (body.riskLevel || "medium") as "low" | "medium" | "high",
       timeframe: body.timeframe || "1h",
       isActive: true,
-      // New listings must be reviewed before they appear in public listings.
-      status: "pending" as const,
+      // New listings start in draft: owner enables webhook, sends a test signal, then submits for review.
+      status: "draft" as const,
       totalPnl: 0,
       winRate: 0,
       totalTrades: 0,

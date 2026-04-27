@@ -13,7 +13,7 @@ import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 /**
  * POST /api/marketplace/studio/strategies/[id]/resubmit
  *
- * Transitions a rejected algo listing back to `pending` for re-review.
+ * Transitions a rejected algo listing back to `draft` for setup and re-review.
  * See the copy-trading variant for background; the marketplace path is
  * identical except for the enforced `type = algo` filter.
  */
@@ -69,7 +69,7 @@ export async function POST(
   await db
     .update(strategies)
     .set({
-      status: "pending",
+      status: "draft",
       rejectionReason: null,
       reviewedBy: null,
       reviewedAt: null,

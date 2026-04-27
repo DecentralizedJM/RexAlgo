@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { isAdminUser } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
-import { strategies } from "@/lib/schema";
+import { strategies, copyWebhookConfig } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import {
   parseBacktestSpecFromBody,
@@ -14,8 +14,8 @@ import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 
 /**
  * Fields that materially change what a strategy will *do* to subscribers.
- * Editing any of them on an approved strategy bumps it back to `pending`
- * so the admin can re-audit before users keep copying the old version of
+ * Editing any of them on an approved strategy bumps it back to `draft`
+ * so the owner re-verifies the webhook and the admin can re-audit before users keep copying the old version of
  * the strategy (audit #16).
  *
  * Non-sensitive fields (`name`, `description`, `riskLevel`, `isActive`,
@@ -44,8 +44,8 @@ export async function GET(
       return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
     }
 
-    // Gate pending / rejected / deactivated strategies so enumerating UUIDs
-    // can't surface drafts or rejection reasons. Creators always see their
+    // Gate draft / pending / rejected / deactivated strategies so enumerating UUIDs
+    // can't surface hidden rows or rejection reasons. Creators always see their
     // own row; admins see everything. Return 404 (not 403) to avoid
     // confirming that a hidden strategy exists.
     const isPublic = strategy.status === "approved" && strategy.isActive;
@@ -172,13 +172,19 @@ export async function PATCH(
     const requeueForReview =
       patchedSensitive && existing.status === "approved";
     if (requeueForReview) {
-      patch.status = "pending";
+      patch.status = "draft";
       patch.rejectionReason = null;
       patch.reviewedAt = null;
       patch.reviewedBy = null;
     }
 
     await db.update(strategies).set(patch).where(eq(strategies.id, id));
+    if (requeueForReview) {
+      await db
+        .update(copyWebhookConfig)
+        .set({ enabled: false })
+        .where(eq(copyWebhookConfig.strategyId, id));
+    }
     revalidatePublicStrategiesList();
 
     const [updated] = await db
@@ -191,9 +197,8 @@ export async function PATCH(
       void queueNotification(existing.creatorId, {
         kind: "strategy_requeued_for_review",
         text:
-          `Your strategy "${existing.name}" was put back into review because ` +
-          `you changed its symbol, side, leverage or backtest spec. It will ` +
-          `be hidden from the marketplace until an admin re-approves it.`,
+          `Your strategy "${existing.name}" returned to setup (draft) because ` +
+          `you changed its symbol, side, leverage or backtest spec. The webhook was disabled — send a test signal, then submit for admin review. It stays hidden from the marketplace until re-approved.`,
         meta: {
           strategyId: id,
           changedFields: SENSITIVE_EDIT_FIELDS.filter(
@@ -206,7 +211,10 @@ export async function PATCH(
     return NextResponse.json({
       strategy: updated,
       ...(requeueForReview
-        ? { notice: "Strategy moved back to pending review due to sensitive edits." }
+        ? {
+            notice:
+              "Strategy returned to setup (draft): webhook disabled. Verify with a test signal, then submit for admin review.",
+          }
         : {}),
     });
   } catch (error) {

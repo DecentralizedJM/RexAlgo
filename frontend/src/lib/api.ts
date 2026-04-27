@@ -354,7 +354,7 @@ export async function reviewAdminStrategySlotRequest(
   );
 }
 
-export type StrategyReviewStatus = "pending" | "approved" | "rejected";
+export type StrategyReviewStatus = "draft" | "pending" | "approved" | "rejected";
 
 export type AdminStrategyRow = {
   id: string;
@@ -372,6 +372,8 @@ export type AdminStrategyRow = {
   createdAt: string;
   subscriberCount: number;
   webhookEnabled: boolean;
+  /** Present when the strategy webhook has accepted at least one delivery (ISO). */
+  webhookLastDeliveryAt?: string | null;
 };
 
 export async function fetchAdminStrategies(
@@ -394,7 +396,7 @@ export async function reviewAdminStrategy(
   return apiFetch<{
     ok: boolean;
     id: string;
-    status: StrategyReviewStatus;
+    status: Exclude<StrategyReviewStatus, "draft">;
     reason?: string | null;
   }>(`/api/admin/strategies/${id}/review`, {
     method: "POST",
@@ -578,7 +580,7 @@ export type ApiStrategy = {
   /**
    * Admin review state. Public listing endpoints already filter to
    * `approved`, but studio listings return all states so the creator sees
-   * pending / rejected rows too.
+   * draft / pending / rejected rows too.
    */
   status?: StrategyReviewStatus;
   rejectionReason?: string | null;
@@ -940,6 +942,13 @@ export async function resubmitCopyStudioStrategy(strategyId: string) {
   );
 }
 
+export async function submitCopyStudioStrategyForReview(strategyId: string) {
+  return apiFetch<{ ok: boolean; strategy: StudioStrategyRow }>(
+    `/api/copy-trading/studio/strategies/${strategyId}/submit-review`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
 // ─── Marketplace — Strategy studio (algo) ───────────────────────────
 
 export async function fetchMarketplaceStudioStrategies() {
@@ -1045,6 +1054,13 @@ export async function deleteMarketplaceStudioStrategy(strategyId: string) {
 export async function resubmitMarketplaceStudioStrategy(strategyId: string) {
   return apiFetch<{ ok: boolean; strategy: StudioStrategyRow }>(
     `/api/marketplace/studio/strategies/${strategyId}/resubmit`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+export async function submitMarketplaceStudioStrategyForReview(strategyId: string) {
+  return apiFetch<{ ok: boolean; strategy: StudioStrategyRow }>(
+    `/api/marketplace/studio/strategies/${strategyId}/submit-review`,
     { method: "POST", body: JSON.stringify({}) }
   );
 }

@@ -13,12 +13,12 @@ import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 /**
  * POST /api/copy-trading/studio/strategies/[id]/resubmit
  *
- * Transitions a rejected copy-trading listing back to `pending` so an admin
- * can re-review it. This is the natural follow-up to editing a rejected
+ * Transitions a rejected copy-trading listing back to `draft` so the owner can
+ * re-verify the webhook before submitting for admin review. This is the natural follow-up to editing a rejected
  * listing. Only the owner may resubmit.
  *
  * Because rejected listings do not count against the per-kind slot cap but
- * pending listings do, we re-assert the quota here; a user who filled their
+ * draft or pending listings do, we re-assert the quota here; a user who filled their
  * 5 active slots with new listings after a rejection must free one before
  * resubmitting.
  */
@@ -74,7 +74,7 @@ export async function POST(
   await db
     .update(strategies)
     .set({
-      status: "pending",
+      status: "draft",
       rejectionReason: null,
       reviewedBy: null,
       reviewedAt: null,

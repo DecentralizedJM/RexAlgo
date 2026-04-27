@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
-import { strategies } from "@/lib/schema";
+import { strategies, copyWebhookConfig } from "@/lib/schema";
 import {
   parseBacktestSpecFromBody,
   serializeBacktestSpec,
@@ -156,20 +156,29 @@ export async function PATCH(
   }
 
   if (existing.status === "approved") {
-    patch.status = "pending";
+    patch.status = "draft";
     patch.rejectionReason = null;
     patch.reviewedBy = null;
     patch.reviewedAt = null;
   }
 
   await db.update(strategies).set(patch).where(eq(strategies.id, id));
+  if (existing.status === "approved") {
+    await db
+      .update(copyWebhookConfig)
+      .set({ enabled: false })
+      .where(eq(copyWebhookConfig.strategyId, id));
+  }
   revalidatePublicStrategiesList();
 
   const [updated] = await db.select().from(strategies).where(eq(strategies.id, id));
   return NextResponse.json({
     strategy: updated,
     ...(existing.status === "approved"
-      ? { notice: "Strategy moved back to pending review after edits." }
+      ? {
+          notice:
+            "Strategy returned to setup (draft): the webhook was disabled. Send a test signal again, then submit for admin review.",
+        }
       : {}),
   });
 }

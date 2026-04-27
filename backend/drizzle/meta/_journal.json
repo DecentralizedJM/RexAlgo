@@ -127,6 +127,13 @@
       "when": 1776535200000,
       "tag": "0017_strategy_asset_slots",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1776535300000,
+      "tag": "0018_strategy_draft_listing",
+      "breakpoints": true
     }
   ]
 }

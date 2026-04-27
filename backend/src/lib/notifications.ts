@@ -124,6 +124,7 @@ export type NotificationKind =
   | "strategy_approved"
   | "strategy_rejected"
   | "strategy_requeued_for_review"
+  | "strategy_submitted_for_review"
   | "strategy_slots_approved"
   | "strategy_slots_rejected";
 

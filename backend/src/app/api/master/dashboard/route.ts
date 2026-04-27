@@ -18,7 +18,7 @@ type StrategyRow = {
   name: string;
   type: "copy_trading" | "algo";
   symbol: string;
-  status: "pending" | "approved" | "rejected";
+  status: "draft" | "pending" | "approved" | "rejected";
   is_active: boolean;
   created_at: Date | string;
   active_subscribers: number;

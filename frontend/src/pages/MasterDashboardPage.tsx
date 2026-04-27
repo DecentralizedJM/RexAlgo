@@ -82,7 +82,13 @@ function strategyStudioPath(strategy: MasterDashboardStrategy): string {
 function statusClass(status: MasterDashboardStrategy["status"]) {
   if (status === "approved") return "bg-profit/15 text-profit";
   if (status === "rejected") return "bg-loss/15 text-loss";
+  if (status === "draft") return "bg-secondary text-muted-foreground";
   return "bg-warning/15 text-warning";
+}
+
+function statusLabel(status: MasterDashboardStrategy["status"]) {
+  if (status === "draft") return "Setup";
+  return status.replace("_", " ");
 }
 
 function SummaryCard({
@@ -125,7 +131,7 @@ function StrategyRow({ strategy }: { strategy: MasterDashboardStrategy }) {
                 strategy.status
               )}`}
             >
-              {strategy.status}
+              {statusLabel(strategy.status)}
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">

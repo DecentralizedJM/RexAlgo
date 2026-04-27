@@ -12,7 +12,7 @@ import {
 
 /**
  * Admin strategy directory. Supports `?type=algo|copy_trading|all` (default all)
- * and `?status=pending|approved|rejected|all` (default all).
+ * and `?status=draft|pending|approved|rejected|all` (default all).
  * Returns creator, webhook state, subscription count, review status.
  */
 export async function GET(req: NextRequest) {
@@ -36,8 +36,11 @@ export async function GET(req: NextRequest) {
       .split(",")
       .map((s) => s.trim())
       .filter(
-        (s): s is "pending" | "approved" | "rejected" =>
-          s === "pending" || s === "approved" || s === "rejected"
+        (s): s is "draft" | "pending" | "approved" | "rejected" =>
+          s === "draft" ||
+          s === "pending" ||
+          s === "approved" ||
+          s === "rejected"
       );
     if (parsed.length > 0) {
       clauses.push(inArray(strategies.status, parsed));
@@ -69,6 +72,12 @@ export async function GET(req: NextRequest) {
         FROM ${copyWebhookConfig}
         WHERE ${copyWebhookConfig.strategyId} = ${strategies.id}
       ), false)`,
+      webhookLastDeliveryAt: sql<Date | null>`(
+        SELECT ${copyWebhookConfig.lastDeliveryAt}
+        FROM ${copyWebhookConfig}
+        WHERE ${copyWebhookConfig.strategyId} = ${strategies.id}
+        LIMIT 1
+      )`,
     })
     .from(strategies)
     .leftJoin(users, eq(users.id, strategies.creatorId))
@@ -82,6 +91,7 @@ export async function GET(req: NextRequest) {
       ...r,
       reviewedAt: r.reviewedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
+      webhookLastDeliveryAt: r.webhookLastDeliveryAt?.toISOString() ?? null,
     })),
   });
 }

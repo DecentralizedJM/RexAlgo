@@ -2,13 +2,13 @@
  * Per-user strategy slot quotas.
  *
  * A user may hold at most {@link STRATEGY_SLOT_LIMIT} strategies per kind where
- * `status IN ('pending','approved')`. Rejected rows do NOT count against the
+ * `status IN ('draft','pending','approved')`. Rejected rows do NOT count against the
  * quota — users are expected to delete or resubmit them to free a slot.
  *
  * This is enforced in code (not in the DB) because we want to surface nice
  * 409 errors with a slot indicator and avoid a race-prone SQL check. Call
  * {@link assertStrategySlotAvailable} before inserting a new row or flipping
- * a rejected row back to `pending` (resubmit).
+ * a rejected row back to `draft` (resubmit).
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -20,7 +20,7 @@ export type StrategyKind = "algo" | "copy_trading";
 
 /**
  * Thrown when the user already holds {@link STRATEGY_SLOT_LIMIT} or more
- * pending/approved strategies of the same kind.
+ * draft/pending/approved strategies of the same kind.
  */
 export class StrategySlotLimitError extends Error {
   readonly code = "STRATEGY_SLOT_LIMIT";
@@ -30,7 +30,7 @@ export class StrategySlotLimitError extends Error {
     readonly limit: number
   ) {
     super(
-      `You already have ${used}/${limit} ${kind === "algo" ? "algo" : "copy-trading"} strategies in pending or approved state. Delete or resubmit a rejected strategy to free a slot.`
+      `You already have ${used}/${limit} ${kind === "algo" ? "algo" : "copy-trading"} strategies in draft, pending, or approved state. Delete or resubmit a rejected strategy to free a slot.`
     );
   }
 }
@@ -46,7 +46,7 @@ export async function countStrategySlots(
       and(
         eq(strategies.creatorId, userId),
         eq(strategies.type, kind),
-        inArray(strategies.status, ["pending", "approved"] as const)
+        inArray(strategies.status, ["draft", "pending", "approved"] as const)
       )
     );
   return row?.c ?? 0;
