@@ -101,20 +101,6 @@ async function runBackfillLocked(
         .update(plain, "utf8")
         .digest("hex");
 
-      const [owner] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.userSecretFingerprint, fingerprint))
-        .limit(1);
-      if (owner && owner.id !== row.id) {
-        skipped += 1;
-        console.warn(
-          `[user-fingerprint-backfill] skipped user ${row.id}: fingerprint already ` +
-            `owned by ${owner.id} (duplicate Mudrex key across accounts — resolve manually)`
-        );
-        continue;
-      }
-
       await db
         .update(users)
         .set({ userSecretFingerprint: fingerprint })

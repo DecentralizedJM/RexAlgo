@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import PerformanceChart from "@/components/PerformanceChart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   BarChart3,
   Users,
@@ -380,6 +381,7 @@ export default function DashboardPage() {
   const sessionAuthed = authQ.authed;
   const user = authQ.data?.user;
   const hasMudrexKey = user?.hasMudrexKey ?? false;
+  const mudrexKeySharedAcrossAccounts = user?.mudrexKeySharedAcrossAccounts === true;
   const isAdmin = user?.isAdmin === true;
 
   const walletQ = useQuery({
@@ -573,11 +575,43 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold">Dashboard</h1>
               <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
-                <span
-                  className={`h-2 w-2 rounded-full ${hasMudrexKey ? "bg-profit" : "bg-warning"}`}
-                  aria-hidden
-                />
-                {hasMudrexKey ? "Mudrex Key Active" : "Mudrex key not linked"}
+                {hasMudrexKey && mudrexKeySharedAcrossAccounts ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label="Mudrex API key security notice — open details"
+                      >
+                        <AlertTriangle
+                          className="h-3.5 w-3.5 shrink-0 text-warning animate-alert-attention"
+                          aria-hidden
+                        />
+                        <span className="text-warning font-medium text-foreground/90">
+                          Mudrex key — review
+                        </span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 text-sm" align="start">
+                      <p className="font-semibold text-foreground leading-snug mb-2">
+                        This API key is on more than one RexAlgo account
+                      </p>
+                      <p className="text-muted-foreground leading-relaxed">
+                        The same Mudrex secret is linked to another RexAlgo sign-in. If you did not set that up,
+                        revoke this key in Mudrex immediately, create a new API secret, and reconnect only on the
+                        account you trust.
+                      </p>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <>
+                    <span
+                      className={`h-2 w-2 rounded-full ${hasMudrexKey ? "bg-profit" : "bg-warning"}`}
+                      aria-hidden
+                    />
+                    {hasMudrexKey ? "Mudrex Key Active" : "Mudrex key not linked"}
+                  </>
+                )}
               </div>
               {hasMudrexKey && (
                 <Button

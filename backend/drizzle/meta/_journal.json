@@ -113,6 +113,13 @@
       "when": 1776535000000,
       "tag": "0015_trade_log_position_attribution",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1776535100000,
+      "tag": "0016_user_secret_fingerprint_non_unique",
+      "breakpoints": true
     }
   ]
 }

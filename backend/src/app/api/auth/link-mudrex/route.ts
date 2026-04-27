@@ -4,6 +4,8 @@ import { getSession, encryptApiSecret } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { tryComputeUserSecretFingerprint } from "@/lib/userFingerprint";
+import { userHasSharedMudrexKey } from "@/lib/mudrexKeySharing";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -29,12 +31,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const encrypted = encryptApiSecret(apiSecret.trim());
+    const trimmed = apiSecret.trim();
+    const encrypted = encryptApiSecret(trimmed);
+    const fingerprint = tryComputeUserSecretFingerprint(trimmed);
 
     await db
       .update(users)
-      .set({ apiSecretEncrypted: encrypted })
+      .set({
+        apiSecretEncrypted: encrypted,
+        userSecretFingerprint: fingerprint ?? null,
+      })
       .where(eq(users.id, session.user.id));
+
+    const mudrexKeySharedAcrossAccounts = await userHasSharedMudrexKey(
+      session.user.id
+    );
 
     // The session cookie references `user_sessions.id`; the Mudrex secret is
     // loaded fresh from `users` on each `getSession()` call, so we no longer
@@ -46,6 +57,7 @@ export async function POST(req: NextRequest) {
         displayName: session.user.displayName,
         email: session.user.email,
         hasMudrexKey: true,
+        mudrexKeySharedAcrossAccounts,
       },
     });
   } catch (error) {
@@ -66,7 +78,7 @@ export async function DELETE() {
   try {
     await db
       .update(users)
-      .set({ apiSecretEncrypted: null })
+      .set({ apiSecretEncrypted: null, userSecretFingerprint: null })
       .where(eq(users.id, session.user.id));
 
     return NextResponse.json({
@@ -76,6 +88,7 @@ export async function DELETE() {
         displayName: session.user.displayName,
         email: session.user.email,
         hasMudrexKey: false,
+        mudrexKeySharedAcrossAccounts: false,
       },
     });
   } catch (error) {

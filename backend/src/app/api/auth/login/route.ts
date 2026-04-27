@@ -16,7 +16,7 @@ import {
 import { computeUserSecretFingerprint } from "@/lib/userFingerprint";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
   const ip = clientIpFromRequest(req);
@@ -66,7 +66,9 @@ export async function POST(req: NextRequest) {
     let [existing] = await db
       .select()
       .from(users)
-      .where(eq(users.userSecretFingerprint, fingerprint));
+      .where(eq(users.userSecretFingerprint, fingerprint))
+      .orderBy(asc(users.createdAt))
+      .limit(1);
     if (!existing) {
       const rows = await db
         .select()

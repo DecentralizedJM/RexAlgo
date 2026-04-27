@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { getMasterAccessStatus, isAdminUser } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
+import { userHasSharedMudrexKey } from "@/lib/mudrexKeySharing";
 
 export async function GET() {
   const session = await getSession();
@@ -13,6 +14,10 @@ export async function GET() {
 
   const isAdmin = isAdminUser(session.user);
   const masterAccess = await getMasterAccessStatus(session.user);
+  const mudrexKeySharedAcrossAccounts =
+    session.apiSecret != null
+      ? await userHasSharedMudrexKey(session.user.id)
+      : false;
 
   // Telegram state is not in the JWT (we don't want to bump JWT size on every
   // login) — fetch it fresh so the navbar can reflect link/unlink changes.
@@ -30,6 +35,7 @@ export async function GET() {
     user: {
       ...session.user,
       hasMudrexKey: session.apiSecret != null,
+      mudrexKeySharedAcrossAccounts,
       isAdmin,
       masterAccess,
       telegramId: row?.telegramId ?? null,

@@ -34,9 +34,12 @@ export const users = pgTable("users", {
    * design this migration fixes). Nullable because Google-only users never
    * set this.
    *
-   * Hex-encoded (64 chars). Unique so we can detect key reuse across accounts.
+   * Hex-encoded (64 chars). **Not** unique: the same Mudrex key may be linked
+   * from more than one RexAlgo account (e.g. two Google emails). We surface a
+   * dashboard warning when `count(users with this fingerprint and a linked
+   * key) > 1`. See `0016_user_secret_fingerprint_non_unique.sql`.
    */
-  userSecretFingerprint: text("user_secret_fingerprint").unique(),
+  userSecretFingerprint: text("user_secret_fingerprint"),
   /** Telegram numeric user id (as string to dodge 53-bit JS number limits). */
   telegramId: text("telegram_id").unique(),
   telegramUsername: text("telegram_username"),
@@ -60,7 +63,7 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [index("users_user_secret_fingerprint_idx").on(t.userSecretFingerprint)]);
 
 /**
  * Short-lived login intents for the bot-first Telegram sign-in flow

@@ -88,6 +88,11 @@ export type SessionUser = {
   displayName: string;
   email: string | null;
   hasMudrexKey: boolean;
+  /**
+   * True when the same Mudrex API secret (fingerprint) is linked on more than
+   * one RexAlgo user row. Shown as a dashboard security notice.
+   */
+  mudrexKeySharedAcrossAccounts?: boolean;
   isAdmin?: boolean;
   masterAccess?: MasterAccessStatus;
   telegramId?: string | null;

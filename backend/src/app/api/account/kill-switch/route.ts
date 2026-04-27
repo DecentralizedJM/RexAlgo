@@ -202,7 +202,7 @@ export async function POST() {
 
   await db
     .update(users)
-    .set({ apiSecretEncrypted: null })
+    .set({ apiSecretEncrypted: null, userSecretFingerprint: null })
     .where(eq(users.id, session.user.id));
 
   return NextResponse.json({
