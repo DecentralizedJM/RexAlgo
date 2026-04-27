@@ -643,18 +643,23 @@ export default function DashboardPage() {
                 )}
               </div>
               {hasMudrexKey && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5"
-                  disabled={refreshing}
-                  onClick={() => void refreshDashboardData(true)}
-                  aria-label="Refresh dashboard data"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-                  Refresh
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    disabled={refreshing}
+                    onClick={() => void refreshDashboardData(true)}
+                    aria-label="Refresh dashboard data"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-8" asChild>
+                    <Link to="/settings#mudrex-api">Manage API key</Link>
+                  </Button>
+                </>
               )}
             </div>
             <p className="text-sm text-muted-foreground">

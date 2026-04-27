@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -208,6 +208,7 @@ function MudrexApiControlsCard({ hasMudrexKey }: { hasMudrexKey: boolean }) {
   };
 
   return (
+    <div id="mudrex-api" className="scroll-mt-24">
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -357,6 +358,7 @@ function MudrexApiControlsCard({ hasMudrexKey }: { hasMudrexKey: boolean }) {
         </Dialog>
       </CardContent>
     </Card>
+    </div>
   );
 }
 
@@ -483,8 +485,16 @@ function KillSwitchCard({ hasMudrexKey }: { hasMudrexKey: boolean }) {
 export default function SettingsPage() {
   const authQ = useRequireAuth();
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const user = authQ.data?.user;
+
+  useEffect(() => {
+    if (location.hash !== "#mudrex-api") return;
+    const el = document.getElementById("mudrex-api");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [location.pathname, location.hash]);
 
   useEffect(() => {
     // Legacy login-widget query params — still supported so stale tabs don't
@@ -552,7 +562,8 @@ export default function SettingsPage() {
           </Link>
           <h1 className="text-2xl font-bold">Account settings</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Control account preferences, support, and emergency trading controls.
+            Telegram, <span className="text-foreground font-medium">Mudrex API</span> (disconnect / rotate key),
+            appearance, support, and emergency controls.
           </p>
         </div>
 
@@ -627,9 +638,9 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+        <MudrexApiControlsCard hasMudrexKey={Boolean(user.hasMudrexKey)} />
         <AppearanceCard />
         <SupportCard />
-        <MudrexApiControlsCard hasMudrexKey={Boolean(user.hasMudrexKey)} />
         <KillSwitchCard hasMudrexKey={Boolean(user.hasMudrexKey)} />
         </div>
       </div>
