@@ -621,15 +621,22 @@ export default function DashboardPage() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="w-full h-auto min-h-10 py-2.5 px-4 whitespace-normal border-border bg-muted/40 text-black font-medium hover:bg-muted/70 hover:text-black"
+                          className="w-full h-auto min-h-10 border-border py-2.5 px-4 whitespace-normal font-medium shadow-sm
+                            !bg-[hsl(40_11%_92%)] !text-[hsl(220_14%_22%)]
+                            hover:!bg-[hsl(40_9%_86%)] hover:!text-[hsl(220_14%_22%)]
+                            dark:!bg-[hsl(40_11%_92%)] dark:!text-[hsl(220_14%_22%)]
+                            dark:hover:!bg-[hsl(40_9%_86%)] dark:hover:!text-[hsl(220_14%_22%)]"
                           onClick={() => {
                             window.open(MUDREX_PRO_TRADING_URL, "_blank", "noopener,noreferrer");
                           }}
                         >
-                          <span className="text-balance text-center leading-snug text-black">
+                          <span className="text-balance text-center leading-snug">
                             Rotate API Secret
                           </span>
-                          <ExternalLink className="h-4 w-4 shrink-0 text-black/70" aria-hidden />
+                          <ExternalLink
+                            className="h-4 w-4 shrink-0 text-[hsl(220_14%_22%)] opacity-70"
+                            aria-hidden
+                          />
                         </Button>
                       </div>
                     </PopoverContent>
