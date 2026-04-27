@@ -5,14 +5,19 @@
  * that don't fit on the dashboard or auth screen. Strategy settings live in
  * the respective studios.
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowLeft,
   BellOff,
   BellRing,
   Copy,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  KeyRound,
   LifeBuoy,
   Loader2,
   Mail,
@@ -32,6 +37,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -46,11 +61,14 @@ import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 import {
   ApiError,
   activateKillSwitch,
+  linkMudrexKey,
   setTelegramNotifyEnabled,
+  unlinkMudrexKey,
   unlinkTelegram,
 } from "@/lib/api";
 import { refreshAppData } from "@/lib/refreshAppData";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
+import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
 import { toast } from "sonner";
 
 const SUPPORT_EMAIL = "help@rexalgo.xyz";
@@ -123,6 +141,220 @@ function SupportCard() {
             Copy email
           </Button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MudrexDisclaimer() {
+  return (
+    <div className="rounded-lg border border-warning/35 bg-warning/10 p-4 flex gap-3">
+      <AlertTriangle className="h-4 w-4 shrink-0 text-warning mt-0.5" aria-hidden />
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        <span className="font-medium text-foreground">Note:</span> Disconnecting your Mudrex API key or changing to a
+        new secret may <span className="text-foreground font-medium">temporarily pause</span> copy-trading and
+        algorithm subscriptions until you reconnect a valid key. Your RexAlgo subscriptions stay on file; mirrors
+        resume once Mudrex accepts the new credentials.
+      </p>
+    </div>
+  );
+}
+
+function MudrexApiControlsCard({ hasMudrexKey }: { hasMudrexKey: boolean }) {
+  const queryClient = useQueryClient();
+  const [changeSecretOpen, setChangeSecretOpen] = useState(false);
+  const [newSecret, setNewSecret] = useState("");
+  const [showSecret, setShowSecret] = useState(false);
+
+  const disconnectMut = useMutation({
+    mutationFn: unlinkMudrexKey,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["session", "me"] }),
+        queryClient.invalidateQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY }),
+        refreshAppData(queryClient),
+      ]);
+      toast.success("Mudrex API disconnected from RexAlgo");
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Disconnect failed");
+    },
+  });
+
+  const changeSecretMut = useMutation({
+    mutationFn: linkMudrexKey,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["session", "me"] }),
+        queryClient.invalidateQueries({ queryKey: MUDREX_KEY_PROBE_QUERY_KEY }),
+        refreshAppData(queryClient),
+      ]);
+      setChangeSecretOpen(false);
+      setNewSecret("");
+      toast.success("Mudrex API secret updated");
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Could not update API secret");
+    },
+  });
+
+  const submitNewSecret = () => {
+    const s = newSecret.trim();
+    if (!s) {
+      toast.error("Paste your new Mudrex API secret");
+      return;
+    }
+    changeSecretMut.mutate(s);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <KeyRound className="h-4 w-4 text-primary" aria-hidden />
+          Mudrex API
+        </CardTitle>
+        <CardDescription>
+          Disconnect or rotate your stored secret without running the kill switch. Use the kill switch only when you
+          need to stop subscriptions and unwind RexAlgo positions in one step.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <MudrexDisclaimer />
+
+        {!hasMudrexKey ? (
+          <p className="text-sm text-muted-foreground">
+            No Mudrex API key on file.{" "}
+            <Link to="/dashboard" className="text-primary font-medium hover:underline">
+              Open the dashboard
+            </Link>{" "}
+            to connect Mudrex.
+          </p>
+        ) : (
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => setChangeSecretOpen(true)}>
+              <KeyRound className="h-4 w-4 mr-1.5" />
+              Change API secret
+            </Button>
+
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-loss/40 text-loss hover:bg-loss/10"
+                  disabled={disconnectMut.isPending}
+                >
+                  {disconnectMut.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Unlink className="h-4 w-4 mr-1.5" />
+                  )}
+                  Disconnect Mudrex API
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Disconnect Mudrex API?</AlertDialogTitle>
+                  <AlertDialogDescription className="space-y-3">
+                    <span className="block">
+                      RexAlgo will remove your stored API secret. Copy-trading and algo mirrors will not run until you
+                      connect a key again from the dashboard.
+                    </span>
+                    <span className="block text-foreground/90 text-sm">
+                      This does not cancel subscriptions or close positions by itself. For a full emergency stop,
+                      use the kill switch below.
+                    </span>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={disconnectMut.isPending}>Cancel</AlertDialogCancel>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={disconnectMut.isPending}
+                    onClick={() => disconnectMut.mutate()}
+                  >
+                    {disconnectMut.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Disconnect"
+                    )}
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
+
+        <Dialog
+          open={changeSecretOpen}
+          onOpenChange={(o) => {
+            setChangeSecretOpen(o);
+            if (!o) {
+              setNewSecret("");
+              setShowSecret(false);
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Change API secret</DialogTitle>
+              <DialogDescription>
+                Paste a new secret from Mudrex. Your previous key stops working on RexAlgo as soon as this succeeds.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <MudrexDisclaimer />
+              <div className="space-y-2">
+                <Label htmlFor="settings-mudrex-secret">New Mudrex API secret</Label>
+                <div className="relative">
+                  <Input
+                    id="settings-mudrex-secret"
+                    type={showSecret ? "text" : "password"}
+                    value={newSecret}
+                    onChange={(e) => setNewSecret(e.target.value)}
+                    placeholder="Paste new API secret"
+                    className="pr-10 font-mono text-sm"
+                    autoComplete="off"
+                    disabled={changeSecretMut.isPending}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    onClick={() => setShowSecret((v) => !v)}
+                    aria-label={showSecret ? "Hide secret" : "Show secret"}
+                  >
+                    {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <Button variant="link" className="h-auto p-0 text-xs" asChild>
+                <a href={MUDREX_PRO_TRADING_URL} target="_blank" rel="noopener noreferrer">
+                  Open Mudrex to create or copy an API secret
+                  <ExternalLink className="inline h-3 w-3 ml-1 opacity-70" aria-hidden />
+                </a>
+              </Button>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setChangeSecretOpen(false)}
+                disabled={changeSecretMut.isPending}
+              >
+                Cancel
+              </Button>
+              <Button type="button" variant="hero" onClick={() => submitNewSecret()} disabled={changeSecretMut.isPending}>
+                {changeSecretMut.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Save new secret"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
@@ -397,6 +629,7 @@ export default function SettingsPage() {
         </Card>
         <AppearanceCard />
         <SupportCard />
+        <MudrexApiControlsCard hasMudrexKey={Boolean(user.hasMudrexKey)} />
         <KillSwitchCard hasMudrexKey={Boolean(user.hasMudrexKey)} />
         </div>
       </div>
