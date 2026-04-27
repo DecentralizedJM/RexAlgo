@@ -125,6 +125,16 @@ function canonicalStrategyWebhookPath(strategyId: string, path: string): string 
   return path;
 }
 
+function appendWebhookSecret(url: string, secret: string): string {
+  if (!url || !secret) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}secret=${encodeURIComponent(secret)}`;
+}
+
+function maskWebhookSecretUrl(url: string): string {
+  return url.replace(/([?&]secret=)[^&]+/, "$1••••••••••••••••••••••••");
+}
+
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   if (!Number.isFinite(diff) || diff < 0) return "just now";
@@ -161,7 +171,7 @@ export default function MarketplaceStudioPage() {
   const sessionAuthed = authQ.authed && authQ.masterApproved;
   const hasMudrexKey = authQ.data?.user?.hasMudrexKey ?? false;
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [secretFlash, setSecretFlash] = useState<string | null>(null);
+  const [secretFlash, setSecretFlash] = useState<{ strategyId: string; secret: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -241,14 +251,14 @@ export default function MarketplaceStudioPage() {
     onSuccess: (data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["marketplace-studio", "strategies"] });
       if (data.secretPlain) {
-        setSecretFlash(data.secretPlain);
+        setSecretFlash({ strategyId: variables.id, secret: data.secretPlain });
         setSecretVisible(false);
       }
       setWebhookConfirm(null);
       if (variables.action === "enable") {
-        toast.success("Webhook enabled", {
+        toast.success("Webhook URL created", {
           description:
-            "Copy the URL and one-time signing secret into your bot. Treat both like passwords — anyone with them can send signals for this strategy.",
+            "Copy the full URL into your bot. Treat it like a password — anyone with it can send signals for this strategy.",
         });
       }
     },
@@ -354,9 +364,18 @@ export default function MarketplaceStudioPage() {
   const webhookDisplayPath = selected
     ? canonicalStrategyWebhookPath(selected.id, selected.webhookPath)
     : "";
-  const webhookDisplayUrl = selected
+  const baseWebhookDisplayUrl = selected
     ? buildWebhookUrl(publicBase, webhookDisplayPath, originFallback)
     : "";
+  const selectedGeneratedSecret =
+    selected && secretFlash?.strategyId === selected.id ? secretFlash.secret : null;
+  const webhookDisplayUrl = selectedGeneratedSecret
+    ? appendWebhookSecret(baseWebhookDisplayUrl, selectedGeneratedSecret)
+    : baseWebhookDisplayUrl;
+  const webhookUrlInputValue =
+    selectedGeneratedSecret && !secretVisible
+      ? maskWebhookSecretUrl(webhookDisplayUrl)
+      : webhookDisplayUrl;
   const pendingSlotRequest = (slotRequestsQ.data?.requests ?? []).find(
     (r) => r.status === "pending"
   );
@@ -367,10 +386,8 @@ import uuid
 import urllib.request
 
 WEBHOOK_URL = "${webhookDisplayUrl}"
-SECRET = "PASTE_SECRET_FROM_STUDIO"
 
 body = {
-    "secret": SECRET,
     "idempotency_key": str(uuid.uuid4()),
     "action": "open",
     "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
@@ -481,45 +498,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
             />
           </DialogContent>
         </Dialog>
-
-        {secretFlash && (
-          <div className="mb-6 p-4 rounded-xl border border-warning/30 bg-warning/10 text-sm">
-            <p className="font-medium text-warning mb-2">Signing secret (copy now; one-time display)</p>
-            <p className="mb-3 text-xs text-muted-foreground">
-              Confidential — do not share. If this leaks, anyone can POST signed signals and manage this strategy
-              on your behalf.
-            </p>
-            <div className="flex gap-2 items-center">
-              <code className="text-xs break-all flex-1 font-mono bg-background/80 p-2 rounded">
-                {secretVisible ? secretFlash : "•".repeat(Math.min(48, secretFlash.length))}
-              </code>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setSecretVisible((v) => !v)}
-                aria-label={secretVisible ? "Hide signing secret" : "Reveal signing secret"}
-              >
-                {secretVisible ? (
-                  <EyeOff className="w-4 h-4" />
-                ) : (
-                  <Eye className={cn("w-4 h-4 animate-pulse")} aria-hidden />
-                )}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => void copyText(secretFlash, "Signing secret copied")}
-              >
-                <Copy className="w-4 h-4" />
-              </Button>
-            </div>
-            <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => setSecretFlash(null)}>
-              Dismiss
-            </Button>
-          </div>
-        )}
 
         {studioQ.isLoading ? (
           <div className="flex justify-center py-24 text-muted-foreground">
@@ -699,8 +677,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                       <div>
                         <h3 className="text-sm font-semibold text-foreground">Your signal webhook</h3>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Generated for this strategy only. After you enable it, use the URL and signing secret in
-                          your bot or TradingView — keep both private.
+                          Generated for this strategy only. The full URL contains the secret, so keep it private.
                         </p>
                       </div>
                     </div>
@@ -792,7 +769,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         onClick={() => setWebhookConfirm({ id: selected.id, action: "enable" })}
                       >
                         <Power className="w-4 h-4 mr-1" />
-                        Enable webhook
+                        Create webhook URL
                       </Button>
                       <Button
                         type="button"
@@ -819,14 +796,29 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         onClick={() => setWebhookConfirm({ id: selected.id, action: "rotate" })}
                       >
                         <RefreshCw className="w-4 h-4 mr-1" />
-                        Rotate secret
+                        Regenerate URL
                       </Button>
                     </div>
 
                     <div>
                       <Label className="text-xs text-muted-foreground">Webhook URL</Label>
                       <div className="flex gap-2 mt-1">
-                        <Input readOnly value={webhookDisplayUrl} className="font-mono text-xs" />
+                        <Input readOnly value={webhookUrlInputValue} className="font-mono text-xs" />
+                        {selectedGeneratedSecret && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            onClick={() => setSecretVisible((v) => !v)}
+                            aria-label={secretVisible ? "Hide webhook URL secret" : "Reveal webhook URL secret"}
+                          >
+                            {secretVisible ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className={cn("w-4 h-4 animate-pulse")} aria-hidden />
+                            )}
+                          </Button>
+                        )}
                         <Button
                           type="button"
                           size="icon"
@@ -839,7 +831,16 @@ with urllib.request.urlopen(req, timeout=30) as res:
                       </div>
                       {!selected.webhookEnabled && (
                         <p className="text-xs text-muted-foreground mt-2">
-                          Enable the webhook after approval to activate this URL and receive your signing secret.
+                          Create the webhook URL after approval to activate it.
+                        </p>
+                      )}
+                      <p className="text-xs text-warning mt-2">
+                        This full URL is the secret. Do not share it publicly. If it leaks, anyone with the URL can
+                        send signals that manage this strategy. Regenerate the URL immediately if exposed.
+                      </p>
+                      {!selectedGeneratedSecret && selected.webhookEnabled && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          For security, the full secret URL is only shown right after creation or regeneration.
                         </p>
                       )}
                     </div>
@@ -855,13 +856,12 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   <CardHeader>
                     <CardTitle className="text-base">Signal format (JSON)</CardTitle>
                     <CardDescription>
-                      Send the endpoint plus your secret in the JSON body. Use a unique idempotency key per signal.
+                      Send this JSON to the generated webhook URL. Use a unique idempotency key per signal.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <pre className="text-xs bg-secondary/50 p-4 rounded-lg overflow-x-auto font-mono">
 {`{
-  "secret": "whsec_...",
   "idempotency_key": "uuid-v4",
   "action": "open",
   "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
@@ -872,7 +872,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
 }
 
 {
-  "secret": "whsec_...",
   "idempotency_key": "uuid-v4-limit-short",
   "action": "open",
   "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
@@ -882,7 +881,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
 }
 
 {
-  "secret": "whsec_...",
   "idempotency_key": "uuid-v4-close",
   "action": "close",
   "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
@@ -1064,14 +1062,14 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     <AlertDialogHeader>
                       <AlertDialogTitle>Confirm webhook action</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action changes access to your strategy webhook. If the signing secret leaks,
-                        anyone with it can send signals that manage this strategy. You may be asked to sign in
-                        again before the server accepts this action.
+                        This action changes access to your strategy webhook URL. The full URL contains the secret;
+                        if it leaks, anyone can send signals for this strategy. You may be asked to sign in again
+                        before the server accepts this action.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
                       <AlertTriangle className="mr-2 inline h-4 w-4" />
-                      Keep webhook URLs and secrets private.
+                      Keep the full webhook URL private.
                     </div>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>

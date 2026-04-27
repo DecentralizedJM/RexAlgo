@@ -138,10 +138,15 @@ export async function postStrategySignalWebhook(
     json && typeof json === "object" && typeof (json as { secret?: unknown }).secret === "string"
       ? String((json as { secret: string }).secret)
       : null;
+  const querySecret = req.nextUrl.searchParams.get("secret");
   const sig = verifyCopyWebhookSignature(secretPlain, rawBody, req.headers);
-  if (!sig.ok && (!bodySecret || !secretMatches(bodySecret, secretPlain))) {
+  if (
+    !sig.ok &&
+    (!bodySecret || !secretMatches(bodySecret, secretPlain)) &&
+    (!querySecret || !secretMatches(querySecret, secretPlain))
+  ) {
     return NextResponse.json(
-      { error: bodySecret ? "Invalid webhook secret" : sig.reason },
+      { error: bodySecret || querySecret ? "Invalid webhook secret" : sig.reason },
       { status: 401 }
     );
   }

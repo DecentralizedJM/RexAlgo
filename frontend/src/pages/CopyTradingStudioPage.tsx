@@ -54,6 +54,7 @@ import {
 } from "@/lib/api";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { copyText } from "@/lib/clipboard";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -65,6 +66,8 @@ import {
   RefreshCw,
   Power,
   PowerOff,
+  Eye,
+  EyeOff,
   Send,
   Trash2,
   X,
@@ -116,6 +119,16 @@ function canonicalStrategyWebhookPath(strategyId: string, path: string): string 
   return path;
 }
 
+function appendWebhookSecret(url: string, secret: string): string {
+  if (!url || !secret) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}secret=${encodeURIComponent(secret)}`;
+}
+
+function maskWebhookSecretUrl(url: string): string {
+  return url.replace(/([?&]secret=)[^&]+/, "$1••••••••••••••••••••••••");
+}
+
 /** Compact relative timestamp for webhook last-delivery hints (e.g. "3m ago"). */
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -136,7 +149,8 @@ export default function CopyTradingStudioPage() {
   const sessionAuthed = authQ.authed && authQ.masterApproved;
   const hasMudrexKey = authQ.data?.user?.hasMudrexKey ?? false;
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [secretFlash, setSecretFlash] = useState<string | null>(null);
+  const [secretFlash, setSecretFlash] = useState<{ strategyId: string; secret: string } | null>(null);
+  const [secretVisible, setSecretVisible] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -198,10 +212,11 @@ export default function CopyTradingStudioPage() {
       id: string;
       action: "enable" | "disable" | "rotate";
     }) => setCopyStrategyWebhook(id, action),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["copy-studio", "strategies"] });
       if (data.secretPlain) {
-        setSecretFlash(data.secretPlain);
+        setSecretFlash({ strategyId: variables.id, secret: data.secretPlain });
+        setSecretVisible(false);
       }
     },
     onError: (e) => {
@@ -272,20 +287,25 @@ export default function CopyTradingStudioPage() {
   const webhookDisplayPath = selected
     ? canonicalStrategyWebhookPath(selected.id, selected.webhookPath)
     : "";
-  const webhookDisplayUrl = selected
+  const baseWebhookDisplayUrl = selected
     ? buildWebhookUrl(publicBase, webhookDisplayPath, originFallback)
     : "";
+  const selectedGeneratedSecret =
+    selected && secretFlash?.strategyId === selected.id ? secretFlash.secret : null;
+  const webhookDisplayUrl = selectedGeneratedSecret
+    ? appendWebhookSecret(baseWebhookDisplayUrl, selectedGeneratedSecret)
+    : baseWebhookDisplayUrl;
+  const webhookUrlInputValue =
+    selectedGeneratedSecret && !secretVisible
+      ? maskWebhookSecretUrl(webhookDisplayUrl)
+      : webhookDisplayUrl;
 
   const pythonSnippet = selected
-    ? `import hashlib
-import hmac
-import json
-import time
+    ? `import json
 import urllib.request
 
-# Use the exact URL below. External bots must reach your Next API (e.g. port 3000 or ngrok).
+# Use the exact generated URL below. It already contains the webhook secret.
 WEBHOOK_URL = "${webhookDisplayUrl}"
-SECRET = "PASTE_SIGNING_SECRET_FROM_STUDIO".encode("utf-8")
 
 body = {
     "idempotency_key": "unique-per-signal-uuid",
@@ -295,17 +315,11 @@ body = {
     "trigger_type": "MARKET",
 }
 raw = json.dumps(body, separators=(",", ":"))
-t = int(time.time())
-msg = f"{t}.{raw}".encode("utf-8")
-sig = hmac.new(SECRET, msg, hashlib.sha256).hexdigest()
 
 req = urllib.request.Request(
     WEBHOOK_URL,
     data=raw.encode("utf-8"),
-    headers={
-        "Content-Type": "application/json",
-        "X-RexAlgo-Signature": f"t={t},v1={sig}",
-    },
+    headers={"Content-Type": "application/json"},
     method="POST",
 )
 with urllib.request.urlopen(req, timeout=30) as res:
@@ -376,28 +390,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
             </p>
           </div>
         </div>
-
-        {secretFlash && (
-          <div className="mb-6 p-4 rounded-xl border border-profit/30 bg-profit/10 text-sm">
-            <p className="font-medium text-profit mb-2">Signing secret (copy now; one-time display)</p>
-            <div className="flex gap-2 items-center">
-              <code className="text-xs break-all flex-1 font-mono bg-background/80 p-2 rounded">
-                {secretFlash}
-              </code>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => void copyText(secretFlash, "Signing secret copied")}
-              >
-                <Copy className="w-4 h-4" />
-              </Button>
-            </div>
-            <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => setSecretFlash(null)}>
-              Dismiss
-            </Button>
-          </div>
-        )}
 
         {studioQ.isLoading ? (
           <div className="flex justify-center py-24 text-muted-foreground">
@@ -636,7 +628,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         onClick={() => webhookMut.mutate({ id: selected.id, action: "enable" })}
                       >
                         <Power className="w-4 h-4 mr-1" />
-                        Enable webhook
+                        Create webhook URL
                       </Button>
                       <Button
                         type="button"
@@ -663,14 +655,29 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         onClick={() => webhookMut.mutate({ id: selected.id, action: "rotate" })}
                       >
                         <RefreshCw className="w-4 h-4 mr-1" />
-                        Rotate secret
+                        Regenerate URL
                       </Button>
                     </div>
 
                     <div>
                       <Label className="text-xs text-muted-foreground">Webhook URL</Label>
                       <div className="flex gap-2 mt-1">
-                        <Input readOnly value={webhookDisplayUrl} className="font-mono text-xs" />
+                        <Input readOnly value={webhookUrlInputValue} className="font-mono text-xs" />
+                        {selectedGeneratedSecret && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            onClick={() => setSecretVisible((v) => !v)}
+                            aria-label={secretVisible ? "Hide webhook URL secret" : "Reveal webhook URL secret"}
+                          >
+                            {secretVisible ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className={cn("w-4 h-4 animate-pulse")} aria-hidden />
+                            )}
+                          </Button>
+                        )}
                         <Button
                           type="button"
                           size="icon"
@@ -680,6 +687,15 @@ with urllib.request.urlopen(req, timeout=30) as res:
                           <Copy className="w-4 h-4" />
                         </Button>
                       </div>
+                      <p className="text-xs text-warning mt-2">
+                        This full URL is the secret. Do not share it publicly. If it leaks, anyone with the URL can
+                        send signals that manage this strategy. Regenerate the URL immediately if exposed.
+                      </p>
+                      {!selectedGeneratedSecret && selected.webhookEnabled && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          For security, the full secret URL is only shown right after creation or regeneration.
+                        </p>
+                      )}
                       <p className="text-xs text-muted-foreground mt-2">
                         Dev tip: expose <code className="text-foreground/80">127.0.0.1:3000</code> with
                         ngrok; bots cannot call Vite on 8080 unless you proxy webhooks there too.
@@ -692,9 +708,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   <CardHeader>
                     <CardTitle className="text-base">Signal format (JSON)</CardTitle>
                     <CardDescription>
-                      Header <code className="text-xs">X-RexAlgo-Signature: t=&lt;unix&gt;,v1=&lt;hmac_hex&gt;</code>{" "}
-                      where HMAC-SHA256 is over the string <code className="text-xs">t + &quot;.&quot; + rawBody</code>
-                      .
+                      Send this JSON to the generated webhook URL. Use a unique idempotency key per signal.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

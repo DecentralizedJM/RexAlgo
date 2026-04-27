@@ -41,6 +41,7 @@ export default function CopyTradingPage() {
     .filter((s) => {
       const creator = (s.creatorName || "").trim().toLowerCase();
       const strategy = (s.name || "").trim().toLowerCase();
+      if (!s.isActive) return false;
       if (creator.length < 2 || strategy.length < 2) return false;
       return true;
     })

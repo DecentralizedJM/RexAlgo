@@ -91,6 +91,28 @@ function strategyStatusBadgeVariant(
   return "secondary";
 }
 
+type StrategyStateInput = {
+  status: StrategyReviewStatus;
+  isActive: boolean;
+};
+
+function strategyListingState(row: StrategyStateInput): {
+  label: "Active" | "Paused" | "Pending review" | "Rejected";
+  variant: "default" | "destructive" | "secondary" | "outline";
+  marketplaceVisible: boolean;
+} {
+  if (row.status === "rejected") {
+    return { label: "Rejected", variant: "destructive", marketplaceVisible: false };
+  }
+  if (row.status === "pending") {
+    return { label: "Pending review", variant: "secondary", marketplaceVisible: false };
+  }
+  if (!row.isActive) {
+    return { label: "Paused", variant: "outline", marketplaceVisible: false };
+  }
+  return { label: "Active", variant: "default", marketplaceVisible: true };
+}
+
 export default function AdminDashboardPage() {
   const authQ = useRequireAdmin();
   const navigate = useNavigate();
@@ -670,7 +692,8 @@ function StrategiesTab() {
             <CardTitle>Strategies</CardTitle>
             <CardDescription>
               Manage all strategies across the platform. Deletes cascade to
-              subscriptions, webhooks, and signal history.
+              subscriptions, webhooks, and signal history. Marketplace pages only
+              show Active listings: approved and not paused.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -719,10 +742,9 @@ function StrategiesTab() {
                 <TableHead>Type</TableHead>
                 <TableHead>Symbol</TableHead>
                 <TableHead>Creator</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>State</TableHead>
                 <TableHead>Subs</TableHead>
                 <TableHead>Webhook</TableHead>
-                <TableHead>Active</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -730,114 +752,120 @@ function StrategiesTab() {
               {q.data?.strategies.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={8}
                     className="text-center text-sm text-muted-foreground"
                   >
                     No strategies.
                   </TableCell>
                 </TableRow>
               )}
-              {q.data?.strategies.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>
-                    <div className="font-medium">{s.name}</div>
-                    <div className="text-xs text-muted-foreground">{s.id}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{s.type}</Badge>
-                  </TableCell>
-                  <TableCell>{s.symbol}</TableCell>
-                  <TableCell>
-                    <div className="text-xs">{s.creatorName}</div>
-                    {s.creatorEmail && (
-                      <div className="text-[11px] text-muted-foreground">
-                        {s.creatorEmail}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <Badge variant={strategyStatusBadgeVariant(s.status)}>
-                        {s.status}
-                      </Badge>
-                      {s.status === "rejected" && s.rejectionReason?.trim() && (
-                        <div
-                          className="text-[11px] text-muted-foreground max-w-[220px] truncate"
-                          title={s.rejectionReason}
-                        >
-                          {s.rejectionReason}
+              {q.data?.strategies.map((s) => {
+                const state = strategyListingState(s);
+                return (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <div className="font-medium">{s.name}</div>
+                      <div className="text-xs text-muted-foreground">{s.id}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{s.type}</Badge>
+                    </TableCell>
+                    <TableCell>{s.symbol}</TableCell>
+                    <TableCell>
+                      <div className="text-xs">{s.creatorName}</div>
+                      {s.creatorEmail && (
+                        <div className="text-[11px] text-muted-foreground">
+                          {s.creatorEmail}
                         </div>
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{s.subscriberCount}</TableCell>
-                  <TableCell>
-                    <Badge variant={s.webhookEnabled ? "default" : "outline"}>
-                      {s.webhookEnabled ? "On" : "Off"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={s.isActive ? "default" : "outline"}>
-                      {s.isActive ? "Active" : "Paused"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      {s.status === "pending" && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            disabled={reviewMut.isPending}
-                            onClick={() =>
-                              reviewMut.mutate({ id: s.id, action: "approve" })
-                            }
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <Badge variant={state.variant}>{state.label}</Badge>
+                        <div className="text-[11px] text-muted-foreground">
+                          {state.marketplaceVisible
+                            ? "Visible in marketplace"
+                            : "Hidden from marketplace"}
+                        </div>
+                        {s.status === "approved" && (
+                          <div className="text-[11px] text-muted-foreground">
+                            Review: approved
+                          </div>
+                        )}
+                        {s.status === "rejected" && s.rejectionReason?.trim() && (
+                          <div
+                            className="text-[11px] text-muted-foreground max-w-[220px] truncate"
+                            title={s.rejectionReason}
                           >
-                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                            Approve
-                          </Button>
+                            {s.rejectionReason}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{s.subscriberCount}</TableCell>
+                    <TableCell>
+                      <Badge variant={s.webhookEnabled ? "default" : "outline"}>
+                        {s.webhookEnabled ? "On" : "Off"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {s.status === "pending" && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="default"
+                              disabled={reviewMut.isPending}
+                              onClick={() =>
+                                reviewMut.mutate({ id: s.id, action: "approve" })
+                              }
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setToReject(s);
+                                setRejectReason("");
+                              }}
+                            >
+                              <XCircle className="h-3.5 w-3.5 mr-1" />
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                        {s.status === "approved" && (
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                              setToReject(s);
-                              setRejectReason("");
-                            }}
+                            disabled={toggleMut.isPending}
+                            onClick={() =>
+                              toggleMut.mutate({
+                                id: s.id,
+                                active: !s.isActive,
+                              })
+                            }
                           >
-                            <XCircle className="h-3.5 w-3.5 mr-1" />
-                            Reject
+                            {s.isActive ? "Pause listing" : "Resume listing"}
                           </Button>
-                        </>
-                      )}
-                      {s.status === "approved" && (
+                        )}
                         <Button
                           size="sm"
-                          variant="outline"
-                          disabled={toggleMut.isPending}
-                          onClick={() =>
-                            toggleMut.mutate({
-                              id: s.id,
-                              active: !s.isActive,
-                            })
-                          }
+                          variant="destructive"
+                          onClick={() => {
+                            setToDelete(s);
+                            setConfirmText("");
+                          }}
                         >
-                          {s.isActive ? "Pause" : "Resume"}
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => {
-                          setToDelete(s);
-                          setConfirmText("");
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -1185,39 +1213,35 @@ function UserDetailDrawer({
                 <EmptyNote>No strategies created.</EmptyNote>
               ) : (
                 <ul className="space-y-2">
-                  {q.data.strategies.map((s) => (
-                    <li
-                      key={s.id}
-                      className="rounded-lg border border-border p-3 text-sm"
-                    >
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{s.name}</span>
-                        <Badge variant="outline" className="text-[10px]">
-                          {s.type}
-                        </Badge>
-                        <Badge
-                          variant={strategyStatusBadgeVariant(s.status)}
-                          className="text-[10px]"
-                        >
-                          {s.status}
-                        </Badge>
-                        {!s.isActive && (
+                  {q.data.strategies.map((s) => {
+                    const state = strategyListingState(s);
+                    return (
+                      <li
+                        key={s.id}
+                        className="rounded-lg border border-border p-3 text-sm"
+                      >
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{s.name}</span>
                           <Badge variant="outline" className="text-[10px]">
-                            paused
+                            {s.type}
                           </Badge>
+                          <Badge variant={state.variant} className="text-[10px]">
+                            {state.label}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {s.symbol} · {s.subscriberCount} subscribers ·{" "}
+                          {state.marketplaceVisible ? "visible" : "hidden"} ·{" "}
+                          {new Date(s.createdAt).toLocaleDateString()}
+                        </div>
+                        {s.rejectionReason && (
+                          <p className="text-xs text-loss mt-1">
+                            Rejected: {s.rejectionReason}
+                          </p>
                         )}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {s.symbol} · {s.subscriberCount} subscribers ·{" "}
-                        {new Date(s.createdAt).toLocaleDateString()}
-                      </div>
-                      {s.rejectionReason && (
-                        <p className="text-xs text-loss mt-1">
-                          Rejected: {s.rejectionReason}
-                        </p>
-                      )}
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </DrawerSection>
