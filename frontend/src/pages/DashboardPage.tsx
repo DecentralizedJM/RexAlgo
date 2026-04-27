@@ -47,6 +47,11 @@ import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
 import { toast } from "sonner";
 import { refreshAppData } from "@/lib/refreshAppData";
 
+/** Session-scoped: user acknowledged shared-key warning; survives dashboard remounts. */
+function sharedMudrexDismissStorageKey(userId: string): string {
+  return `rexalgo:dismissSharedMudrex:${userId}`;
+}
+
 /** Cumulative realized P&L from Mudrex position history (one API page). */
 function buildRealizedPnlCurve(positions: ApiPosition[]): { date: string; value: number }[] {
   if (!positions.length) return [];
@@ -376,6 +381,7 @@ export default function DashboardPage() {
   const refreshingRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [mudrexSharedKeyPopoverOpen, setMudrexSharedKeyPopoverOpen] = useState(false);
+  const [sharedMudrexWarningDismissed, setSharedMudrexWarningDismissed] = useState(false);
   const [pnlScope, setPnlScope] = useState<PositionScope>("all");
   const [openScope, setOpenScope] = useState<PositionScope>("all");
   const [historyScope, setHistoryScope] = useState<PositionScope>("all");
@@ -383,7 +389,31 @@ export default function DashboardPage() {
   const user = authQ.data?.user;
   const hasMudrexKey = user?.hasMudrexKey ?? false;
   const mudrexKeySharedAcrossAccounts = user?.mudrexKeySharedAcrossAccounts === true;
+  const showSharedMudrexWarning =
+    mudrexKeySharedAcrossAccounts && !sharedMudrexWarningDismissed;
   const isAdmin = user?.isAdmin === true;
+
+  useEffect(() => {
+    if (!mudrexKeySharedAcrossAccounts) {
+      setSharedMudrexWarningDismissed(false);
+      if (user?.id) {
+        try {
+          sessionStorage.removeItem(sharedMudrexDismissStorageKey(user.id));
+        } catch {
+          /* private mode */
+        }
+      }
+      return;
+    }
+    if (!user?.id) return;
+    try {
+      const dismissed =
+        sessionStorage.getItem(sharedMudrexDismissStorageKey(user.id)) === "1";
+      setSharedMudrexWarningDismissed(dismissed);
+    } catch {
+      setSharedMudrexWarningDismissed(false);
+    }
+  }, [user?.id, mudrexKeySharedAcrossAccounts]);
 
   const walletQ = useQuery({
     queryKey: ["wallet", "futures"],
@@ -576,7 +606,7 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold">Dashboard</h1>
               <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
-                {hasMudrexKey && mudrexKeySharedAcrossAccounts ? (
+                {hasMudrexKey && showSharedMudrexWarning ? (
                   <Popover
                     open={mudrexSharedKeyPopoverOpen}
                     onOpenChange={setMudrexSharedKeyPopoverOpen}
@@ -616,7 +646,20 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           className="w-full h-10 shadow-sm font-semibold"
-                          onClick={() => setMudrexSharedKeyPopoverOpen(false)}
+                          onClick={() => {
+                            setSharedMudrexWarningDismissed(true);
+                            setMudrexSharedKeyPopoverOpen(false);
+                            if (user?.id) {
+                              try {
+                                sessionStorage.setItem(
+                                  sharedMudrexDismissStorageKey(user.id),
+                                  "1"
+                                );
+                              } catch {
+                                /* private mode */
+                              }
+                            }
+                          }}
                         >
                           It&apos;s ok
                         </Button>
