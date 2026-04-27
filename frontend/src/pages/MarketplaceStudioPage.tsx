@@ -380,25 +380,24 @@ export default function MarketplaceStudioPage() {
     (r) => r.status === "pending"
   );
 
+  const exampleSymbol = strategySymbols(selected)[0] ?? "BTCUSDT";
   const pythonSnippet = selected
     ? `import json
 import uuid
 import urllib.request
 
-WEBHOOK_URL = "${webhookDisplayUrl}"
+# Paste the full URL from Strategy studio — it includes the secret (do not log or commit it).
+WEBHOOK_URL = "<your full webhook URL from Strategy studio>"
 
 body = {
     "idempotency_key": str(uuid.uuid4()),
     "action": "open",
-    "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
+    "symbol": "${exampleSymbol}",
     "side": "LONG",
     "trigger_type": "MARKET",
-    # For LIMIT orders:
-    # "trigger_type": "LIMIT",
-    # "price": "65000",
-    # Optional SL / TP:
-    # "sl": "62000",
-    # "tp": "70000",
+    # For LIMIT: set trigger_type to LIMIT and add "price": "65000"
+    # Optional stops: "sl": "62000", "tp": "70000" (or stoplosPrice / takeprofitPrice)
+    # To close: "action": "close", same symbol/side/trigger_type as the open
 }
 raw = json.dumps(body, separators=(",", ":"))
 
@@ -856,13 +855,33 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   <CardHeader>
                     <CardTitle className="text-base">Signal format (JSON)</CardTitle>
                     <CardDescription>
-                      Send this JSON to the generated webhook URL. Use a unique idempotency key per signal.
+                      Required on every signal:{" "}
+                      <code className="text-xs">idempotency_key</code>,{" "}
+                      <code className="text-xs">action</code> (<code className="text-xs">open</code> |{" "}
+                      <code className="text-xs">close</code>),{" "}
+                      <code className="text-xs">symbol</code>,{" "}
+                      <code className="text-xs">side</code> (<code className="text-xs">LONG</code> |{" "}
+                      <code className="text-xs">SHORT</code>),{" "}
+                      <code className="text-xs">trigger_type</code> (<code className="text-xs">MARKET</code> |{" "}
+                      <code className="text-xs">LIMIT</code>). For <code className="text-xs">LIMIT</code>,{" "}
+                      <code className="text-xs">price</code> is required. Optional stops:{" "}
+                      <code className="text-xs">sl</code> / <code className="text-xs">tp</code> (or{" "}
+                      <code className="text-xs">stoplosPrice</code>, <code className="text-xs">takeprofitPrice</code>
+                      ). Authentication is the secret in your webhook URL (not in this JSON).
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <pre className="text-xs bg-secondary/50 p-4 rounded-lg overflow-x-auto font-mono">
 {`{
   "idempotency_key": "uuid-v4",
+  "action": "open",
+  "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
+  "side": "LONG",
+  "trigger_type": "MARKET"
+}
+
+{
+  "idempotency_key": "uuid-v4-with-stops",
   "action": "open",
   "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
   "side": "LONG",

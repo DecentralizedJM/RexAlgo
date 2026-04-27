@@ -300,19 +300,22 @@ export default function CopyTradingStudioPage() {
       ? maskWebhookSecretUrl(webhookDisplayUrl)
       : webhookDisplayUrl;
 
+  const copyExampleSymbol = selected?.symbol?.trim().toUpperCase() || "BTCUSDT";
   const pythonSnippet = selected
     ? `import json
 import urllib.request
 
-# Use the exact generated URL below. It already contains the webhook secret.
-WEBHOOK_URL = "${webhookDisplayUrl}"
+# Paste the full URL from Copy trading studio — it includes the secret (do not log or commit it).
+WEBHOOK_URL = "<your full webhook URL from Copy trading studio>"
 
 body = {
     "idempotency_key": "unique-per-signal-uuid",
     "action": "open",
-    "symbol": "BTCUSDT",
+    "symbol": "${copyExampleSymbol}",
     "side": "LONG",
     "trigger_type": "MARKET",
+    # For LIMIT: "trigger_type": "LIMIT", "price": "65000"
+    # Optional: "sl", "tp" (or stoplosPrice / takeprofitPrice)
 }
 raw = json.dumps(body, separators=(",", ":"))
 
@@ -708,7 +711,18 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   <CardHeader>
                     <CardTitle className="text-base">Signal format (JSON)</CardTitle>
                     <CardDescription>
-                      Send this JSON to the generated webhook URL. Use a unique idempotency key per signal.
+                      Required:{" "}
+                      <code className="text-xs">idempotency_key</code>,{" "}
+                      <code className="text-xs">action</code> (<code className="text-xs">open</code> |{" "}
+                      <code className="text-xs">close</code>),{" "}
+                      <code className="text-xs">symbol</code>,{" "}
+                      <code className="text-xs">side</code> (<code className="text-xs">LONG</code> |{" "}
+                      <code className="text-xs">SHORT</code>),{" "}
+                      <code className="text-xs">trigger_type</code> (<code className="text-xs">MARKET</code> |{" "}
+                      <code className="text-xs">LIMIT</code>). For <code className="text-xs">LIMIT</code>,{" "}
+                      <code className="text-xs">price</code> is required. Optional:{" "}
+                      <code className="text-xs">sl</code> / <code className="text-xs">tp</code>. Auth is the secret in
+                      your webhook URL.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -716,14 +730,31 @@ with urllib.request.urlopen(req, timeout=30) as res:
 {`{
   "idempotency_key": "uuid-v4",
   "action": "open",
-  "symbol": "BTCUSDT",
+  "symbol": "${copyExampleSymbol}",
+  "side": "LONG",
+  "trigger_type": "MARKET"
+}
+
+{
+  "idempotency_key": "uuid-v4-limit",
+  "action": "open",
+  "symbol": "${copyExampleSymbol}",
+  "side": "SHORT",
+  "trigger_type": "LIMIT",
+  "price": "65000"
+}
+
+{
+  "idempotency_key": "uuid-v4-close",
+  "action": "close",
+  "symbol": "${copyExampleSymbol}",
   "side": "LONG",
   "trigger_type": "MARKET"
 }`}
                     </pre>
                     <p className="text-xs text-muted-foreground mt-3">
-                      Use <code>action: &quot;close&quot;</code> to close one open position matching symbol and
-                      side. Follower size uses each subscriber&apos;s margin and your strategy leverage.
+                      Close matches one open position for the same symbol and side. Follower size uses each
+                      subscriber&apos;s margin and your strategy leverage.
                     </p>
                   </CardContent>
                 </Card>
