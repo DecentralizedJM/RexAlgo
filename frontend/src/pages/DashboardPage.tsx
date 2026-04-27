@@ -609,10 +609,13 @@ export default function DashboardPage() {
                         account you trust.
                       </p>
                       <div className="flex flex-col gap-2.5 w-full">
+                        {/*
+                          Match StrategyCard CTAs: Subscribe = default primary; Backtest = outline + shadow-sm.
+                        */}
                         <Button
                           type="button"
                           size="sm"
-                          className="w-full h-10 border-0 bg-profit text-black font-semibold shadow-sm hover:bg-profit/88 hover:text-black focus-visible:ring-profit/50"
+                          className="w-full h-10 shadow-sm font-semibold"
                           onClick={() => setMudrexSharedKeyPopoverOpen(false)}
                         >
                           It&apos;s ok
@@ -621,22 +624,13 @@ export default function DashboardPage() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="w-full h-auto min-h-10 border-border py-2.5 px-4 whitespace-normal font-medium shadow-sm
-                            !bg-[hsl(40_11%_92%)] !text-[hsl(220_14%_22%)]
-                            hover:!bg-[hsl(40_9%_86%)] hover:!text-[hsl(220_14%_22%)]
-                            dark:!bg-[hsl(40_11%_92%)] dark:!text-[hsl(220_14%_22%)]
-                            dark:hover:!bg-[hsl(40_9%_86%)] dark:hover:!text-[hsl(220_14%_22%)]"
+                          className="w-full h-auto min-h-10 whitespace-normal py-2.5 shadow-sm"
                           onClick={() => {
                             window.open(MUDREX_PRO_TRADING_URL, "_blank", "noopener,noreferrer");
                           }}
                         >
-                          <span className="text-balance text-center leading-snug">
-                            Rotate API Secret
-                          </span>
-                          <ExternalLink
-                            className="h-4 w-4 shrink-0 text-[hsl(220_14%_22%)] opacity-70"
-                            aria-hidden
-                          />
+                          <span className="text-balance text-center leading-snug">Rotate API Secret</span>
+                          <ExternalLink className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
                         </Button>
                       </div>
                     </PopoverContent>
