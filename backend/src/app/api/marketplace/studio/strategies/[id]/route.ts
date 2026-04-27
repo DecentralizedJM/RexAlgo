@@ -9,6 +9,11 @@ import {
   serializeBacktestSpec,
 } from "@/lib/backtest/spec";
 import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
+import {
+  parseAssetSelection,
+  serializeSymbols,
+  validateMudrexSymbols,
+} from "@/lib/strategyAssets";
 
 /**
  * Marketplace (algo) studio per-strategy route.
@@ -99,12 +104,31 @@ export async function PATCH(
     }
     patch.description = description;
   }
-  if (typeof body.symbol === "string") {
-    const symbol = body.symbol.trim().toUpperCase();
-    if (!symbol) {
-      return NextResponse.json({ error: "symbol cannot be empty" }, { status: 400 });
+  if ("symbol" in body || "symbols" in body || "assetMode" in body) {
+    if (!session.apiSecret) {
+      return NextResponse.json(
+        { error: "Connect your Mudrex API secret before changing strategy symbols." },
+        { status: 428 }
+      );
     }
-    patch.symbol = symbol;
+    const assetSelection = parseAssetSelection({
+      assetMode: body.assetMode ?? existing.assetMode,
+      symbol: body.symbol ?? existing.symbol,
+      symbols: body.symbols,
+    });
+    if (!assetSelection.ok) {
+      return NextResponse.json({ error: assetSelection.error }, { status: 400 });
+    }
+    const symbolCheck = await validateMudrexSymbols(session.apiSecret, assetSelection.symbols);
+    if (!symbolCheck.ok) {
+      return NextResponse.json(
+        { error: symbolCheck.error, field: "symbol", invalid: symbolCheck.invalid },
+        { status: 400 }
+      );
+    }
+    patch.symbol = assetSelection.primarySymbol;
+    patch.assetMode = assetSelection.assetMode;
+    patch.symbolsJson = serializeSymbols(assetSelection.symbols);
   }
   if (typeof body.side === "string") {
     const side = body.side.toUpperCase() as Side;

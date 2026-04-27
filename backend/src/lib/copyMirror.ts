@@ -28,6 +28,8 @@ export type CopySignalV1 = {
   side: "LONG" | "SHORT";
   trigger_type: "MARKET" | "LIMIT";
   price?: string;
+  stoplosPrice?: string;
+  takeprofitPrice?: string;
 };
 
 export type StrategyRow = InferSelectModel<typeof strategies>;
@@ -46,6 +48,16 @@ export function parseCopySignalV1(json: unknown):
   const side = o.side;
   const trigger_type = o.trigger_type;
   const price = o.price != null ? String(o.price).trim() : undefined;
+  const stoplosPrice =
+    o.stoplosPrice != null ? String(o.stoplosPrice).trim() :
+    o.stoploss_price != null ? String(o.stoploss_price).trim() :
+    o.sl != null ? String(o.sl).trim() :
+    undefined;
+  const takeprofitPrice =
+    o.takeprofitPrice != null ? String(o.takeprofitPrice).trim() :
+    o.takeprofit_price != null ? String(o.takeprofit_price).trim() :
+    o.tp != null ? String(o.tp).trim() :
+    undefined;
 
   if (!idempotency_key) {
     return { ok: false, reason: "idempotency_key is required" };
@@ -75,6 +87,8 @@ export function parseCopySignalV1(json: unknown):
       side,
       trigger_type,
       price: trigger_type === "LIMIT" ? price : undefined,
+      stoplosPrice,
+      takeprofitPrice,
     },
   };
 }
@@ -161,6 +175,8 @@ async function mirrorOpen(
         leverage: String(lev),
         triggerType: signal.trigger_type,
         price: signal.trigger_type === "LIMIT" ? signal.price : undefined,
+        stoplosPrice: signal.stoplosPrice,
+        takeprofitPrice: signal.takeprofitPrice,
       },
       "background"
     );

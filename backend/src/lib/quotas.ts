@@ -12,7 +12,7 @@
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { strategies } from "@/lib/schema";
+import { strategies, strategySlotExtensionRequests } from "@/lib/schema";
 
 export const STRATEGY_SLOT_LIMIT = 5;
 
@@ -52,13 +52,40 @@ export async function countStrategySlots(
   return row?.c ?? 0;
 }
 
+export async function countApprovedExtraSlots(
+  userId: string,
+  kind: StrategyKind
+): Promise<number> {
+  const [row] = await db
+    .select({
+      c: sql<number>`COALESCE(SUM(${strategySlotExtensionRequests.requestedSlots}), 0)::int`,
+    })
+    .from(strategySlotExtensionRequests)
+    .where(
+      and(
+        eq(strategySlotExtensionRequests.userId, userId),
+        eq(strategySlotExtensionRequests.strategyType, kind),
+        eq(strategySlotExtensionRequests.status, "approved")
+      )
+    );
+  return row?.c ?? 0;
+}
+
+export async function getStrategySlotLimit(
+  userId: string,
+  kind: StrategyKind
+): Promise<number> {
+  return STRATEGY_SLOT_LIMIT + (await countApprovedExtraSlots(userId, kind));
+}
+
 export async function assertStrategySlotAvailable(
   userId: string,
   kind: StrategyKind
 ): Promise<void> {
   const used = await countStrategySlots(userId, kind);
-  if (used >= STRATEGY_SLOT_LIMIT) {
-    throw new StrategySlotLimitError(kind, used, STRATEGY_SLOT_LIMIT);
+  const limit = await getStrategySlotLimit(userId, kind);
+  if (used >= limit) {
+    throw new StrategySlotLimitError(kind, used, limit);
   }
 }
 
@@ -69,6 +96,6 @@ export async function getStrategySlotInfo(
 ): Promise<{ used: number; limit: number }> {
   return {
     used: await countStrategySlots(userId, kind),
-    limit: STRATEGY_SLOT_LIMIT,
+    limit: await getStrategySlotLimit(userId, kind),
   };
 }

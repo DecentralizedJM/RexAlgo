@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -13,6 +14,20 @@ import { parseCopySignalV1, executeMirror } from "@/lib/copyMirror";
 import { checkCopyWebhookRateLimit } from "@/lib/copyWebhookRateLimit";
 import { enforceBodyLimit } from "@/lib/bodyLimit";
 import { queueNotification } from "@/lib/notifications";
+import { parseSymbolsJson } from "@/lib/strategyAssets";
+
+function secretMatches(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length > 0 && ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+
+function redactSecretPayload(rawBody: string, json: unknown): string {
+  if (!json || typeof json !== "object") return rawBody;
+  const o = { ...(json as Record<string, unknown>) };
+  if ("secret" in o) o.secret = "[redacted]";
+  return JSON.stringify(o);
+}
 
 function isUniqueViolation(err: unknown): boolean {
   return (
@@ -113,16 +128,23 @@ export async function POST(
     return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
   }
 
-  const sig = verifyCopyWebhookSignature(secretPlain, rawBody, req.headers);
-  if (!sig.ok) {
-    return NextResponse.json({ error: sig.reason }, { status: 401 });
-  }
-
   let json: unknown;
   try {
     json = JSON.parse(rawBody) as unknown;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const bodySecret =
+    json && typeof json === "object" && typeof (json as { secret?: unknown }).secret === "string"
+      ? String((json as { secret: string }).secret)
+      : null;
+  const sig = verifyCopyWebhookSignature(secretPlain, rawBody, req.headers);
+  if (!sig.ok && (!bodySecret || !secretMatches(bodySecret, secretPlain))) {
+    return NextResponse.json(
+      { error: bodySecret ? "Invalid webhook secret" : sig.reason },
+      { status: 401 }
+    );
   }
 
   const parsed = parseCopySignalV1(json);
@@ -131,6 +153,19 @@ export async function POST(
   }
 
   const { signal } = parsed;
+  const allowedSymbols = parseSymbolsJson(strategy.symbolsJson, strategy.symbol);
+  if (strategy.assetMode === "single" && signal.symbol !== strategy.symbol) {
+    return NextResponse.json(
+      { error: `Signal symbol must be ${strategy.symbol} for this single-asset strategy` },
+      { status: 400 }
+    );
+  }
+  if (strategy.assetMode === "multi" && !allowedSymbols.includes(signal.symbol)) {
+    return NextResponse.json(
+      { error: `${signal.symbol} is not in this strategy's allowed symbol list` },
+      { status: 400 }
+    );
+  }
 
   const existing = await db
     .select({ id: copySignalEvents.id })
@@ -161,7 +196,7 @@ export async function POST(
       id: signalId,
       strategyId,
       idempotencyKey: signal.idempotency_key,
-      payloadJson: rawBody,
+      payloadJson: redactSecretPayload(rawBody, json),
       clientIp,
     });
   } catch (err) {

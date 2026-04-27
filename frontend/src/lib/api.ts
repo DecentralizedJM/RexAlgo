@@ -334,6 +334,26 @@ export async function deleteAdminMasterAccessRequest(id: string) {
   }>(`/api/admin/master-access/${id}`, { method: "DELETE" });
 }
 
+export async function fetchAdminStrategySlotRequests(
+  status: "pending" | "approved" | "rejected" | "all" = "pending"
+) {
+  const params = new URLSearchParams({ status });
+  return apiFetch<{ requests: StrategySlotRequestRow[] }>(
+    `/api/admin/strategy-slot-requests?${params.toString()}`
+  );
+}
+
+export async function reviewAdminStrategySlotRequest(
+  id: string,
+  action: "approve" | "reject",
+  note?: string
+) {
+  return apiFetch<{ ok: boolean; id: string; status: "approved" | "rejected" }>(
+    `/api/admin/strategy-slot-requests/${id}`,
+    { method: "POST", body: JSON.stringify({ action, note }) }
+  );
+}
+
 export type StrategyReviewStatus = "pending" | "approved" | "rejected";
 
 export type AdminStrategyRow = {
@@ -518,10 +538,22 @@ export async function fetchAdminAudit() {
 // ─── Strategies ─────────────────────────────────────────────────────
 
 /** Stored on algo strategies; drives simulation for that listing only. */
-export type StrategyBacktestSpec = {
-  engine: "sma_cross";
-  params: { fastPeriod: number; slowPeriod: number };
-};
+export type StrategyBacktestSpec =
+  | {
+      engine: "sma_cross";
+      params: { fastPeriod: number; slowPeriod: number };
+    }
+  | {
+      engine: "rule_builder_v1";
+      params: {
+        indicator: "sma" | "ema" | "rsi";
+        period: number;
+        comparator: "cross_above" | "cross_below" | "above" | "below";
+        threshold: number;
+        exitComparator?: "cross_above" | "cross_below" | "above" | "below";
+        exitThreshold?: number;
+      };
+    };
 
 export type ApiStrategy = {
   id: string;
@@ -531,6 +563,9 @@ export type ApiStrategy = {
   description: string;
   type: "copy_trading" | "algo";
   symbol: string;
+  assetMode?: "single" | "multi";
+  symbolsJson?: string | null;
+  symbols?: string[];
   side: string;
   leverage: string;
   stoplossPct: number | null;
@@ -564,7 +599,30 @@ export function parseStrategyBacktestSpec(
     if (!o || typeof o !== "object") return null;
     const engine = (o as { engine?: string }).engine;
     const params = (o as { params?: unknown }).params;
-    if (engine !== "sma_cross" || !params || typeof params !== "object") return null;
+    if ((engine !== "sma_cross" && engine !== "rule_builder_v1") || !params || typeof params !== "object") return null;
+    if (engine === "rule_builder_v1") {
+      const p = params as Record<string, unknown>;
+      return {
+        engine: "rule_builder_v1",
+        params: {
+          indicator: p.indicator === "ema" || p.indicator === "rsi" ? p.indicator : "sma",
+          period: Math.max(2, Number(p.period) || 20),
+          comparator:
+            p.comparator === "cross_below" || p.comparator === "above" || p.comparator === "below"
+              ? p.comparator
+              : "cross_above",
+          threshold: Number(p.threshold) || 0,
+          exitComparator:
+            p.exitComparator === "cross_above" ||
+            p.exitComparator === "cross_below" ||
+            p.exitComparator === "above" ||
+            p.exitComparator === "below"
+              ? p.exitComparator
+              : "cross_below",
+          exitThreshold: Number(p.exitThreshold) || 0,
+        },
+      };
+    }
     const fastPeriod = Number((params as { fastPeriod?: unknown }).fastPeriod);
     const slowPeriod = Number((params as { slowPeriod?: unknown }).slowPeriod);
     if (
@@ -613,6 +671,7 @@ export async function runStrategyBacktest(
     initialCapital?: number;
     riskPctPerTrade?: number;
     feeRoundTrip?: number;
+    backtestSpec?: StrategyBacktestSpec;
   }
 ) {
   return apiFetch<{
@@ -724,6 +783,9 @@ export async function patchStrategy(
 
 export type StudioStrategyRow = ApiStrategy & {
   status: StrategyReviewStatus;
+  assetMode?: "single" | "multi";
+  symbolsJson?: string | null;
+  symbols?: string[];
   rejectionReason: string | null;
   reviewedAt: string | null;
   webhookEnabled: boolean;
@@ -738,6 +800,36 @@ export type StudioStrategyRow = ApiStrategy & {
 };
 
 export type StrategySlotInfo = { used: number; limit: number };
+
+export type StrategySlotRequestRow = {
+  id: string;
+  userId: string;
+  strategyType: "algo" | "copy_trading";
+  requestedSlots: number;
+  status: "pending" | "approved" | "rejected";
+  note: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  userEmail?: string | null;
+  userDisplayName?: string | null;
+};
+
+export type MudrexAsset = {
+  asset_id: string;
+  symbol: string;
+  base_currency: string;
+  quote_currency: string;
+  is_active: boolean;
+  price?: string;
+};
+
+export async function fetchMudrexAssets(symbol?: string) {
+  const q = symbol ? `?symbol=${encodeURIComponent(symbol)}` : "";
+  return apiFetch<{ assets?: MudrexAsset[]; asset?: MudrexAsset }>(
+    `/api/mudrex/assets${q}`
+  );
+}
 
 export async function fetchCopyStudioStrategies() {
   return apiFetch<{
@@ -797,7 +889,13 @@ export type CopySignalRow = {
   receivedAt: string;
   clientIp: string | null;
   payload: unknown;
-  mirror: { ok: number; err: number };
+  summary?: {
+    action: unknown;
+    symbol: unknown;
+    side: unknown;
+    triggerType: unknown;
+  } | null;
+  mirror: { ok: number; err: number; lastError?: string | null };
 };
 
 export async function fetchCopyStrategySignals(strategyId: string) {
@@ -852,10 +950,28 @@ export async function fetchMarketplaceStudioStrategies() {
   }>("/api/marketplace/studio/strategies");
 }
 
+export async function fetchMarketplaceSlotRequests() {
+  return apiFetch<{ requests: StrategySlotRequestRow[] }>(
+    "/api/marketplace/studio/slot-requests"
+  );
+}
+
+export async function requestMarketplaceSlots(body: {
+  requestedSlots: number;
+  note?: string;
+}) {
+  return apiFetch<{ request: StrategySlotRequestRow }>(
+    "/api/marketplace/studio/slot-requests",
+    { method: "POST", body: JSON.stringify(body) }
+  );
+}
+
 export async function createMarketplaceStudioStrategy(body: {
   name: string;
   description: string;
   symbol: string;
+  assetMode?: "single" | "multi";
+  symbols?: string[];
   side: "LONG" | "SHORT" | "BOTH";
   leverage?: string;
   riskLevel?: "low" | "medium" | "high";
@@ -904,6 +1020,8 @@ export async function fetchMarketplaceStrategySignals(strategyId: string) {
 }
 
 export type MarketplaceStudioStrategyPatch = CopyStudioStrategyPatch & {
+  assetMode?: "single" | "multi";
+  symbols?: string[];
   backtestSpec?: StrategyBacktestSpec;
 };
 

@@ -52,6 +52,7 @@ import {
 } from "@/lib/mudrex";
 import { computeFollowerQuantity } from "@/lib/copyMirror";
 import { logTrade, markRexAlgoTradesClosed } from "@/lib/tradeLedger";
+import { parseSymbolsJson } from "@/lib/strategyAssets";
 
 async function recordEvent(
   webhookId: string,
@@ -351,6 +352,24 @@ export async function POST(
             ? "strategy_not_approved"
             : "strategy_inactive",
       });
+    }
+
+    const allowedSymbols = parseSymbolsJson(strategy.symbolsJson, strategy.symbol);
+    if (strategy.assetMode === "single" && parsed.route.signal.symbol !== strategy.symbol) {
+      await recordEvent(wh.id, idempotencyKey, rawBody, "rejected",
+        `Signal symbol must be ${strategy.symbol} for this single-asset strategy`, clientIp);
+      return NextResponse.json(
+        { error: `Signal symbol must be ${strategy.symbol} for this strategy` },
+        { status: 400 }
+      );
+    }
+    if (strategy.assetMode === "multi" && !allowedSymbols.includes(parsed.route.signal.symbol)) {
+      await recordEvent(wh.id, idempotencyKey, rawBody, "rejected",
+        `${parsed.route.signal.symbol} is not allowed for this strategy`, clientIp);
+      return NextResponse.json(
+        { error: `${parsed.route.signal.symbol} is not in this strategy's allowed symbol list` },
+        { status: 400 }
+      );
     }
 
     const summary = await executeMirror(strategy, parsed.route.signal, signalId);

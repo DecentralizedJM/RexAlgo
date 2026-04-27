@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -48,12 +48,15 @@ import {
   renameMarketplaceStrategyWebhook,
   fetchMarketplaceStrategySignals,
   patchStrategy,
-  parseStrategyBacktestSpec,
   updateMarketplaceStudioStrategy,
   deleteMarketplaceStudioStrategy,
   resubmitMarketplaceStudioStrategy,
+  fetchMudrexAssets,
+  fetchMarketplaceSlotRequests,
+  requestMarketplaceSlots,
   type StudioStrategyRow,
   type StrategyReviewStatus,
+  type MudrexAsset,
   ApiError,
 } from "@/lib/api";
 import StrategyBacktestPanel from "@/components/StrategyBacktestPanel";
@@ -72,6 +75,9 @@ import {
   PowerOff,
   Send,
   Trash2,
+  Eye,
+  EyeOff,
+  AlertTriangle,
   X,
 } from "lucide-react";
 
@@ -113,8 +119,25 @@ function formatRelative(iso: string): string {
   return `${d}d ago`;
 }
 
+function strategySymbols(row: StudioStrategyRow): string[] {
+  if (Array.isArray(row.symbols) && row.symbols.length > 0) return row.symbols;
+  if (row.symbolsJson) {
+    try {
+      const parsed = JSON.parse(row.symbolsJson) as unknown;
+      if (Array.isArray(parsed)) {
+        const out = parsed.filter((s): s is string => typeof s === "string" && s.trim().length > 0);
+        if (out.length > 0) return out;
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return [row.symbol];
+}
+
 export default function MarketplaceStudioPage() {
   const authQ = useRequireMasterAccess();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const sessionAuthed = authQ.authed && authQ.masterApproved;
   const hasMudrexKey = authQ.data?.user?.hasMudrexKey ?? false;
@@ -124,6 +147,12 @@ export default function MarketplaceStudioPage() {
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [slotDialogOpen, setSlotDialogOpen] = useState(false);
+  const [webhookConfirm, setWebhookConfirm] = useState<{
+    id: string;
+    action: "enable" | "disable" | "rotate";
+  } | null>(null);
+  const [secretVisible, setSecretVisible] = useState(false);
 
   const originFallback =
     typeof window !== "undefined" ? `${window.location.origin}` : "";
@@ -161,6 +190,13 @@ export default function MarketplaceStudioPage() {
     ...liveDataQueryOptions,
   });
 
+  const slotRequestsQ = useQuery({
+    queryKey: ["marketplace-studio", "slot-requests"],
+    queryFn: fetchMarketplaceSlotRequests,
+    enabled: sessionAuthed,
+    ...liveDataQueryOptions,
+  });
+
   const createMut = useMutation({
     mutationFn: createMarketplaceStudioStrategy,
     onSuccess: (data) => {
@@ -186,10 +222,29 @@ export default function MarketplaceStudioPage() {
       void queryClient.invalidateQueries({ queryKey: ["marketplace-studio", "strategies"] });
       if (data.secretPlain) {
         setSecretFlash(data.secretPlain);
+        setSecretVisible(false);
       }
+      setWebhookConfirm(null);
     },
     onError: (e) => {
+      if (e instanceof ApiError && e.body && typeof e.body === "object" && (e.body as { code?: string }).code === "RECENT_LOGIN_REQUIRED") {
+        toast.error("Sign in again to confirm this webhook action.");
+        navigate("/auth", { state: { from: "/marketplace/studio" } });
+        return;
+      }
       toast.error(e instanceof ApiError ? e.message : "Webhook update failed");
+    },
+  });
+
+  const slotRequestMut = useMutation({
+    mutationFn: requestMarketplaceSlots,
+    onSuccess: async () => {
+      toast.success("Slot request sent to admin");
+      setSlotDialogOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["marketplace-studio", "slot-requests"] });
+    },
+    onError: (e) => {
+      toast.error(e instanceof ApiError ? e.message : "Slot request failed");
     },
   });
 
@@ -269,65 +324,41 @@ export default function MarketplaceStudioPage() {
     },
   });
 
-  const specMut = useMutation({
-    mutationFn: ({
-      id,
-      fastPeriod,
-      slowPeriod,
-    }: {
-      id: string;
-      fastPeriod: number;
-      slowPeriod: number;
-    }) =>
-      patchStrategy(id, {
-        backtestSpec: {
-          engine: "sma_cross",
-          params: { fastPeriod, slowPeriod },
-        },
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["marketplace-studio", "strategies"] });
-      void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
-      toast.success("Simulation settings saved");
-    },
-    onError: (e) => {
-      toast.error(e instanceof ApiError ? e.message : "Save failed");
-    },
-  });
-
   const webhookDisplayUrl = selected
     ? buildWebhookUrl(publicBase, selected.webhookPath, originFallback)
     : "";
+  const pendingSlotRequest = (slotRequestsQ.data?.requests ?? []).find(
+    (r) => r.status === "pending"
+  );
 
   const pythonSnippet = selected
-    ? `import hashlib
-import hmac
-import json
-import time
+    ? `import json
+import uuid
 import urllib.request
 
 WEBHOOK_URL = "${webhookDisplayUrl}"
-SECRET = "PASTE_SIGNING_SECRET_FROM_STUDIO".encode("utf-8")
+SECRET = "PASTE_SECRET_FROM_STUDIO"
 
 body = {
-    "idempotency_key": "unique-per-signal-uuid",
+    "secret": SECRET,
+    "idempotency_key": str(uuid.uuid4()),
     "action": "open",
-    "symbol": "BTCUSDT",
+    "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
     "side": "LONG",
     "trigger_type": "MARKET",
+    # For LIMIT orders:
+    # "trigger_type": "LIMIT",
+    # "price": "65000",
+    # Optional SL / TP:
+    # "sl": "62000",
+    # "tp": "70000",
 }
 raw = json.dumps(body, separators=(",", ":"))
-t = int(time.time())
-msg = f"{t}.{raw}".encode("utf-8")
-sig = hmac.new(SECRET, msg, hashlib.sha256).hexdigest()
 
 req = urllib.request.Request(
     WEBHOOK_URL,
     data=raw.encode("utf-8"),
-    headers={
-        "Content-Type": "application/json",
-        "X-RexAlgo-Signature": f"t={t},v1={sig}",
-    },
+    headers={"Content-Type": "application/json"},
     method="POST",
 )
 with urllib.request.urlopen(req, timeout=30) as res:
@@ -387,18 +418,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                 </DialogHeader>
                 <AlgoCreateForm
                   loading={createMut.isPending}
-                  onSubmit={(v) =>
-                    createMut.mutate({
-                      ...v,
-                      backtestSpec: {
-                        engine: "sma_cross",
-                        params: {
-                          fastPeriod: v.fastPeriod,
-                          slowPeriod: v.slowPeriod,
-                        },
-                      },
-                    })
-                  }
+                  onSubmit={(v) => createMut.mutate(v)}
                 />
               </DialogContent>
             </Dialog>
@@ -406,16 +426,50 @@ with urllib.request.urlopen(req, timeout=30) as res:
               Slots: <span className="font-medium text-foreground">{slots.used}</span>/
               {slots.limit} · rejected listings don&apos;t count
             </p>
+            {slotsFull && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={Boolean(pendingSlotRequest)}
+                onClick={() => setSlotDialogOpen(true)}
+              >
+                {pendingSlotRequest ? "Slot request pending" : "Request more slots"}
+              </Button>
+            )}
           </div>
         </div>
 
+        <Dialog open={slotDialogOpen} onOpenChange={setSlotDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Request more algo slots</DialogTitle>
+            </DialogHeader>
+            <SlotRequestForm
+              loading={slotRequestMut.isPending}
+              onSubmit={(v) => slotRequestMut.mutate(v)}
+            />
+          </DialogContent>
+        </Dialog>
+
         {secretFlash && (
-          <div className="mb-6 p-4 rounded-xl border border-profit/30 bg-profit/10 text-sm">
-            <p className="font-medium text-profit mb-2">Signing secret (copy now; one-time display)</p>
+          <div className="mb-6 p-4 rounded-xl border border-warning/30 bg-warning/10 text-sm">
+            <p className="font-medium text-warning mb-2">Signing secret (copy now; one-time display)</p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Keep this safe. If leaked, anyone with this secret can send signals that manage this strategy.
+            </p>
             <div className="flex gap-2 items-center">
               <code className="text-xs break-all flex-1 font-mono bg-background/80 p-2 rounded">
-                {secretFlash}
+                {secretVisible ? secretFlash : "•".repeat(Math.min(48, secretFlash.length))}
               </code>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setSecretVisible((v) => !v)}
+              >
+                {secretVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </Button>
               <Button
                 type="button"
                 size="sm"
@@ -469,7 +523,9 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         </Badge>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">{s.symbol}</div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {(s.assetMode === "multi" ? strategySymbols(s) : [s.symbol]).join(", ")}
+                    </div>
                     <div className="text-xs mt-1 flex items-center gap-2">
                       <span
                         className={
@@ -580,6 +636,10 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 font-medium text-foreground">
+                        {selected.assetMode === "multi" ? "Multi asset" : "Single asset"}:{" "}
+                        {strategySymbols(selected).join(", ")}
+                      </span>
                       {selected.webhookEnabled ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-profit/15 text-profit px-2 py-0.5 font-medium">
                           <Check className="w-3 h-3" /> webhook active
@@ -687,7 +747,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                             ? "Webhook can only be enabled after admin approval."
                             : undefined
                         }
-                        onClick={() => webhookMut.mutate({ id: selected.id, action: "enable" })}
+                        onClick={() => setWebhookConfirm({ id: selected.id, action: "enable" })}
                       >
                         <Power className="w-4 h-4 mr-1" />
                         Enable webhook
@@ -697,7 +757,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         size="sm"
                         variant="outline"
                         disabled={webhookMut.isPending || !selected.webhookEnabled}
-                        onClick={() => webhookMut.mutate({ id: selected.id, action: "disable" })}
+                        onClick={() => setWebhookConfirm({ id: selected.id, action: "disable" })}
                       >
                         <PowerOff className="w-4 h-4 mr-1" />
                         Disable
@@ -714,7 +774,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                             ? "Webhook can only be rotated for approved listings."
                             : undefined
                         }
-                        onClick={() => webhookMut.mutate({ id: selected.id, action: "rotate" })}
+                        onClick={() => setWebhookConfirm({ id: selected.id, action: "rotate" })}
                       >
                         <RefreshCw className="w-4 h-4 mr-1" />
                         Rotate secret
@@ -741,15 +801,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   </CardContent>
                 </Card>
 
-                <StudioBacktestSpecCard
-                  strategyId={selected.id}
-                  backtestSpecJson={selected.backtestSpecJson}
-                  saving={specMut.isPending}
-                  onSave={(fastPeriod, slowPeriod) =>
-                    specMut.mutate({ id: selected.id, fastPeriod, slowPeriod })
-                  }
-                />
-
                 <StrategyBacktestPanel
                   strategyId={selected.id}
                   strategyName={selected.name}
@@ -759,16 +810,37 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   <CardHeader>
                     <CardTitle className="text-base">Signal format (JSON)</CardTitle>
                     <CardDescription>
-                      HMAC header <code className="text-xs">X-RexAlgo-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code> over{" "}
-                      <code className="text-xs">t + &quot;.&quot; + rawBody</code>.
+                      Send the endpoint plus your secret in the JSON body. Use a unique idempotency key per signal.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <pre className="text-xs bg-secondary/50 p-4 rounded-lg overflow-x-auto font-mono">
 {`{
+  "secret": "whsec_...",
   "idempotency_key": "uuid-v4",
   "action": "open",
-  "symbol": "BTCUSDT",
+  "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
+  "side": "LONG",
+  "trigger_type": "MARKET",
+  "sl": "62000",
+  "tp": "70000"
+}
+
+{
+  "secret": "whsec_...",
+  "idempotency_key": "uuid-v4-limit-short",
+  "action": "open",
+  "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
+  "side": "SHORT",
+  "trigger_type": "LIMIT",
+  "price": "65000"
+}
+
+{
+  "secret": "whsec_...",
+  "idempotency_key": "uuid-v4-close",
+  "action": "close",
+  "symbol": "${strategySymbols(selected)[0] ?? "BTCUSDT"}",
   "side": "LONG",
   "trigger_type": "MARKET"
 }`}
@@ -812,26 +884,39 @@ with urllib.request.urlopen(req, timeout=30) as res:
                           <thead>
                             <tr className="text-left text-muted-foreground border-b border-border">
                               <th className="py-2 pr-2">Time</th>
+                              <th className="py-2 pr-2">Signal</th>
                               <th className="py-2 pr-2">Idempotency</th>
-                              <th className="py-2 pr-2">Mirror OK / err</th>
+                              <th className="py-2 pr-2">Status</th>
+                              <th className="py-2 pr-2">Error</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {signalsQ.data!.signals.map((row) => (
-                              <tr key={row.id} className="border-b border-border/50">
-                                <td className="py-2 pr-2 font-mono text-xs whitespace-nowrap">
-                                  {new Date(row.receivedAt).toLocaleString()}
-                                </td>
-                                <td className="py-2 pr-2 font-mono text-xs truncate max-w-[140px]">
-                                  {row.idempotencyKey}
-                                </td>
-                                <td className="py-2 pr-2">
-                                  <span className="text-profit">{row.mirror.ok}</span>
-                                  {" / "}
-                                  <span className="text-loss">{row.mirror.err}</span>
-                                </td>
-                              </tr>
-                            ))}
+                            {signalsQ.data!.signals.map((row) => {
+                              const s = row.summary;
+                              return (
+                                <tr key={row.id} className="border-b border-border/50 align-top">
+                                  <td className="py-2 pr-2 font-mono text-xs whitespace-nowrap">
+                                    {new Date(row.receivedAt).toLocaleString()}
+                                  </td>
+                                  <td className="py-2 pr-2 text-xs">
+                                    <span className="font-medium">{String(s?.action ?? "—").toUpperCase()}</span>{" "}
+                                    <span className="font-mono">{String(s?.side ?? "—")} {String(s?.symbol ?? "—")}</span>
+                                    <span className="ml-1 text-muted-foreground">{String(s?.triggerType ?? "—")}</span>
+                                  </td>
+                                  <td className="py-2 pr-2 font-mono text-xs truncate max-w-[140px]">
+                                    {row.idempotencyKey}
+                                  </td>
+                                  <td className="py-2 pr-2 whitespace-nowrap">
+                                    <span className="text-profit">{row.mirror.ok}</span>
+                                    {" / "}
+                                    <span className="text-loss">{row.mirror.err}</span>
+                                  </td>
+                                  <td className="py-2 pr-2 max-w-[220px] truncate text-xs text-loss">
+                                    {row.mirror.lastError ?? "—"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -887,12 +972,192 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
+
+                <AlertDialog open={Boolean(webhookConfirm)} onOpenChange={(open) => !open && setWebhookConfirm(null)}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Confirm webhook action</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action changes access to your strategy webhook. If the signing secret leaks,
+                        anyone with it can send signals that manage this strategy. You may be asked to sign in
+                        again before the server accepts this action.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+                      <AlertTriangle className="mr-2 inline h-4 w-4" />
+                      Keep webhook URLs and secrets private.
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        disabled={webhookMut.isPending || !webhookConfirm}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (webhookConfirm) webhookMut.mutate(webhookConfirm);
+                        }}
+                      >
+                        {webhookMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function SymbolSelector({
+  assetMode,
+  setAssetMode,
+  symbols,
+  setSymbols,
+}: {
+  assetMode: "single" | "multi";
+  setAssetMode: (v: "single" | "multi") => void;
+  symbols: string[];
+  setSymbols: (v: string[]) => void;
+}) {
+  const [manual, setManual] = useState("");
+  const assetsQ = useQuery({
+    queryKey: ["mudrex", "assets", "studio"],
+    queryFn: () => fetchMudrexAssets(),
+    staleTime: 5 * 60_000,
+  });
+  const assets = (assetsQ.data?.assets ?? []).filter((a) => a.is_active !== false);
+
+  function addSymbol(symbol: string) {
+    const s = symbol.trim().toUpperCase();
+    if (!s) return;
+    setSymbols(Array.from(new Set(assetMode === "single" ? [s] : [...symbols, s])));
+    setManual("");
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border/60 p-3">
+      <div>
+        <Label>Asset mode</Label>
+        <Select value={assetMode} onValueChange={(v) => {
+          const next = v as "single" | "multi";
+          setAssetMode(next);
+          if (next === "single") setSymbols([symbols[0] ?? "BTCUSDT"]);
+        }}>
+          <SelectTrigger className="mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="single">Single asset</SelectItem>
+            <SelectItem value="multi">Multi asset</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Mudrex symbols</Label>
+        {assets.length > 0 ? (
+          <Select value="" onValueChange={addSymbol}>
+            <SelectTrigger>
+              <SelectValue placeholder={assetMode === "single" ? "Choose symbol" : "Add symbol"} />
+            </SelectTrigger>
+            <SelectContent>
+              {assets.slice(0, 250).map((a: MudrexAsset) => (
+                <SelectItem key={a.symbol} value={a.symbol}>
+                  {a.symbol}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="flex gap-2">
+            <Input
+              value={manual}
+              onChange={(e) => setManual(e.target.value)}
+              placeholder="BTCUSDT"
+              className="font-mono"
+            />
+            <Button type="button" variant="outline" onClick={() => addSymbol(manual)}>
+              {assetMode === "single" ? "Set" : "Add"}
+            </Button>
+          </div>
+        )}
+        {assetsQ.isError && (
+          <p className="text-xs text-warning">
+            Could not load Mudrex symbols. You can type one; the server will still validate it.
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {symbols.map((s) => (
+            <Badge key={s} variant="secondary" className="gap-1 font-mono">
+              {s}
+              {assetMode === "multi" && symbols.length > 2 && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${s}`}
+                  onClick={() => setSymbols(symbols.filter((x) => x !== s))}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </Badge>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Symbols are validated against your Mudrex Futures account before save.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SlotRequestForm({
+  loading,
+  onSubmit,
+}: {
+  loading: boolean;
+  onSubmit: (v: { requestedSlots: number; note?: string }) => void;
+}) {
+  const [requestedSlots, setRequestedSlots] = useState("1");
+  const [note, setNote] = useState("");
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit({
+          requestedSlots: Math.max(1, parseInt(requestedSlots, 10) || 1),
+          note: note.trim() || undefined,
+        });
+      }}
+    >
+      <div>
+        <Label htmlFor="slot-count">Additional slots</Label>
+        <Input
+          id="slot-count"
+          type="number"
+          min={1}
+          max={20}
+          value={requestedSlots}
+          onChange={(e) => setRequestedSlots(e.target.value)}
+          className="mt-1 font-mono"
+        />
+      </div>
+      <div>
+        <Label htmlFor="slot-note">Why do you need more?</Label>
+        <Textarea
+          id="slot-note"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="mt-1 min-h-[100px]"
+          placeholder="Share what you plan to publish so admins can review faster."
+        />
+      </div>
+      <Button type="submit" disabled={loading} className="w-full">
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send request"}
+      </Button>
+    </form>
   );
 }
 
@@ -907,7 +1172,10 @@ function EditAlgoForm({
 }) {
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description);
-  const [symbol, setSymbol] = useState(initial.symbol);
+  const [assetMode, setAssetMode] = useState<"single" | "multi">(
+    initial.assetMode === "multi" ? "multi" : "single"
+  );
+  const [symbols, setSymbols] = useState<string[]>(strategySymbols(initial));
   const [side, setSide] = useState<"LONG" | "SHORT" | "BOTH">(
     (initial.side as "LONG" | "SHORT" | "BOTH") ?? "BOTH"
   );
@@ -922,11 +1190,13 @@ function EditAlgoForm({
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!name.trim() || !description.trim() || !symbol.trim()) return;
+        if (!name.trim() || !description.trim() || symbols.length === 0) return;
         onSubmit({
           name: name.trim(),
           description: description.trim(),
-          symbol: symbol.trim().toUpperCase(),
+          assetMode,
+          symbol: symbols[0]!,
+          symbols,
           side,
           leverage,
           riskLevel,
@@ -954,16 +1224,12 @@ function EditAlgoForm({
           required
         />
       </div>
-      <div>
-        <Label htmlFor="edit-ms-sym">Symbol (Mudrex)</Label>
-        <Input
-          id="edit-ms-sym"
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value)}
-          className="mt-1 font-mono"
-          required
-        />
-      </div>
+      <SymbolSelector
+        assetMode={assetMode}
+        setAssetMode={setAssetMode}
+        symbols={symbols}
+        setSymbols={setSymbols}
+      />
       <div>
         <Label>Side</Label>
         <Select value={side} onValueChange={(v) => setSide(v as typeof side)}>
@@ -1018,85 +1284,6 @@ function EditAlgoForm({
   );
 }
 
-function StudioBacktestSpecCard({
-  strategyId,
-  backtestSpecJson,
-  saving,
-  onSave,
-}: {
-  strategyId: string;
-  backtestSpecJson: string | null | undefined;
-  saving: boolean;
-  onSave: (fastPeriod: number, slowPeriod: number) => void;
-}) {
-  const [fast, setFast] = useState("10");
-  const [slow, setSlow] = useState("30");
-
-  useEffect(() => {
-    const p = parseStrategyBacktestSpec(backtestSpecJson);
-    setFast(String(p?.params.fastPeriod ?? 10));
-    setSlow(String(p?.params.slowPeriod ?? 30));
-  }, [strategyId, backtestSpecJson]);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Simulation logic (this listing)</CardTitle>
-        <CardDescription>
-          Shoppers run a simulation that uses these parameters together with symbol, timeframe, side, and
-          stops from the listing. Webhook signals are separate.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Engine: <span className="text-foreground font-medium">Moving average crossover</span> (fast vs slow
-          SMA on the listing timeframe).
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="spec-fast">Fast period (bars)</Label>
-            <Input
-              id="spec-fast"
-              type="number"
-              min={2}
-              className="mt-1 font-mono"
-              value={fast}
-              onChange={(e) => setFast(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="spec-slow">Slow period (bars)</Label>
-            <Input
-              id="spec-slow"
-              type="number"
-              min={3}
-              className="mt-1 font-mono"
-              value={slow}
-              onChange={(e) => setSlow(e.target.value)}
-            />
-          </div>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          disabled={saving}
-          onClick={() => {
-            const fp = parseInt(fast, 10);
-            const sp = parseInt(slow, 10);
-            if (!Number.isInteger(fp) || !Number.isInteger(sp) || fp < 2 || sp < 2 || fp >= sp) {
-              toast.error("Fast and slow must be integers ≥ 2, with fast < slow.");
-              return;
-            }
-            onSave(fp, sp);
-          }}
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save simulation settings"}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
 function AlgoCreateForm({
   onSubmit,
   loading,
@@ -1106,46 +1293,43 @@ function AlgoCreateForm({
     name: string;
     description: string;
     symbol: string;
+    assetMode: "single" | "multi";
+    symbols: string[];
     side: "LONG" | "SHORT" | "BOTH";
     leverage: string;
     riskLevel: "low" | "medium" | "high";
     timeframe: string;
-    fastPeriod: number;
-    slowPeriod: number;
   }) => void;
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [symbol, setSymbol] = useState("BTCUSDT");
+  const [assetMode, setAssetMode] = useState<"single" | "multi">("single");
+  const [symbols, setSymbols] = useState<string[]>(["BTCUSDT"]);
   const [side, setSide] = useState<"LONG" | "SHORT" | "BOTH">("BOTH");
   const [leverage, setLeverage] = useState("5");
   const [riskLevel, setRiskLevel] = useState<"low" | "medium" | "high">("medium");
   const [timeframe, setTimeframe] = useState("1h");
-  const [fastPeriod, setFastPeriod] = useState("10");
-  const [slowPeriod, setSlowPeriod] = useState("30");
 
   return (
     <form
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!name.trim() || !description.trim() || !symbol.trim()) return;
-        const fp = parseInt(fastPeriod, 10);
-        const sp = parseInt(slowPeriod, 10);
-        if (!Number.isInteger(fp) || !Number.isInteger(sp) || fp < 2 || sp < 2 || fp >= sp) {
-          toast.error("Fast and slow periods: integers ≥ 2, fast < slow.");
+        if (!name.trim() || !description.trim() || symbols.length === 0) return;
+        if (assetMode === "multi" && symbols.length < 2) {
+          toast.error("Choose at least two symbols for a multi-asset strategy.");
           return;
         }
         onSubmit({
           name: name.trim(),
           description: description.trim(),
-          symbol: symbol.trim().toUpperCase(),
+          assetMode,
+          symbol: symbols[0]!,
+          symbols,
           side,
           leverage,
           riskLevel,
           timeframe,
-          fastPeriod: fp,
-          slowPeriod: sp,
         });
       }}
     >
@@ -1169,16 +1353,12 @@ function AlgoCreateForm({
           required
         />
       </div>
-      <div>
-        <Label htmlFor="ms-sym">Symbol (Mudrex)</Label>
-        <Input
-          id="ms-sym"
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value)}
-          className="mt-1 font-mono"
-          required
-        />
-      </div>
+      <SymbolSelector
+        assetMode={assetMode}
+        setAssetMode={setAssetMode}
+        symbols={symbols}
+        setSymbols={setSymbols}
+      />
       <div>
         <Label>Side</Label>
         <Select value={side} onValueChange={(v) => setSide(v as typeof side)}>
@@ -1222,40 +1402,6 @@ function AlgoCreateForm({
           onChange={(e) => setTimeframe(e.target.value)}
           className="mt-1"
         />
-      </div>
-      <div className="rounded-lg border border-border/60 p-3 space-y-3 bg-secondary/20">
-        <p className="text-xs font-medium text-foreground">Simulation logic (same as listing)</p>
-        <p className="text-xs text-muted-foreground">
-          Moving average crossover, used when anyone runs a simulation for this strategy.
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label htmlFor="ms-fast" className="text-xs">
-              Fast period
-            </Label>
-            <Input
-              id="ms-fast"
-              type="number"
-              min={2}
-              className="mt-1 font-mono text-sm"
-              value={fastPeriod}
-              onChange={(e) => setFastPeriod(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="ms-slow" className="text-xs">
-              Slow period
-            </Label>
-            <Input
-              id="ms-slow"
-              type="number"
-              min={3}
-              className="mt-1 font-mono text-sm"
-              value={slowPeriod}
-              onChange={(e) => setSlowPeriod(e.target.value)}
-            />
-          </div>
-        </div>
       </div>
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}

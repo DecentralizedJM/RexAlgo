@@ -48,6 +48,61 @@ function sma(closes: number[], period: number): (number | null)[] {
   return out;
 }
 
+function ema(closes: number[], period: number): (number | null)[] {
+  const out: (number | null)[] = [];
+  const k = 2 / (period + 1);
+  let prev: number | null = null;
+  for (let i = 0; i < closes.length; i++) {
+    const price = closes[i]!;
+    if (i < period - 1) {
+      out.push(null);
+      continue;
+    }
+    if (prev == null) {
+      const seed = closes.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0) / period;
+      prev = seed;
+    } else {
+      prev = price * k + prev * (1 - k);
+    }
+    out.push(prev);
+  }
+  return out;
+}
+
+function rsi(closes: number[], period: number): (number | null)[] {
+  const out: (number | null)[] = [null];
+  let avgGain = 0;
+  let avgLoss = 0;
+  for (let i = 1; i < closes.length; i++) {
+    const change = closes[i]! - closes[i - 1]!;
+    const gain = Math.max(0, change);
+    const loss = Math.max(0, -change);
+    if (i <= period) {
+      avgGain += gain;
+      avgLoss += loss;
+      out.push(i === period ? 100 - 100 / (1 + avgGain / Math.max(1e-9, avgLoss)) : null);
+      if (i === period) {
+        avgGain /= period;
+        avgLoss /= period;
+      }
+      continue;
+    }
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    out.push(100 - 100 / (1 + avgGain / Math.max(1e-9, avgLoss)));
+  }
+  return out;
+}
+
+function condition(prev: number | null, cur: number | null, cmp: string, threshold: number): boolean {
+  if (prev == null || cur == null || !Number.isFinite(cur)) return false;
+  if (cmp === "above") return cur > threshold;
+  if (cmp === "below") return cur < threshold;
+  if (cmp === "cross_above") return prev <= threshold && cur > threshold;
+  if (cmp === "cross_below") return prev >= threshold && cur < threshold;
+  return false;
+}
+
 export function runStrategyBacktest(
   candles: Candle[],
   strategy: StrategyRow,
@@ -64,14 +119,19 @@ export function runStrategyBacktest(
     return emptyResult(initialCapital);
   }
 
-  if (spec.engine !== "sma_cross") {
-    return emptyResult(initialCapital);
-  }
-
-  const fastP = spec.params.fastPeriod as number;
-  const slowP = spec.params.slowPeriod as number;
-  const fast = sma(closes, fastP);
-  const slow = sma(closes, slowP);
+  const legacy = spec.engine === "sma_cross";
+  const fast = legacy ? sma(closes, spec.params.fastPeriod) : [];
+  const slow = legacy ? sma(closes, spec.params.slowPeriod) : [];
+  const ruleSeries =
+    !legacy && spec.params.indicator === "ema"
+      ? ema(closes, spec.params.period)
+      : !legacy && spec.params.indicator === "rsi"
+        ? rsi(closes, spec.params.period)
+        : !legacy
+          ? sma(closes, spec.params.period).map((v, i) =>
+              v == null ? null : ((closes[i]! - v) / v) * 100
+            )
+          : [];
 
   const slFrac = (strategy.stoplossPct ?? defaultStop * 100) / 100;
   const tpFrac = strategy.takeprofitPct != null ? strategy.takeprofitPct / 100 : null;
@@ -160,10 +220,10 @@ export function runStrategyBacktest(
 
   for (let i = 1; i < candles.length; i++) {
     const bar = candles[i]!;
-    const prevF = fast[i - 1];
-    const prevS = slow[i - 1];
-    const curF = fast[i];
-    const curS = slow[i];
+    const prevF = legacy ? fast[i - 1] : null;
+    const prevS = legacy ? slow[i - 1] : null;
+    const curF = legacy ? fast[i] : null;
+    const curS = legacy ? slow[i] : null;
     const price = bar.close;
     const t = bar.openTime;
 
@@ -181,19 +241,22 @@ export function runStrategyBacktest(
       }
     }
 
-    const golden =
-      prevF != null &&
-      prevS != null &&
-      curF != null &&
-      curS != null &&
-      Number.isFinite(prevF) &&
-      Number.isFinite(prevS) &&
-      Number.isFinite(curF) &&
-      Number.isFinite(curS);
-
-    if (golden) {
-      const bullCross = prevF <= prevS && curF > curS;
-      const bearCross = prevF >= prevS && curF < curS;
+    if (legacy) {
+      const golden =
+        prevF != null &&
+        prevS != null &&
+        curF != null &&
+        curS != null &&
+        Number.isFinite(prevF) &&
+        Number.isFinite(prevS) &&
+        Number.isFinite(curF) &&
+        Number.isFinite(curS);
+      if (!golden) {
+        equityPts.push({ t, equity });
+        continue;
+      }
+      const bullCross = prevF! <= prevS! && curF! > curS!;
+      const bearCross = prevF! >= prevS! && curF! < curS!;
 
       if (posHolder.p.kind === "long" && bearCross) {
         closePosition(price, t, "signal");
@@ -207,6 +270,21 @@ export function runStrategyBacktest(
         } else if (bearCross && sideAllowShort) {
           openShort(price, t);
         }
+      }
+    } else {
+      const prev = ruleSeries[i - 1] ?? null;
+      const cur = ruleSeries[i] ?? null;
+      const enter = condition(prev, cur, spec.params.comparator, spec.params.threshold);
+      const exit = condition(
+        prev,
+        cur,
+        spec.params.exitComparator ?? "cross_below",
+        spec.params.exitThreshold ?? spec.params.threshold
+      );
+      if (posHolder.p.kind !== "flat" && exit) closePosition(price, t, "signal");
+      if (posHolder.p.kind === "flat" && enter) {
+        if (sideAllowLong) openLong(price, t);
+        else if (sideAllowShort) openShort(price, t);
       }
     }
 

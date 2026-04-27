@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { eq, and } from "drizzle-orm";
-import { getSession, encryptApiSecret } from "@/lib/auth";
+import { getSession, encryptApiSecret, requireRecentSession } from "@/lib/auth";
 import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { strategies, copyWebhookConfig } from "@/lib/schema";
@@ -36,6 +36,8 @@ export async function POST(
   }
   const blocked = await blockIfNoMasterAccess(session.user);
   if (blocked) return blocked;
+  const recentBlock = requireRecentSession(session);
+  if (recentBlock) return recentBlock;
 
   const { id: strategyId } = await ctx.params;
   const strategy = await loadOwnedStrategy(strategyId, session.user.id);

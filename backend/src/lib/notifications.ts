@@ -123,7 +123,9 @@ export type NotificationKind =
   | "strategy_deleted_by_admin"
   | "strategy_approved"
   | "strategy_rejected"
-  | "strategy_requeued_for_review";
+  | "strategy_requeued_for_review"
+  | "strategy_slots_approved"
+  | "strategy_slots_rejected";
 
 export type NotificationPayload = {
   kind: NotificationKind;

@@ -6,6 +6,7 @@ import { strategies } from "@/lib/schema";
 import { acquireBacktestSlot } from "@/lib/backtestConcurrency";
 import {
   defaultBacktestSpec,
+  parseBacktestSpecFromBody,
   parseBacktestSpecJson,
 } from "@/lib/backtest/spec";
 import { runStrategyBacktest } from "@/lib/backtest/runBacktest";
@@ -90,7 +91,9 @@ export async function POST(
     );
 
     const spec =
-      parseBacktestSpecJson(strategy.backtestSpecJson) ?? defaultBacktestSpec();
+      parseBacktestSpecFromBody(body.backtestSpec) ??
+      parseBacktestSpecJson(strategy.backtestSpecJson) ??
+      defaultBacktestSpec();
 
     const endMs = Date.now();
     const startMs = endMs - lookbackMonths * 30 * 24 * 60 * 60 * 1000;

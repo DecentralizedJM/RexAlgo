@@ -12,6 +12,12 @@ import {
 } from "@/lib/backtest/spec";
 import { publicApiBase } from "@/lib/publicUrl";
 import {
+  parseAssetSelection,
+  parseSymbolsJson,
+  serializeSymbols,
+  validateMudrexSymbols,
+} from "@/lib/strategyAssets";
+import {
   STRATEGY_SLOT_LIMIT,
   StrategySlotLimitError,
   assertStrategySlotAvailable,
@@ -47,6 +53,7 @@ export async function GET() {
     const path = `/api/webhooks/copy-trading/${s.id}`;
     return {
       ...s,
+      symbols: parseSymbolsJson(s.symbolsJson, s.symbol),
       webhookEnabled: w?.enabled ?? false,
       webhookName: w?.name ?? s.name,
       webhookLastDeliveryAt: w?.lastDeliveryAt?.toISOString() ?? null,
@@ -92,6 +99,26 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
+    if (!session.apiSecret) {
+      return NextResponse.json(
+        { error: "Connect your Mudrex API secret before creating an algo strategy." },
+        { status: 428 }
+      );
+    }
+    const assetSelection = parseAssetSelection(body);
+    if (!assetSelection.ok) {
+      return NextResponse.json({ error: assetSelection.error }, { status: 400 });
+    }
+    const symbolCheck = await validateMudrexSymbols(
+      session.apiSecret,
+      assetSelection.symbols
+    );
+    if (!symbolCheck.ok) {
+      return NextResponse.json(
+        { error: symbolCheck.error, field: "symbol", invalid: symbolCheck.invalid },
+        { status: 400 }
+      );
+    }
 
     const id = uuidv4();
     const newStrategy = {
@@ -101,7 +128,9 @@ export async function POST(req: NextRequest) {
       name: body.name,
       description: body.description,
       type: "algo" as const,
-      symbol: body.symbol,
+      symbol: assetSelection.primarySymbol,
+      assetMode: assetSelection.assetMode,
+      symbolsJson: serializeSymbols(assetSelection.symbols),
       side: body.side as "LONG" | "SHORT" | "BOTH",
       leverage: body.leverage || "1",
       stoplossPct: body.stoplossPct ? parseFloat(body.stoplossPct) : null,

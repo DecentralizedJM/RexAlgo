@@ -89,6 +89,12 @@ export default function StrategyBacktestPanel({
   const [months, setMonths] = useState("6");
   const [capital, setCapital] = useState("10000");
   const [riskPct, setRiskPct] = useState("2");
+  const [indicator, setIndicator] = useState<"sma" | "ema" | "rsi">("sma");
+  const [period, setPeriod] = useState("20");
+  const [comparator, setComparator] = useState<"cross_above" | "cross_below" | "above" | "below">("cross_above");
+  const [threshold, setThreshold] = useState("0");
+  const [exitComparator, setExitComparator] = useState<"cross_above" | "cross_below" | "above" | "below">("cross_below");
+  const [exitThreshold, setExitThreshold] = useState("0");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<StrategyBacktestResultPayload | null>(null);
   const [metaBars, setMetaBars] = useState<number | null>(null);
@@ -109,6 +115,17 @@ export default function StrategyBacktestPanel({
         lookbackMonths: m,
         initialCapital: cap,
         riskPctPerTrade: risk,
+        backtestSpec: {
+          engine: "rule_builder_v1",
+          params: {
+            indicator,
+            period: Math.max(2, parseInt(period, 10) || 20),
+            comparator,
+            threshold: parseFloat(threshold) || 0,
+            exitComparator,
+            exitThreshold: parseFloat(exitThreshold) || 0,
+          },
+        },
       });
       setResult(r);
       setMetaBars(meta.barsUsed);
@@ -135,6 +152,64 @@ export default function StrategyBacktestPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <div className="rounded-lg border border-border/60 p-4 space-y-4">
+          <div>
+            <p className="text-sm font-medium">Rule builder</p>
+            <p className="text-xs text-muted-foreground">
+              Historical backtest over Bybit klines using these limited, explicit rules. This is not arbitrary strategy code.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2">
+              <Label>Indicator</Label>
+              <Select value={indicator} onValueChange={(v) => setIndicator(v as typeof indicator)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sma">SMA distance %</SelectItem>
+                  <SelectItem value="ema">EMA value</SelectItem>
+                  <SelectItem value="rsi">RSI</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bt-period">Period</Label>
+              <Input id="bt-period" type="number" min={2} max={200} value={period} onChange={(e) => setPeriod(e.target.value)} className="font-mono" />
+            </div>
+            <div className="space-y-2">
+              <Label>Entry condition</Label>
+              <Select value={comparator} onValueChange={(v) => setComparator(v as typeof comparator)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cross_above">Cross above</SelectItem>
+                  <SelectItem value="cross_below">Cross below</SelectItem>
+                  <SelectItem value="above">Above</SelectItem>
+                  <SelectItem value="below">Below</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bt-threshold">Entry threshold</Label>
+              <Input id="bt-threshold" type="number" value={threshold} onChange={(e) => setThreshold(e.target.value)} className="font-mono" />
+            </div>
+            <div className="space-y-2">
+              <Label>Exit condition</Label>
+              <Select value={exitComparator} onValueChange={(v) => setExitComparator(v as typeof exitComparator)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cross_above">Cross above</SelectItem>
+                  <SelectItem value="cross_below">Cross below</SelectItem>
+                  <SelectItem value="above">Above</SelectItem>
+                  <SelectItem value="below">Below</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bt-exit-threshold">Exit threshold</Label>
+              <Input id="bt-exit-threshold" type="number" value={exitThreshold} onChange={(e) => setExitThreshold(e.target.value)} className="font-mono" />
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-2">
             <Label>History</Label>

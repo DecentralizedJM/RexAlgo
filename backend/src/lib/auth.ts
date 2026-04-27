@@ -347,6 +347,7 @@ export async function getSession(): Promise<{
   user: AuthUser;
   apiSecret: string | null;
   sessionId: string;
+  sessionCreatedAt: Date;
   sessionExpiresAt: Date | null;
 } | null> {
   const cookieStore = await cookies();
@@ -360,6 +361,7 @@ export async function getSession(): Promise<{
     .select({
       id: userSessions.id,
       userId: userSessions.userId,
+      createdAt: userSessions.createdAt,
       expiresAt: userSessions.expiresAt,
       revokedAt: userSessions.revokedAt,
       displayName: users.displayName,
@@ -396,8 +398,23 @@ export async function getSession(): Promise<{
     },
     apiSecret,
     sessionId: row.id,
+    sessionCreatedAt: row.createdAt,
     sessionExpiresAt: row.expiresAt,
   };
+}
+
+export function requireRecentSession(
+  session: { sessionCreatedAt: Date },
+  maxAgeMs = 15 * 60 * 1000
+): NextResponse | null {
+  if (Date.now() - session.sessionCreatedAt.getTime() <= maxAgeMs) return null;
+  return NextResponse.json(
+    {
+      error: "Please sign in again to confirm this sensitive webhook action.",
+      code: "RECENT_LOGIN_REQUIRED",
+    },
+    { status: 403 }
+  );
 }
 
 export async function getSessionUser(): Promise<AuthUser | null> {

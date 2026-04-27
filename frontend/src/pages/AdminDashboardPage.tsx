@@ -50,8 +50,11 @@ import {
   fetchAdminUserDetail,
   fetchAdminAudit,
   reviewAdminStrategy,
+  fetchAdminStrategySlotRequests,
+  reviewAdminStrategySlotRequest,
   type AdminMasterAccessRow,
   type AdminStrategyRow,
+  type StrategySlotRequestRow,
   type AdminUserRow,
   type StrategyReviewStatus,
 } from "@/lib/api";
@@ -114,6 +117,7 @@ export default function AdminDashboardPage() {
         <Tabs defaultValue="master-access" className="space-y-6">
           <TabsList>
             <TabsTrigger value="master-access">Master access</TabsTrigger>
+            <TabsTrigger value="slot-requests">Slot requests</TabsTrigger>
             <TabsTrigger value="strategies">Strategies</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
@@ -121,6 +125,9 @@ export default function AdminDashboardPage() {
 
           <TabsContent value="master-access">
             <MasterAccessTab />
+          </TabsContent>
+          <TabsContent value="slot-requests">
+            <SlotRequestsTab />
           </TabsContent>
           <TabsContent value="strategies">
             <StrategiesTab />
@@ -492,6 +499,98 @@ function MasterAccessTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </Card>
+  );
+}
+
+function SlotRequestsTab() {
+  const qc = useQueryClient();
+  const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const q = useQuery({
+    queryKey: ["admin", "strategy-slot-requests", filter],
+    queryFn: () => fetchAdminStrategySlotRequests(filter),
+    staleTime: 10_000,
+  });
+  const reviewMut = useMutation({
+    mutationFn: (args: { id: string; action: "approve" | "reject" }) =>
+      reviewAdminStrategySlotRequest(args.id, args.action),
+    onSuccess: async (_res, vars) => {
+      toast.success(vars.action === "approve" ? "Slots approved" : "Request rejected");
+      await qc.invalidateQueries({ queryKey: ["admin", "strategy-slot-requests"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Action failed"),
+  });
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <CardTitle>Strategy slot requests</CardTitle>
+          <CardDescription>
+            Approve additional algo strategy slots after creators hit their base limit.
+          </CardDescription>
+        </div>
+        <Select value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+            <SelectItem value="all">All</SelectItem>
+          </SelectContent>
+        </Select>
+      </CardHeader>
+      <CardContent>
+        {q.isLoading && <EmptyNote>Loading slot requests...</EmptyNote>}
+        {q.isError && <EmptyNote>{q.error instanceof Error ? q.error.message : "Failed to load"}</EmptyNote>}
+        {q.data?.requests.length === 0 && <EmptyNote>No slot requests.</EmptyNote>}
+        {q.data && q.data.requests.length > 0 && (
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Slots</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Note</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {q.data.requests.map((r: StrategySlotRequestRow) => (
+                  <TableRow key={r.id}>
+                    <TableCell>
+                      <div className="font-medium">{r.userEmail ?? r.userDisplayName ?? r.userId}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</div>
+                    </TableCell>
+                    <TableCell className="font-mono">+{r.requestedSlots}</TableCell>
+                    <TableCell>
+                      <Badge variant={strategyStatusBadgeVariant(r.status)}>{r.status}</Badge>
+                    </TableCell>
+                    <TableCell className="max-w-[320px] text-xs text-muted-foreground">{r.note ?? "—"}</TableCell>
+                    <TableCell className="text-right">
+                      {r.status === "pending" ? (
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" disabled={reviewMut.isPending} onClick={() => reviewMut.mutate({ id: r.id, action: "reject" })}>
+                            Reject
+                          </Button>
+                          <Button size="sm" disabled={reviewMut.isPending} onClick={() => reviewMut.mutate({ id: r.id, action: "approve" })}>
+                            Approve
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Reviewed</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
 }

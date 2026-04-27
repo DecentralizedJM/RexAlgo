@@ -118,6 +118,11 @@ export const strategies = pgTable("strategies", {
   description: text("description").notNull(),
   type: text("type", { enum: ["copy_trading", "algo"] }).notNull(),
   symbol: text("symbol").notNull(),
+  assetMode: text("asset_mode", { enum: ["single", "multi"] })
+    .notNull()
+    .default("single"),
+  /** JSON array of validated Mudrex symbols. `symbol` remains the primary/display symbol. */
+  symbolsJson: text("symbols_json"),
   side: text("side", { enum: ["LONG", "SHORT", "BOTH"] }).notNull(),
   leverage: text("leverage").notNull().default("1"),
   stoplossPct: doublePrecision("stoploss_pct"),
@@ -321,6 +326,39 @@ export const masterAccessRequests = pgTable("master_access_requests", {
     .notNull()
     .defaultNow(),
 });
+
+/** Additional strategy slot requests once a creator reaches their base quota. */
+export const strategySlotExtensionRequests = pgTable(
+  "strategy_slot_extension_requests",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    strategyType: text("strategy_type", { enum: ["algo", "copy_trading"] })
+      .notNull()
+      .default("algo"),
+    requestedSlots: integer("requested_slots").notNull().default(1),
+    status: text("status", {
+      enum: ["pending", "approved", "rejected"],
+    })
+      .notNull()
+      .default("pending"),
+    note: text("note"),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("strategy_slot_ext_user_type_status_idx").on(
+      t.userId,
+      t.strategyType,
+      t.status
+    ),
+  ]
+);
 
 /**
  * User-owned TradingView webhook endpoints (Phase 5).

@@ -45,22 +45,26 @@ export async function GET(
     .limit(50);
 
   const ids = signals.map((s) => s.id);
-  let attemptRows: { signalId: string; status: string }[] = [];
+  let attemptRows: { signalId: string; status: string; detail: string }[] = [];
   if (ids.length > 0) {
     attemptRows = await db
       .select({
         signalId: copyMirrorAttempts.signalId,
         status: copyMirrorAttempts.status,
+        detail: copyMirrorAttempts.detail,
       })
       .from(copyMirrorAttempts)
       .where(inArray(copyMirrorAttempts.signalId, ids));
   }
 
-  const counts = new Map<string, { ok: number; err: number }>();
+  const counts = new Map<string, { ok: number; err: number; lastError: string | null }>();
   for (const a of attemptRows) {
-    const c = counts.get(a.signalId) ?? { ok: 0, err: 0 };
+    const c = counts.get(a.signalId) ?? { ok: 0, err: 0, lastError: null };
     if (a.status === "ok") c.ok++;
-    else c.err++;
+    else {
+      c.err++;
+      c.lastError = a.detail;
+    }
     counts.set(a.signalId, c);
   }
 
@@ -77,6 +81,15 @@ export async function GET(
       receivedAt: s.receivedAt,
       clientIp: s.clientIp,
       payload,
+      summary:
+        payload && typeof payload === "object"
+          ? {
+              action: (payload as { action?: unknown }).action ?? null,
+              symbol: (payload as { symbol?: unknown }).symbol ?? null,
+              side: (payload as { side?: unknown }).side ?? null,
+              triggerType: (payload as { trigger_type?: unknown }).trigger_type ?? null,
+            }
+          : null,
       mirror: counts.get(s.id) ?? { ok: 0, err: 0 },
     };
   });
