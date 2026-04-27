@@ -612,22 +612,24 @@ export default function DashboardPage() {
                         <Button
                           type="button"
                           size="sm"
-                          className="w-full h-10 border-0 bg-profit text-white font-medium shadow-sm hover:bg-profit/90 hover:text-white focus-visible:ring-profit/40"
+                          className="w-full h-10 border-0 bg-profit text-black font-semibold shadow-sm hover:bg-profit/88 hover:text-black focus-visible:ring-profit/50"
                           onClick={() => setMudrexSharedKeyPopoverOpen(false)}
                         >
                           It&apos;s ok
                         </Button>
                         <Button
                           type="button"
-                          variant="hero"
+                          variant="outline"
                           size="sm"
-                          className="w-full h-auto min-h-10 py-2.5 px-4 whitespace-normal"
+                          className="w-full h-auto min-h-10 py-2.5 px-4 whitespace-normal border-border bg-muted/40 text-black font-medium hover:bg-muted/70 hover:text-black"
                           onClick={() => {
                             window.open(MUDREX_PRO_TRADING_URL, "_blank", "noopener,noreferrer");
                           }}
                         >
-                          <span className="text-balance text-center leading-snug">Rotate API Secret</span>
-                          <ExternalLink className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                          <span className="text-balance text-center leading-snug text-black">
+                            Rotate API Secret
+                          </span>
+                          <ExternalLink className="h-4 w-4 shrink-0 text-black/70" aria-hidden />
                         </Button>
                       </div>
                     </PopoverContent>
