@@ -596,7 +596,10 @@ export default function DashboardPage() {
                         </span>
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80 text-sm" align="start">
+                    <PopoverContent
+                      className="w-[min(calc(100vw-1.5rem),22rem)] sm:max-w-[24rem] sm:w-[24rem] p-4 text-sm"
+                      align="start"
+                    >
                       <p className="font-semibold text-foreground leading-snug mb-2">
                         This API key is on more than one RexAlgo account
                       </p>
@@ -605,26 +608,26 @@ export default function DashboardPage() {
                         revoke this key in Mudrex immediately, create a new API secret, and reconnect only on the
                         account you trust.
                       </p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-col gap-2.5 w-full">
                         <Button
                           type="button"
-                          variant="outline"
                           size="sm"
-                          className="flex-1 min-w-[6rem]"
+                          className="w-full h-10 border-0 bg-profit text-white font-medium shadow-sm hover:bg-profit/90 hover:text-white focus-visible:ring-profit/40"
                           onClick={() => setMudrexSharedKeyPopoverOpen(false)}
                         >
                           It&apos;s ok
                         </Button>
-                        <Button variant="hero" size="sm" className="flex-1 min-w-[8rem]" asChild>
-                          <a
-                            href={MUDREX_PRO_TRADING_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-1.5"
-                          >
-                            Rotate API Secret
-                            <ExternalLink className="h-3.5 w-3.5 opacity-80" aria-hidden />
-                          </a>
+                        <Button
+                          type="button"
+                          variant="hero"
+                          size="sm"
+                          className="w-full h-auto min-h-10 py-2.5 px-4 whitespace-normal"
+                          onClick={() => {
+                            window.open(MUDREX_PRO_TRADING_URL, "_blank", "noopener,noreferrer");
+                          }}
+                        >
+                          <span className="text-balance text-center leading-snug">Rotate API Secret</span>
+                          <ExternalLink className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
                         </Button>
                       </div>
                     </PopoverContent>
