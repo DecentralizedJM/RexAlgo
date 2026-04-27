@@ -125,15 +125,6 @@ function canonicalStrategyWebhookPath(strategyId: string, path: string): string 
   return path;
 }
 
-function defaultProviderWebhookHostname(fullUrl: string): boolean {
-  try {
-    const h = new URL(fullUrl).hostname;
-    return /\.railway\.app$/i.test(h) || /\.vercel\.app$/i.test(h);
-  } catch {
-    return false;
-  }
-}
-
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   if (!Number.isFinite(diff) || diff < 0) return "just now";
@@ -849,13 +840,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
                       {!selected.webhookEnabled && (
                         <p className="text-xs text-muted-foreground mt-2">
                           Enable the webhook after approval to activate this URL and receive your signing secret.
-                        </p>
-                      )}
-                      {webhookDisplayUrl && defaultProviderWebhookHostname(webhookDisplayUrl) && (
-                        <p className="text-xs text-muted-foreground mt-2 rounded-md border border-border/80 bg-muted/40 p-2">
-                          The hostname comes from your API&apos;s{" "}
-                          <code className="text-foreground/90">PUBLIC_API_URL</code> (or legacy env fallbacks). Set it
-                          to your own API domain so copied links don&apos;t show a default hosting URL.
                         </p>
                       )}
                     </div>
