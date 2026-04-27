@@ -150,7 +150,8 @@ function formatRelative(iso: string): string {
   return `${d}d ago`;
 }
 
-function strategySymbols(row: StudioStrategyRow): string[] {
+function strategySymbols(row: StudioStrategyRow | null | undefined): string[] {
+  if (!row) return [];
   if (Array.isArray(row.symbols) && row.symbols.length > 0) return row.symbols;
   if (row.symbolsJson) {
     try {
