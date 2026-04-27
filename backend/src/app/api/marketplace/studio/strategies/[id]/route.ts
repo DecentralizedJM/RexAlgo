@@ -66,18 +66,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
   }
 
-  if (existing.status === "approved") {
-    return NextResponse.json(
-      {
-        error:
-          "Approved listings cannot be edited. Pause and resubmit a fresh version if you need to change parameters.",
-        code: "STRATEGY_LOCKED",
-        status: existing.status,
-      },
-      { status: 409 }
-    );
-  }
-
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
@@ -167,11 +155,23 @@ export async function PATCH(
     );
   }
 
+  if (existing.status === "approved") {
+    patch.status = "pending";
+    patch.rejectionReason = null;
+    patch.reviewedBy = null;
+    patch.reviewedAt = null;
+  }
+
   await db.update(strategies).set(patch).where(eq(strategies.id, id));
   revalidatePublicStrategiesList();
 
   const [updated] = await db.select().from(strategies).where(eq(strategies.id, id));
-  return NextResponse.json({ strategy: updated });
+  return NextResponse.json({
+    strategy: updated,
+    ...(existing.status === "approved"
+      ? { notice: "Strategy moved back to pending review after edits." }
+      : {}),
+  });
 }
 
 export async function DELETE(
@@ -189,17 +189,6 @@ export async function DELETE(
   const existing = await loadOwned(id, session.user.id);
   if (!existing) {
     return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
-  }
-
-  if (existing.status === "approved") {
-    return NextResponse.json(
-      {
-        error:
-          "Approved listings cannot be deleted from the studio. Contact an admin if the strategy needs to be retired.",
-        code: "STRATEGY_LOCKED",
-      },
-      { status: 409 }
-    );
   }
 
   await db.delete(strategies).where(eq(strategies.id, id));

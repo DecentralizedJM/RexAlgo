@@ -146,6 +146,7 @@ export default function MarketplaceStudioPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [approvedEditPatch, setApprovedEditPatch] = useState<Parameters<typeof updateMarketplaceStudioStrategy>[1] | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [slotDialogOpen, setSlotDialogOpen] = useState(false);
   const [webhookConfirm, setWebhookConfirm] = useState<{
@@ -289,6 +290,7 @@ export default function MarketplaceStudioPage() {
       });
       void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
       setEditOpen(false);
+      setApprovedEditPatch(null);
       toast.success("Strategy updated");
     },
     onError: (e) => {
@@ -560,16 +562,14 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         <CardDescription>{selected.description}</CardDescription>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {selected.status !== "approved" && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setEditOpen(true)}
-                          >
-                            <Pencil className="w-4 h-4 mr-1" /> Edit
-                          </Button>
-                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditOpen(true)}
+                        >
+                          <Pencil className="w-4 h-4 mr-1" /> Edit
+                        </Button>
                         {selected.status === "rejected" && (
                           <Button
                             type="button"
@@ -581,17 +581,15 @@ with urllib.request.urlopen(req, timeout=30) as res:
                             <Send className="w-4 h-4 mr-1" /> Reapply
                           </Button>
                         )}
-                        {selected.status !== "approved" && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="text-loss hover:text-loss"
-                            onClick={() => setDeleteOpen(true)}
-                          >
-                            <Trash2 className="w-4 h-4 mr-1" /> Delete
-                          </Button>
-                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="text-loss hover:text-loss"
+                          onClick={() => setDeleteOpen(true)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" /> Delete
+                        </Button>
                       </div>
                     </div>
                   </CardHeader>
@@ -936,21 +934,62 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     <EditAlgoForm
                       initial={selected}
                       loading={updateMut.isPending}
-                      onSubmit={(patch) =>
-                        updateMut.mutate({ id: selected.id, patch })
-                      }
+                      onSubmit={(patch) => {
+                        if (selected.status === "approved") {
+                          setApprovedEditPatch(patch);
+                          return;
+                        }
+                        updateMut.mutate({ id: selected.id, patch });
+                      }}
                     />
                   </DialogContent>
                 </Dialog>
+
+                <AlertDialog
+                  open={Boolean(approvedEditPatch)}
+                  onOpenChange={(open) => !open && setApprovedEditPatch(null)}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Edit approved strategy?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Saving changes to an approved strategy will move it back to pending admin review.
+                        It will be hidden from the marketplace and webhook mirroring will pause until it is
+                        approved again.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        disabled={updateMut.isPending || !approvedEditPatch}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (approvedEditPatch) {
+                            updateMut.mutate({ id: selected.id, patch: approvedEditPatch });
+                          }
+                        }}
+                      >
+                        {updateMut.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Save and send to review"
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
 
                 <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete this listing?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This removes &quot;{selected.name}&quot; from your studio and cancels
-                        any open webhook config. Active subscribers (if any) will be
-                        unsubscribed. This cannot be undone.
+                        This removes &quot;{selected.name}&quot; from your studio, cancels any
+                        webhook config, and unsubscribes active subscribers if any exist.
+                        {selected.status === "approved"
+                          ? " This strategy is currently approved and public, so deleting it will immediately remove it from the marketplace."
+                          : ""}{" "}
+                        This cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
