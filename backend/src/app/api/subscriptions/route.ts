@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { subscriptions, strategies } from "@/lib/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { validateSubscriptionMargin } from "@/lib/subscriptionMargin";
 
 export async function GET() {
   const session = await getSession();
@@ -60,12 +61,31 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { strategyId, marginPerTrade } = await req.json();
+    const body = (await req.json()) as {
+      strategyId?: unknown;
+      marginPerTrade?: unknown;
+      marginCurrency?: unknown;
+    };
+    const strategyId =
+      typeof body.strategyId === "string" ? body.strategyId.trim() : "";
 
-    if (!strategyId || !marginPerTrade) {
+    if (!strategyId) {
       return NextResponse.json(
-        { error: "strategyId and marginPerTrade are required" },
+        { error: "strategyId is required" },
         { status: 400 }
+      );
+    }
+
+    // Centralized margin validation — also defaults missing `marginCurrency`
+    // to USDT so older clients that don't send it keep working.
+    const margin = validateSubscriptionMargin({
+      marginPerTrade: body.marginPerTrade,
+      marginCurrency: body.marginCurrency,
+    });
+    if (!margin.ok) {
+      return NextResponse.json(
+        { error: margin.message, code: margin.code },
+        { status: margin.status }
       );
     }
 
@@ -117,7 +137,7 @@ export async function POST(req: NextRequest) {
       id,
       userId: session.user.id,
       strategyId,
-      marginPerTrade,
+      marginPerTrade: margin.amountString,
       isActive: true,
     });
 

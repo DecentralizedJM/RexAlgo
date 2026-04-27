@@ -5,6 +5,7 @@
  */
 
 import { reportClientEvent } from "@/lib/telemetry";
+import type { MarginCurrency } from "@/lib/subscriptionCurrency";
 
 export class ApiError extends Error {
   constructor(
@@ -925,12 +926,16 @@ export async function resubmitMarketplaceStudioStrategy(strategyId: string) {
   );
 }
 
-export async function subscribe(strategyId: string, marginPerTrade: string) {
+export async function subscribe(
+  strategyId: string,
+  marginPerTrade: string,
+  marginCurrency: MarginCurrency = "USDT"
+) {
   return apiFetch<{ success: boolean; subscriptionId: string }>(
     "/api/subscriptions",
     {
       method: "POST",
-      body: JSON.stringify({ strategyId, marginPerTrade }),
+      body: JSON.stringify({ strategyId, marginPerTrade, marginCurrency }),
     }
   );
 }
@@ -1031,6 +1036,12 @@ export type ApiSubscription = {
   userId: string;
   strategyId: string;
   marginPerTrade: string;
+  /**
+   * The currency the `marginPerTrade` is denominated in. Server only persists
+   * USDT today; INR is reserved for the upcoming Mudrex INR futures launch.
+   * Optional on the wire so older clients/responses default to USDT.
+   */
+  marginCurrency?: MarginCurrency;
   isActive: boolean;
   createdAt: string;
   strategy: SubscriptionStrategySummary;
@@ -1049,13 +1060,14 @@ export async function cancelSubscription(subscriptionId: string) {
 
 export async function updateSubscriptionMargin(
   subscriptionId: string,
-  marginPerTrade: string
+  marginPerTrade: string,
+  marginCurrency: MarginCurrency = "USDT"
 ) {
   return apiFetch<{ success: boolean; marginPerTrade: string }>(
     `/api/subscriptions/${subscriptionId}`,
     {
       method: "PATCH",
-      body: JSON.stringify({ marginPerTrade }),
+      body: JSON.stringify({ marginPerTrade, marginCurrency }),
     }
   );
 }

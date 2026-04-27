@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import StrategyBacktestPanel from "@/components/StrategyBacktestPanel";
 import { futuresAvailableUsdt } from "@/lib/walletFunding";
+import type { MarginCurrency } from "@/lib/subscriptionCurrency";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import {
   TrendingUp,
@@ -119,15 +120,21 @@ export default function StrategyDetailPage() {
       ]
     : [];
 
-  async function handleSubscribe(amount: number) {
+  async function handleSubscribe(amount: number, currency: MarginCurrency) {
     if (!strategy) return;
     if (!hasMudrexKey) {
       toast.error("Connect your API secret to subscribe.");
       navigate("/dashboard");
       return;
     }
+    // Mudrex INR futures aren't live yet, so the modal blocks INR confirms.
+    // Defensive guard: bail without calling the API if INR ever leaks through.
+    if (currency !== "USDT") {
+      toast.error("INR margin is coming soon. Please use USDT for now.");
+      return;
+    }
     try {
-      await subscribe(strategy.id, String(amount));
+      await subscribe(strategy.id, String(amount), currency);
       await queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
       setShowAllocation(false);
     } catch (e) {
@@ -305,8 +312,8 @@ export default function StrategyDetailPage() {
           strategyName={strategy.name}
           futuresAvailableUsdt={futAvail}
           onClose={() => setShowAllocation(false)}
-          onConfirm={(capital) => {
-            void handleSubscribe(capital);
+          onConfirm={(capital, _risk, currency) => {
+            void handleSubscribe(capital, currency);
           }}
         />
       )}

@@ -34,6 +34,11 @@ import {
 import { futuresAvailableUsdt, MIN_MARGIN_PER_TRADE_USD } from "@/lib/walletFunding";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { formatPair } from "@/lib/format";
+import {
+  MARGIN_CURRENCIES,
+  formatMarginAmount,
+  getMarginCurrencyOption,
+} from "@/lib/subscriptionCurrency";
 import { useRequireAuth } from "@/hooks/useAuth";
 import { AuthGateSplash } from "@/components/AuthGateSplash";
 import {
@@ -177,7 +182,7 @@ export default function SubscriptionsPage() {
               <ul className="mt-2 list-disc list-inside text-foreground space-y-1">
                 {underfunded.map((s) => (
                   <li key={s.id}>
-                    {s.strategy.name}: ${parseFloat(s.marginPerTrade).toFixed(2)} per trade required
+                    {s.strategy.name}: ${parseFloat(s.marginPerTrade).toFixed(2)} USDT per trade required
                   </li>
                 ))}
               </ul>
@@ -207,7 +212,7 @@ export default function SubscriptionsPage() {
                   <tr className="text-left text-xs text-muted-foreground border-b border-border bg-secondary/30">
                     <th className="py-3 px-4 font-medium">Strategy</th>
                     <th className="py-3 px-4 font-medium">Type</th>
-                    <th className="py-3 px-4 font-medium text-right">Margin / trade</th>
+                    <th className="py-3 px-4 font-medium text-right">USDT margin / trade</th>
                     <th className="py-3 px-4 font-medium">Status</th>
                     <th className="py-3 px-4 font-medium text-right">Actions</th>
                   </tr>
@@ -250,7 +255,11 @@ export default function SubscriptionsPage() {
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-right font-mono">
-                          ${parseFloat(s.marginPerTrade).toLocaleString()}
+                          {(() => {
+                            const opt = getMarginCurrencyOption(s.marginCurrency);
+                            const n = parseFloat(s.marginPerTrade);
+                            return `${formatMarginAmount(opt.code, Number.isFinite(n) ? n : 0)} ${opt.unitSuffix}`;
+                          })()}
                         </td>
                         <td className="py-3 px-4">
                           {s.isActive ? (
@@ -326,8 +335,49 @@ export default function SubscriptionsPage() {
             Each open signal uses this USDT margin at {editTarget?.strategy.leverage}x on{" "}
             {editTarget?.strategy.name}.
           </p>
+
+          <div className="mb-4">
+            <p className="text-xs font-medium mb-2 text-muted-foreground">Margin currency</p>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.values(MARGIN_CURRENCIES).map((opt) => {
+                const active = opt.code === "USDT";
+                const disabled = !opt.enabled;
+                return (
+                  <div
+                    key={opt.code}
+                    className={`rounded-xl border p-2.5 text-left text-xs ${
+                      active
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-secondary/30"
+                    } ${disabled ? "opacity-60" : ""}`}
+                  >
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="font-semibold text-foreground">{opt.code}</span>
+                      {disabled && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] uppercase tracking-wide border-warning/40 text-warning bg-warning/10"
+                        >
+                          Coming soon
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">
+                      Min {formatMarginAmount(opt.code, opt.min)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              INR margin unlocks here when Mudrex enables INR futures.
+            </p>
+          </div>
+
           <div className="bg-secondary/50 rounded-xl p-4 mb-4">
-            <div className="text-2xl font-mono font-bold text-center mb-3">${editMargin[0]}</div>
+            <div className="text-2xl font-mono font-bold text-center mb-3">
+              ${editMargin[0].toLocaleString()} USDT
+            </div>
             <Slider
               value={editMargin}
               onValueChange={setEditMargin}

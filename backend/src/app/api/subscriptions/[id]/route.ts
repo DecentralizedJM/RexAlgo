@@ -3,9 +3,7 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { subscriptions } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
-
-const MIN_MARGIN = 10;
-const MAX_MARGIN = 500_000;
+import { validateSubscriptionMargin } from "@/lib/subscriptionMargin";
 
 export async function PATCH(
   req: NextRequest,
@@ -17,19 +15,19 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const body = await req.json();
-    const marginPerTrade =
-      typeof body.marginPerTrade === "string"
-        ? body.marginPerTrade.trim()
-        : body.marginPerTrade != null
-          ? String(body.marginPerTrade).trim()
-          : "";
+    const body = (await req.json()) as {
+      marginPerTrade?: unknown;
+      marginCurrency?: unknown;
+    };
 
-    const n = parseFloat(marginPerTrade);
-    if (!Number.isFinite(n) || n < MIN_MARGIN || n > MAX_MARGIN) {
+    const margin = validateSubscriptionMargin({
+      marginPerTrade: body.marginPerTrade,
+      marginCurrency: body.marginCurrency,
+    });
+    if (!margin.ok) {
       return NextResponse.json(
-        { error: `marginPerTrade must be between ${MIN_MARGIN} and ${MAX_MARGIN} USDT` },
-        { status: 400 }
+        { error: margin.message, code: margin.code },
+        { status: margin.status }
       );
     }
 
@@ -53,10 +51,13 @@ export async function PATCH(
 
     await db
       .update(subscriptions)
-      .set({ marginPerTrade: String(n) })
+      .set({ marginPerTrade: margin.amountString })
       .where(eq(subscriptions.id, id));
 
-    return NextResponse.json({ success: true, marginPerTrade: String(n) });
+    return NextResponse.json({
+      success: true,
+      marginPerTrade: margin.amountString,
+    });
   } catch (error) {
     console.error("Subscription PATCH error:", error);
     return NextResponse.json({ error: "Failed to update subscription" }, { status: 500 });
