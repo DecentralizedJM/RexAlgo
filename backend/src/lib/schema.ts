@@ -200,7 +200,7 @@ export const strategies = pgTable("strategies", {
    *   rejected → hidden from public; owner may edit, resubmit, or delete.
    */
   status: text("status", {
-    enum: ["draft", "pending", "approved", "rejected"],
+    enum: ["draft", "pending", "on_hold", "approved", "rejected"],
   })
     .notNull()
     .default("draft"),

@@ -26,7 +26,7 @@ function toIsoOrNow(v: unknown): string {
 
 /**
  * Admin strategy directory. Supports `?type=algo|copy_trading|all` (default all)
- * and `?status=draft|pending|approved|rejected|all` (default all).
+ * and `?status=draft|pending|on_hold|approved|rejected|all` (default all).
  * Returns creator, webhook state, subscription count, review status.
  */
 export async function GET(req: NextRequest) {
@@ -50,9 +50,10 @@ export async function GET(req: NextRequest) {
       .split(",")
       .map((s) => s.trim())
       .filter(
-        (s): s is "draft" | "pending" | "approved" | "rejected" =>
+        (s): s is "draft" | "pending" | "on_hold" | "approved" | "rejected" =>
           s === "draft" ||
           s === "pending" ||
+          s === "on_hold" ||
           s === "approved" ||
           s === "rejected"
       );

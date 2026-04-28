@@ -66,7 +66,7 @@ function bodyByteLength(body: unknown): number {
 export async function applyBacktestUpload(
   strategyId: string,
   strategyType: "algo" | "copy_trading",
-  status: "draft" | "pending" | "approved" | "rejected",
+  status: "draft" | "pending" | "on_hold" | "approved" | "rejected",
   input: ApplyUploadInput
 ): Promise<ApplyUploadResult> {
   if (bodyByteLength(input.body) > UPLOAD_MAX_BYTES) {

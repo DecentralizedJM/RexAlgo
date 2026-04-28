@@ -370,7 +370,12 @@ export async function reviewAdminStrategySlotRequest(
   );
 }
 
-export type StrategyReviewStatus = "draft" | "pending" | "approved" | "rejected";
+export type StrategyReviewStatus =
+  | "draft"
+  | "pending"
+  | "on_hold"
+  | "approved"
+  | "rejected";
 
 export type AdminStrategyRow = {
   id: string;
@@ -406,7 +411,7 @@ export async function fetchAdminStrategies(
 
 export async function reviewAdminStrategy(
   id: string,
-  action: "approve" | "reject",
+  action: "approve" | "reject" | "later" | "resume",
   reason?: string
 ) {
   return apiFetch<{

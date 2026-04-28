@@ -47,6 +47,8 @@ export async function POST(
         error:
           strategy.status === "pending"
             ? "This strategy is already awaiting admin review."
+            : strategy.status === "on_hold"
+              ? "This strategy is marked 'I'll check later' by admin. Please wait for review."
             : strategy.status === "approved"
               ? "Approved listings are not submitted again from here."
               : "Only draft listings can be submitted for review. Resubmit from the studio if this strategy was rejected.",

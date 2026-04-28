@@ -99,6 +99,7 @@ function StatusBadge({ status }: { status: StrategyReviewStatus }) {
   const map: Record<StrategyReviewStatus, { label: string; cls: string }> = {
     draft: { label: "Setup", cls: "bg-secondary text-muted-foreground" },
     pending: { label: "Pending review", cls: "bg-warning/15 text-warning" },
+    on_hold: { label: "Check later", cls: "bg-secondary text-muted-foreground" },
     approved: { label: "Approved", cls: "bg-profit/15 text-profit" },
     rejected: { label: "Rejected", cls: "bg-loss/15 text-loss" },
   };

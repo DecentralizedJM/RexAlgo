@@ -92,6 +92,10 @@ function StatusBadge({ status }: { status: StrategyReviewStatus }) {
       label: "Pending review",
       cls: "bg-warning/15 text-warning",
     },
+    on_hold: {
+      label: "Check later",
+      cls: "bg-secondary text-muted-foreground",
+    },
     approved: {
       label: "Approved",
       cls: "bg-profit/15 text-profit",

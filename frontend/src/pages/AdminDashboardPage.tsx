@@ -85,9 +85,10 @@ function formatUsdt(raw: string | null | undefined): string {
 
 function strategyStatusBadgeVariant(
   status: StrategyReviewStatus
-): "default" | "destructive" | "secondary" {
+): "default" | "destructive" | "secondary" | "outline" {
   if (status === "approved") return "default";
   if (status === "rejected") return "destructive";
+  if (status === "on_hold") return "outline";
   if (status === "draft") return "outline";
   return "secondary";
 }
@@ -98,7 +99,7 @@ type StrategyStateInput = {
 };
 
 function strategyListingState(row: StrategyStateInput): {
-  label: "Active" | "Paused" | "Pending review" | "Rejected" | "Setup";
+  label: "Active" | "Paused" | "Pending review" | "Check later" | "Rejected" | "Setup";
   variant: "default" | "destructive" | "secondary" | "outline";
   marketplaceVisible: boolean;
 } {
@@ -110,6 +111,9 @@ function strategyListingState(row: StrategyStateInput): {
   }
   if (row.status === "pending") {
     return { label: "Pending review", variant: "secondary", marketplaceVisible: false };
+  }
+  if (row.status === "on_hold") {
+    return { label: "Check later", variant: "outline", marketplaceVisible: false };
   }
   if (!row.isActive) {
     return { label: "Paused", variant: "outline", marketplaceVisible: false };
@@ -666,12 +670,18 @@ function StrategiesTab() {
   const reviewMut = useMutation({
     mutationFn: (args: {
       id: string;
-      action: "approve" | "reject";
+      action: "approve" | "reject" | "later" | "resume";
       reason?: string;
     }) => reviewAdminStrategy(args.id, args.action, args.reason),
     onSuccess: async (res) => {
       toast.success(
-        res.status === "approved" ? "Strategy approved" : "Strategy rejected"
+        res.status === "approved"
+          ? "Strategy approved"
+          : res.status === "rejected"
+            ? "Strategy rejected"
+            : res.status === "on_hold"
+              ? "Marked as 'I'll check later'"
+              : "Moved back to pending review"
       );
       setToReject(null);
       setRejectReason("");
@@ -715,6 +725,7 @@ function StrategiesTab() {
                   <SelectItem value="all">All statuses</SelectItem>
                   <SelectItem value="draft">Setup (draft)</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="on_hold">I'll check later</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
@@ -847,6 +858,16 @@ function StrategiesTab() {
                               </Button>
                               <Button
                                 size="sm"
+                                variant="secondary"
+                                disabled={reviewMut.isPending}
+                                onClick={() =>
+                                  reviewMut.mutate({ id: s.id, action: "later" })
+                                }
+                              >
+                                I&apos;ll check later
+                              </Button>
+                              <Button
+                                size="sm"
                                 variant="outline"
                                 onClick={() => {
                                   setToReject(s);
@@ -857,6 +878,18 @@ function StrategiesTab() {
                                 Reject
                               </Button>
                             </>
+                          )}
+                          {s.status === "on_hold" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={reviewMut.isPending}
+                              onClick={() =>
+                                reviewMut.mutate({ id: s.id, action: "resume" })
+                              }
+                            >
+                              Review now
+                            </Button>
                           )}
                           {s.status === "approved" && (
                             <Button

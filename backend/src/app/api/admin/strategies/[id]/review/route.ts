@@ -13,7 +13,7 @@ const MAX_REASON = 500;
 /**
  * Approve or reject a single strategy (per-strategy review flow).
  *
- * Body: `{ action: "approve" | "reject", reason?: string }`
+ * Body: `{ action: "approve" | "reject" | "later" | "resume", reason?: string }`
  *
  *   - `approve` — flips status to `approved`, records reviewer, and leaves
  *     the webhook as-is (owner may already have it enabled from draft setup).
@@ -45,9 +45,14 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (body.action !== "approve" && body.action !== "reject") {
+  if (
+    body.action !== "approve" &&
+    body.action !== "reject" &&
+    body.action !== "later" &&
+    body.action !== "resume"
+  ) {
     return NextResponse.json(
-      { error: "action must be 'approve' or 'reject'" },
+      { error: "action must be 'approve', 'reject', 'later', or 'resume'" },
       { status: 400 }
     );
   }
@@ -59,7 +64,7 @@ export async function POST(
   if (!existing) {
     return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
   }
-  if (existing.status !== "pending") {
+  if (existing.status !== "pending" && existing.status !== "on_hold") {
     return NextResponse.json(
       {
         error: `Strategy is already ${existing.status}. Ask the owner to resubmit before reviewing again.`,
@@ -97,6 +102,55 @@ export async function POST(
 
     revalidatePublicStrategiesList();
     return NextResponse.json({ ok: true, id, status: "approved" });
+  }
+
+  if (body.action === "resume") {
+    if (existing.status !== "on_hold") {
+      return NextResponse.json(
+        { error: "Only 'I'll check later' strategies can be moved back to pending." },
+        { status: 409 }
+      );
+    }
+    await db
+      .update(strategies)
+      .set({
+        status: "pending",
+        reviewedBy: reviewerId,
+        reviewedAt: now,
+      })
+      .where(eq(strategies.id, id));
+
+    void logAdminAudit({
+      actorUserId: reviewerId,
+      action: "strategy.review.resume",
+      targetType: "strategy",
+      targetId: id,
+      detail: { strategyName: existing.name, creatorId: existing.creatorId },
+    });
+
+    return NextResponse.json({ ok: true, id, status: "pending" });
+  }
+
+  if (body.action === "later") {
+    await db
+      .update(strategies)
+      .set({
+        status: "on_hold",
+        rejectionReason: null,
+        reviewedBy: reviewerId,
+        reviewedAt: now,
+      })
+      .where(eq(strategies.id, id));
+
+    void logAdminAudit({
+      actorUserId: reviewerId,
+      action: "strategy.review.on_hold",
+      targetType: "strategy",
+      targetId: id,
+      detail: { strategyName: existing.name, creatorId: existing.creatorId },
+    });
+
+    return NextResponse.json({ ok: true, id, status: "on_hold" });
   }
 
   const reason =
