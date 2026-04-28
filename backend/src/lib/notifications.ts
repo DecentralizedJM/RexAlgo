@@ -117,6 +117,10 @@ export type NotificationKind =
   | "master_access_approved"
   | "master_access_rejected"
   | "master_access_revoked"
+  | "admin_master_access_requested"
+  | "admin_strategy_submitted_for_review"
+  | "admin_user_login"
+  | "admin_new_subscription"
   | "copy_signal_received"
   | "copy_mirror_error"
   | "tv_alert_executed"
@@ -132,6 +136,10 @@ export type NotificationPayload = {
   kind: NotificationKind;
   /** Plain-text message body — dispatched as-is to Telegram. */
   text: string;
+  /** Optional channel-specific rendering controls. */
+  telegram?: {
+    replyMarkup?: Record<string, unknown>;
+  };
   /** Optional free-form metadata stored alongside the row for later debugging. */
   meta?: Record<string, unknown>;
 };
@@ -301,7 +309,17 @@ async function tick(): Promise<void> {
       continue;
     }
 
-    const res = await sendTelegramMessage(chatId, text);
+    const telegram = (() => {
+      try {
+        const parsed = JSON.parse(row.payloadJson) as NotificationPayload;
+        return parsed.telegram;
+      } catch {
+        return undefined;
+      }
+    })();
+    const res = await sendTelegramMessage(chatId, text, {
+      replyMarkup: telegram?.replyMarkup,
+    });
     if (res.ok) {
       await recordTelegramSendOk();
       await db

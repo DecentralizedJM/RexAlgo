@@ -25,6 +25,7 @@ import type { AuthUser } from "@/types";
 import { sessionJwtIssuedAtAllowed } from "@/lib/sessionPolicy";
 import { requireSecretEnv } from "@/lib/requireEnv";
 import { db } from "@/lib/db";
+import { queueAdminNotification } from "@/lib/adminNotifications";
 import { userSessions, users } from "@/lib/schema";
 
 /**
@@ -286,6 +287,26 @@ export async function createSession(
     createdAt: now,
     lastSeenAt: now,
     expiresAt,
+  });
+
+  const [u] = await db
+    .select({ email: users.email, displayName: users.displayName })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  void queueAdminNotification({
+    kind: "admin_user_login",
+    text:
+      `🔐 <b>User login</b>\n` +
+      `User: ${u?.displayName ?? userId}${u?.email ? ` (${u.email})` : ""}\n` +
+      `User ID: <code>${userId}</code>\n` +
+      `Provider: <code>${opts.authProvider ?? "unknown"}</code>`,
+    meta: {
+      userId,
+      email: u?.email ?? null,
+      authProvider: opts.authProvider ?? "unknown",
+    },
   });
 
   return new SignJWT({ sid })

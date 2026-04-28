@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { subscriptions, strategies } from "@/lib/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { validateSubscriptionMargin } from "@/lib/subscriptionMargin";
+import { queueAdminNotification } from "@/lib/adminNotifications";
 
 export async function GET() {
   const session = await getSession();
@@ -149,6 +150,21 @@ export async function POST(req: NextRequest) {
         subscriberCount: sql`${strategies.subscriberCount} + 1`,
       })
       .where(eq(strategies.id, strategyId));
+
+    void queueAdminNotification({
+      kind: "admin_new_subscription",
+      text:
+        `💸 <b>New strategy subscription</b>\n` +
+        `Strategy: <b>${strategy.name}</b> (<code>${strategy.type}</code>)\n` +
+        `Strategy ID: <code>${strategyId}</code>\n` +
+        `Subscriber: <code>${session.user.id}</code>\n` +
+        `Margin: <code>${margin.amountString} ${margin.marginCurrency}</code>`,
+      meta: {
+        strategyId,
+        strategyType: strategy.type,
+        subscriberId: session.user.id,
+      },
+    });
 
     return NextResponse.json({ success: true, subscriptionId: id }, { status: 201 });
   } catch (error) {

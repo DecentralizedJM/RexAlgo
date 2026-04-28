@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { isAdminUser } from "@/lib/adminAuth";
+import { queueAdminNotification } from "@/lib/adminNotifications";
 import { db } from "@/lib/db";
 import { masterAccessRequests } from "@/lib/schema";
 
@@ -114,6 +115,22 @@ export async function POST(req: NextRequest) {
     status: "pending",
     note,
     contactPhone,
+  });
+
+  void queueAdminNotification({
+    kind: "admin_master_access_requested",
+    text:
+      `🆕 <b>New Master Studio access request</b>\n` +
+      `User: ${session.user.displayName}${session.user.email ? ` (${session.user.email})` : ""}\n` +
+      `Request ID: <code>${id}</code>\n` +
+      `Phone: <code>${contactPhone}</code>\n` +
+      `Note: ${note ?? "—"}`,
+    telegram: {
+      replyMarkup: {
+        inline_keyboard: [[{ text: "Approve in Telegram", callback_data: `adm:master:approve:${id}` }]],
+      },
+    },
+    meta: { requestId: id, userId: session.user.id },
   });
 
   return NextResponse.json({ ok: true, status: "pending", requestId: id });

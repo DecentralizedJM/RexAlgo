@@ -20,13 +20,22 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { eq } from "drizzle-orm";
 import { ensureDbReady } from "@/lib/db";
 import {
+  answerTelegramCallbackQuery,
   parseStartDeepLinkPayload,
   sendTelegramMessage,
   telegramBotConfigured,
   telegramWebhookSecret,
 } from "@/lib/telegram";
+import { isAdminUser } from "@/lib/adminAuth";
+import { db } from "@/lib/db";
+import { users } from "@/lib/schema";
+import {
+  approveMasterAccessRequest,
+  approveStrategyReview,
+} from "@/lib/adminModeration";
 import {
   attachUserToTelegramLoginToken,
   claimTelegramLoginToken,
@@ -63,7 +72,12 @@ type TelegramUpdate = {
   message?: TelegramMessage;
   edited_message?: TelegramMessage;
   channel_post?: TelegramMessage;
-  callback_query?: unknown;
+  callback_query?: {
+    id?: string;
+    data?: string;
+    from?: TelegramUser;
+    message?: TelegramMessage;
+  };
 };
 
 function webhookAuthOk(req: NextRequest): boolean {
@@ -176,6 +190,111 @@ async function handleStart(
   await sendTelegramMessage(chatId, welcomeMessageFor(upserted.mode));
 }
 
+async function resolveAdminFromTelegram(telegramId: string): Promise<{
+  id: string;
+  email: string | null;
+} | null> {
+  const [u] = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(eq(users.telegramId, telegramId))
+    .limit(1);
+  if (!u || !isAdminUser({ email: u.email })) return null;
+  return u;
+}
+
+async function handleAdminCallback(update: TelegramUpdate): Promise<boolean> {
+  const q = update.callback_query;
+  const qid = q?.id;
+  const data = q?.data ?? "";
+  const fromId = q?.from?.id ? String(q.from.id) : null;
+  const chatId =
+    q?.message?.chat?.id != null ? String(q.message.chat.id) : null;
+
+  if (!qid || !fromId || !data.startsWith("adm:")) return false;
+
+  const admin = await resolveAdminFromTelegram(fromId);
+  if (!admin) {
+    await answerTelegramCallbackQuery(qid, {
+      text: "Only admin Telegram accounts can do this.",
+      showAlert: true,
+    });
+    return true;
+  }
+
+  const parts = data.split(":");
+  if (parts.length !== 4) {
+    await answerTelegramCallbackQuery(qid, {
+      text: "Invalid admin action payload.",
+      showAlert: true,
+    });
+    return true;
+  }
+  const [, domain, action, targetId] = parts;
+  if (action !== "approve") {
+    await answerTelegramCallbackQuery(qid, {
+      text: "Unsupported action.",
+      showAlert: true,
+    });
+    return true;
+  }
+
+  if (domain === "master") {
+    const res = await approveMasterAccessRequest({
+      requestId: targetId,
+      reviewerUserId: admin.id,
+      reviewerLabel: admin.email ?? `telegram:${fromId}`,
+    });
+    if (!res.ok) {
+      await answerTelegramCallbackQuery(qid, {
+        text: res.error,
+        showAlert: true,
+      });
+      return true;
+    }
+    await answerTelegramCallbackQuery(qid, {
+      text: "Master access approved.",
+    });
+    if (chatId) {
+      await sendTelegramMessage(
+        chatId,
+        `✅ Master access approved for request <code>${targetId}</code>.`
+      );
+    }
+    return true;
+  }
+
+  if (domain === "strategy") {
+    const res = await approveStrategyReview({
+      strategyId: targetId,
+      reviewerUserId: admin.id,
+    });
+    if (!res.ok) {
+      await answerTelegramCallbackQuery(qid, {
+        text: res.error,
+        showAlert: true,
+      });
+      return true;
+    }
+    await answerTelegramCallbackQuery(qid, {
+      text: "Strategy approved.",
+    });
+    if (chatId) {
+      await sendTelegramMessage(
+        chatId,
+        `✅ Strategy approved: <code>${targetId}</code>.`
+      );
+    }
+    return true;
+  }
+
+  await answerTelegramCallbackQuery(qid, {
+    text: "Unknown admin action.",
+    showAlert: true,
+  });
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   const tooLarge = enforceBodyLimit(req);
   if (tooLarge) return tooLarge;
@@ -197,6 +316,10 @@ export async function POST(req: NextRequest) {
     update = (await req.json()) as TelegramUpdate;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  if (await handleAdminCallback(update)) {
+    return NextResponse.json({ ok: true });
   }
 
   const message = update.message ?? update.edited_message;

@@ -5,6 +5,7 @@ import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { strategies, copyWebhookConfig } from "@/lib/schema";
 import { queueNotification } from "@/lib/notifications";
+import { queueAdminNotification } from "@/lib/adminNotifications";
 import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 
 /**
@@ -88,6 +89,22 @@ export async function POST(
     kind: "strategy_submitted_for_review",
     text: `📋 <b>${strategy.name}</b> was submitted for admin review. You will be notified when it is approved or rejected.`,
     meta: { strategyId: id, type: "algo" as const },
+  });
+
+  void queueAdminNotification({
+    kind: "admin_strategy_submitted_for_review",
+    text:
+      `📥 <b>New strategy review request</b>\n` +
+      `Name: <b>${strategy.name}</b>\n` +
+      `Type: <code>algo</code>\n` +
+      `Strategy ID: <code>${id}</code>\n` +
+      `Creator ID: <code>${strategy.creatorId}</code>`,
+    telegram: {
+      replyMarkup: {
+        inline_keyboard: [[{ text: "Approve in Telegram", callback_data: `adm:strategy:approve:${id}` }]],
+      },
+    },
+    meta: { strategyId: id, type: "algo", creatorId: strategy.creatorId },
   });
 
   const [updated] = await db.select().from(strategies).where(eq(strategies.id, id));

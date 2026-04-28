@@ -154,7 +154,10 @@ export function verifyTelegramLogin(
 export async function sendTelegramMessage(
   chatId: string,
   text: string,
-  opts?: { parseMode?: "MarkdownV2" | "HTML" }
+  opts?: {
+    parseMode?: "MarkdownV2" | "HTML";
+    replyMarkup?: Record<string, unknown>;
+  }
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const token = botToken();
   if (!token) return { ok: false, reason: "not_configured" };
@@ -170,6 +173,7 @@ export async function sendTelegramMessage(
           text,
           disable_web_page_preview: true,
           parse_mode: opts?.parseMode ?? "HTML",
+          ...(opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
         }),
       }
     );
@@ -183,6 +187,41 @@ export async function sendTelegramMessage(
     const data = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
     if (data.ok === false) {
       return { ok: false, reason: data.description ?? "Telegram returned ok=false" };
+    }
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      reason: e instanceof Error ? e.message : "Telegram network error",
+    };
+  }
+}
+
+export async function answerTelegramCallbackQuery(
+  callbackQueryId: string,
+  opts?: { text?: string; showAlert?: boolean }
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const token = botToken();
+  if (!token) return { ok: false, reason: "not_configured" };
+  try {
+    const res = await fetch(
+      `https://api.telegram.org/bot${token}/answerCallbackQuery`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callback_query_id: callbackQueryId,
+          text: opts?.text,
+          show_alert: opts?.showAlert ?? false,
+        }),
+      }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return {
+        ok: false,
+        reason: `Telegram HTTP ${res.status}: ${body.slice(0, 180)}`,
+      };
     }
     return { ok: true };
   } catch (e) {
