@@ -40,6 +40,28 @@ export const users = pgTable("users", {
    * key) > 1`. See `0016_user_secret_fingerprint_non_unique.sql`.
    */
   userSecretFingerprint: text("user_secret_fingerprint"),
+  /**
+   * Server-side acknowledgement of the dashboard "shared Mudrex key" warning.
+   *
+   * The warning fires when {@link userHasSharedMudrexKey} is true (≥2 users
+   * carry the same `userSecretFingerprint` with a linked secret). When the
+   * user taps "It's ok", we persist:
+   *   - `sharedMudrexAckFingerprint` = current `userSecretFingerprint`
+   *   - `sharedMudrexAckIp`          = current request IP (best-effort)
+   *   - `sharedMudrexAckAt`          = ack timestamp (audit only)
+   *
+   * The `/auth/me` read suppresses the warning iff both the fingerprint and
+   * the IP still match. Either change (key rotation ⇒ new fingerprint, new
+   * machine/network ⇒ new IP) re-shows the warning automatically, which
+   * matches the threat model: dismissal should not survive the conditions
+   * that originally made the user click "It's ok".
+   */
+  sharedMudrexAckFingerprint: text("shared_mudrex_ack_fingerprint"),
+  sharedMudrexAckIp: text("shared_mudrex_ack_ip"),
+  sharedMudrexAckAt: timestamp("shared_mudrex_ack_at", {
+    withTimezone: true,
+    mode: "date",
+  }),
   /** Telegram numeric user id (as string to dodge 53-bit JS number limits). */
   telegramId: text("telegram_id").unique(),
   telegramUsername: text("telegram_username"),
@@ -131,8 +153,43 @@ export const strategies = pgTable("strategies", {
     .notNull()
     .default("medium"),
   timeframe: text("timeframe").default("1h"),
-  /** JSON: { engine, params } — drives strategy-bound simulation (see lib/backtest/spec.ts). */
+  /**
+   * @deprecated Legacy simulated-engine spec (`sma_cross` / `rule_builder_v1`).
+   *   Kept on the row for now so a future migration can clean it out without
+   *   coupling to this release. The studio + detail panels no longer read or
+   *   write this column — see `backtestUploadPayload` below.
+   */
   backtestSpecJson: text("backtest_spec_json"),
+  /**
+   * How `backtestUploadPayload` was produced:
+   *   - `"json"`      — creator pasted a normalized backtest results JSON.
+   *   - `"tv_export"` — creator uploaded a TradingView Strategy Tester
+   *                    export (List of Trades CSV or Performance Summary
+   *                    JSON) which we parse into the same shape via
+   *                    `lib/backtest/parseTvExport.ts`.
+   *
+   * `null` when the creator hasn't uploaded a backtest yet — listings render
+   * a "Creator hasn't published a backtest yet" empty state.
+   */
+  backtestUploadKind: text("backtest_upload_kind", {
+    enum: ["json", "tv_export"],
+  }),
+  /**
+   * Normalised backtest payload — same shape on the wire regardless of
+   * `backtestUploadKind`, so the panel can render it without branching:
+   *   { summary: { totalReturnPct, winRatePct, maxDrawdownPct, ... },
+   *     equity: [{ t, v }, ...],
+   *     trades: [{ entryTime, exitTime, side, ... }, ...] }
+   * Stored as a JSON-encoded text blob to match the existing
+   * `backtest_spec_json` convention. See `lib/backtest/uploadSchema.ts`.
+   */
+  backtestUploadPayload: text("backtest_upload_payload"),
+  /**
+   * Provenance / display metadata for the uploaded payload:
+   *   { source: "json" | "tv_export", fileName?, uploadedAt: ISO,
+   *     ranges?: { start, end }, version: number }
+   */
+  backtestUploadMeta: text("backtest_upload_meta"),
   isActive: boolean("is_active").notNull().default(true),
   /**
    * Per-strategy admin review state.

@@ -1,138 +1,37 @@
-import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { strategies } from "@/lib/schema";
-import { acquireBacktestSlot } from "@/lib/backtestConcurrency";
-import {
-  defaultBacktestSpec,
-  parseBacktestSpecFromBody,
-  parseBacktestSpecJson,
-} from "@/lib/backtest/spec";
-import { runStrategyBacktest } from "@/lib/backtest/runBacktest";
-import {
-  fetchOhlcAscending,
-  normalizeLinearSymbol,
-  timeframeToInterval,
-} from "@/lib/marketData/ohlc";
+/**
+ * Legacy simulated-backtest endpoint — deprecated.
+ *
+ * Used to run `sma_cross` / `rule_builder_v1` against live Bybit klines
+ * each request. The simulator could not model SMC, order blocks,
+ * liquidity, or volume strategies, so creators got hypothetical numbers
+ * that didn't reflect what they actually traded. The replacement is a
+ * creator-uploaded backtest payload (raw JSON or TradingView Strategy
+ * Tester export) which the studio + public detail panel render verbatim.
+ *
+ * This shell is kept for one release so older clients receive a clear
+ * error code instead of a 404. Remove the file once analytics confirms
+ * no traffic.
+ *
+ * Replacement endpoints:
+ *   - `POST /api/marketplace/studio/strategies/[id]/backtest-upload`
+ *   - `POST /api/copy-trading/studio/strategies/[id]/backtest-upload`
+ */
+import { NextResponse } from "next/server";
 
-function clampMonths(m: unknown): number {
-  const n = typeof m === "number" ? m : parseFloat(String(m ?? 6));
-  if (!Number.isFinite(n)) return 6;
-  return Math.min(36, Math.max(1, Math.floor(n)));
+const DEPRECATION_BODY = {
+  error:
+    "The simulated backtest engine has been deprecated. Upload your backtest results JSON or a TradingView Strategy Tester export from the studio instead.",
+  code: "BACKTEST_LEGACY_DEPRECATED",
+  replacement: {
+    algo: "POST /api/marketplace/studio/strategies/{id}/backtest-upload",
+    copy_trading: "POST /api/copy-trading/studio/strategies/{id}/backtest-upload",
+  },
+} as const;
+
+export async function POST() {
+  return NextResponse.json(DEPRECATION_BODY, { status: 410 });
 }
 
-export async function POST(
-  req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
-) {
-  const session = await getSession();
-  const userId = session?.user?.id;
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { id: strategyId } = await ctx.params;
-
-  const [strategy] = await db
-    .select()
-    .from(strategies)
-    .where(eq(strategies.id, strategyId));
-
-  if (!strategy) {
-    return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
-  }
-
-  if (strategy.type !== "algo") {
-    return NextResponse.json(
-      { error: "Backtest is only available for algo strategies" },
-      { status: 403 }
-    );
-  }
-
-  const isCreator = strategy.creatorId === userId;
-  if (!strategy.isActive && !isCreator) {
-    return NextResponse.json(
-      { error: "Strategy is not available for backtest" },
-      { status: 403 }
-    );
-  }
-
-  // Per-user backtest concurrency cap (audit #14). Released in `finally` so
-  // a thrown error or early return never leaks a slot.
-  const lease = await acquireBacktestSlot(userId);
-  if (!lease.ok) {
-    return NextResponse.json(
-      { error: lease.reason, limit: lease.limit },
-      { status: 429, headers: { "Retry-After": "10" } }
-    );
-  }
-
-  try {
-    let body: Record<string, unknown> = {};
-    try {
-      body = (await req.json()) as Record<string, unknown>;
-    } catch {
-      body = {};
-    }
-
-    const lookbackMonths = clampMonths(body.lookbackMonths);
-    const initialCapital = Math.max(
-      100,
-      Math.min(1e9, Number(body.initialCapital) || 10_000)
-    );
-    const riskPctPerTrade = Math.min(
-      0.1,
-      Math.max(0.005, Number(body.riskPctPerTrade) || 0.02)
-    );
-    const feeRoundTrip = Math.min(
-      0.05,
-      Math.max(0, Number(body.feeRoundTrip) || 0.001)
-    );
-
-    const spec =
-      parseBacktestSpecFromBody(body.backtestSpec) ??
-      parseBacktestSpecJson(strategy.backtestSpecJson) ??
-      defaultBacktestSpec();
-
-    const endMs = Date.now();
-    const startMs = endMs - lookbackMonths * 30 * 24 * 60 * 60 * 1000;
-
-    const symbol = normalizeLinearSymbol(strategy.symbol);
-    const interval = timeframeToInterval(strategy.timeframe);
-
-    let candles;
-    try {
-      candles = await fetchOhlcAscending({
-        symbol,
-        interval,
-        startMs,
-        endMs,
-      });
-    } catch (e) {
-      console.error("backtest ohlc fetch:", e);
-      return NextResponse.json(
-        { error: "Could not load historical data. Try again later." },
-        { status: 502 }
-      );
-    }
-
-    const result = runStrategyBacktest(candles, strategy, spec, {
-      initialCapital,
-      riskPctPerTrade,
-      feeRoundTrip,
-      defaultStopPct: 0.02,
-    });
-
-    return NextResponse.json({
-      result,
-      meta: {
-        barsUsed: candles.length,
-        rangeStart: startMs,
-        rangeEnd: endMs,
-      },
-    });
-  } finally {
-    await lease.release();
-  }
+export async function GET() {
+  return NextResponse.json(DEPRECATION_BODY, { status: 410 });
 }

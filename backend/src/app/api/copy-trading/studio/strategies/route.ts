@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { strategies, copyWebhookConfig } from "@/lib/schema";
 import { publicApiBase } from "@/lib/publicUrl";
 import { strategySignalWebhookPath } from "@/lib/strategyWebhookPath";
+import { withBacktestUpload } from "@/lib/backtest/uploadSerialize";
 import {
   StrategySlotLimitError,
   assertStrategySlotAvailable,
@@ -41,7 +42,7 @@ export async function GET() {
   const out = rows.map((s) => {
     const w = whMap.get(s.id);
     const path = strategySignalWebhookPath(s.id);
-    return {
+    return withBacktestUpload({
       ...s,
       webhookEnabled: w?.enabled ?? false,
       webhookName: w?.name ?? s.name,
@@ -49,7 +50,7 @@ export async function GET() {
       webhookRotatedAt: w?.rotatedAt?.toISOString() ?? null,
       webhookUrl: base ? `${base}${path}` : null,
       webhookPath: path,
-    };
+    });
   });
 
   const used = await countStrategySlots(session.user.id, "copy_trading");

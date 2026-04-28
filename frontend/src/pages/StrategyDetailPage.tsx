@@ -278,11 +278,12 @@ export default function StrategyDetailPage() {
           ))}
         </div>
 
-        {strategy.type === "algo" && (
-          <div id="backtest" className="mb-8 animate-fade-up-delay-2 scroll-mt-24">
-            <StrategyBacktestPanel strategyId={strategy.id} strategyName={strategy.name} />
-          </div>
-        )}
+        <div id="backtest" className="mb-8 animate-fade-up-delay-2 scroll-mt-24">
+          <StrategyBacktestPanel
+            strategyName={strategy.name}
+            upload={strategy.backtestUpload ?? null}
+          />
+        </div>
 
         <div className="glass rounded-xl p-6 mb-8 animate-fade-up-delay-2">
           <h2 className="font-semibold mb-4">Performance</h2>

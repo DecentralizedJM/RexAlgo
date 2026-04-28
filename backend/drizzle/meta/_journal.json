@@ -134,6 +134,20 @@
       "when": 1776535300000,
       "tag": "0018_strategy_draft_listing",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1776535400000,
+      "tag": "0019_shared_mudrex_ack",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1776535500000,
+      "tag": "0020_creator_backtest_upload",
+      "breakpoints": true
     }
   ]
 }

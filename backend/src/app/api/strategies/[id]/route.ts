@@ -8,6 +8,7 @@ import {
   parseBacktestSpecFromBody,
   serializeBacktestSpec,
 } from "@/lib/backtest/spec";
+import { withBacktestUpload } from "@/lib/backtest/uploadSerialize";
 import { validateStrategyPatch } from "@/lib/strategyValidation";
 import { queueNotification } from "@/lib/notifications";
 import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
@@ -58,7 +59,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({ strategy });
+    return NextResponse.json({ strategy: withBacktestUpload(strategy) });
   } catch (error) {
     console.error("Strategy fetch error:", error);
     return NextResponse.json({ error: "Failed to fetch strategy" }, { status: 500 });

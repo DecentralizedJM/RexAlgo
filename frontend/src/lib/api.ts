@@ -132,6 +132,22 @@ export async function unlinkMudrexKey() {
   );
 }
 
+/**
+ * Persist the dashboard "It's ok" acknowledgement of the shared-Mudrex-key
+ * warning on the server. The server keys the dismissal on the user's current
+ * Mudrex secret fingerprint and request IP, so the warning stays hidden until
+ * either changes (key rotation or new machine/network).
+ *
+ * Replaces the legacy per-tab `sessionStorage` flag, which made the warning
+ * reappear on every fresh login on the same device.
+ */
+export async function dismissSharedMudrexWarning() {
+  return apiFetch<{ ok: true }>(
+    "/api/account/shared-mudrex-warning/dismiss",
+    { method: "POST" }
+  );
+}
+
 export type KillSwitchSummary = {
   subscriptionsStopped: number;
   rexAlgoOpenTradesFound: number;
@@ -539,7 +555,11 @@ export async function fetchAdminAudit() {
 
 // ─── Strategies ─────────────────────────────────────────────────────
 
-/** Stored on algo strategies; drives simulation for that listing only. */
+/**
+ * @deprecated The simulated `sma_cross` / `rule_builder_v1` engines have
+ * been retired — see `BacktestUploadKind` and `StrategyBacktestUpload`.
+ * Kept here so older create/edit payloads still type-check until removed.
+ */
 export type StrategyBacktestSpec =
   | {
       engine: "sma_cross";
@@ -556,6 +576,55 @@ export type StrategyBacktestSpec =
         exitThreshold?: number;
       };
     };
+
+/** How a creator-uploaded backtest payload was produced. */
+export type BacktestUploadKind = "json" | "tv_export";
+
+export type StrategyBacktestUploadSummary = {
+  totalReturnPct: number;
+  winRatePct: number;
+  maxDrawdownPct: number;
+  trades: number;
+  rangeStart: string;
+  rangeEnd: string;
+  profitFactor?: number;
+  sharpe?: number;
+  initialCapital?: number;
+  finalCapital?: number;
+};
+
+export type StrategyBacktestUploadEquityPoint = { t: string; v: number };
+
+export type StrategyBacktestUploadTrade = {
+  entryTime: string;
+  exitTime: string;
+  side: "long" | "short";
+  entry: number;
+  exit: number;
+  qty: number;
+  pnl: number;
+  pnlPct: number;
+};
+
+export type StrategyBacktestUploadPayload = {
+  summary: StrategyBacktestUploadSummary;
+  equity: StrategyBacktestUploadEquityPoint[];
+  trades: StrategyBacktestUploadTrade[];
+};
+
+export type StrategyBacktestUploadMeta = {
+  source: BacktestUploadKind;
+  fileName?: string;
+  uploadedAt: string;
+  ranges?: { start: string; end: string };
+  version: number;
+};
+
+export type StrategyBacktestUpload = {
+  kind: BacktestUploadKind;
+  payload: StrategyBacktestUploadPayload;
+  meta: StrategyBacktestUploadMeta;
+};
 
 export type ApiStrategy = {
   id: string;
@@ -574,8 +643,17 @@ export type ApiStrategy = {
   takeprofitPct: number | null;
   riskLevel: "low" | "medium" | "high";
   timeframe: string | null;
-  /** Raw JSON from API; parse with {@link parseStrategyBacktestSpec}. */
+  /**
+   * @deprecated Legacy simulated-engine spec. Still emitted by the API for
+   * existing rows but no longer rendered or edited in the UI.
+   */
   backtestSpecJson?: string | null;
+  /**
+   * Creator-uploaded backtest payload (raw JSON or parsed TradingView
+   * Strategy Tester export). `null` until the creator publishes one.
+   * Replaces the simulated engine flow.
+   */
+  backtestUpload?: StrategyBacktestUpload | null;
   isActive: boolean;
   /**
    * Admin review state. Public listing endpoints already filter to
@@ -592,6 +670,11 @@ export type ApiStrategy = {
   createdAt: string;
 };
 
+/**
+ * @deprecated Reads the legacy `backtestSpecJson`. The studio + detail
+ * panels now use `strategy.backtestUpload` directly. Kept until the
+ * field is fully retired.
+ */
 export function parseStrategyBacktestSpec(
   raw: string | null | undefined
 ): StrategyBacktestSpec | null {
@@ -666,6 +749,11 @@ export type StrategyBacktestResultPayload = {
   trades: StrategyBacktestTrade[];
 };
 
+/**
+ * @deprecated The simulated engine is retired. New endpoint is
+ * `uploadMarketplaceStrategyBacktest` /
+ * `uploadCopyStrategyBacktest`. The legacy server route returns 410.
+ */
 export async function runStrategyBacktest(
   strategyId: string,
   body: {
@@ -683,6 +771,59 @@ export async function runStrategyBacktest(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * Persist a creator-uploaded backtest payload (raw JSON or a TradingView
+ * Strategy Tester export). The server validates with
+ * `validateUploadedBacktest` (or `parseTvExport` for TV bodies) and
+ * returns the normalised payload back to the caller.
+ *
+ * Marketplace re-uploads while approved demote the listing to draft and
+ * disable the webhook (see backend `applyUpload.ts`); copy-trading
+ * approved uploads return 409 (`STRATEGY_LOCKED`).
+ */
+export async function uploadMarketplaceStrategyBacktest(
+  strategyId: string,
+  body: { kind: BacktestUploadKind; body: unknown; fileName?: string | null }
+) {
+  return apiFetch<{
+    ok: true;
+    payload: StrategyBacktestUploadPayload;
+    meta: StrategyBacktestUploadMeta;
+    notice?: string;
+  }>(`/api/marketplace/studio/strategies/${strategyId}/backtest-upload`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteMarketplaceStrategyBacktest(strategyId: string) {
+  return apiFetch<{ ok: true }>(
+    `/api/marketplace/studio/strategies/${strategyId}/backtest-upload`,
+    { method: "DELETE" }
+  );
+}
+
+export async function uploadCopyStrategyBacktest(
+  strategyId: string,
+  body: { kind: BacktestUploadKind; body: unknown; fileName?: string | null }
+) {
+  return apiFetch<{
+    ok: true;
+    payload: StrategyBacktestUploadPayload;
+    meta: StrategyBacktestUploadMeta;
+  }>(`/api/copy-trading/studio/strategies/${strategyId}/backtest-upload`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteCopyStrategyBacktest(strategyId: string) {
+  return apiFetch<{ ok: true }>(
+    `/api/copy-trading/studio/strategies/${strategyId}/backtest-upload`,
+    { method: "DELETE" }
+  );
 }
 
 export async function fetchStrategies(params?: { type?: string }) {

@@ -18,6 +18,7 @@ import {
   serializeSymbols,
   validateMudrexSymbols,
 } from "@/lib/strategyAssets";
+import { withBacktestUpload } from "@/lib/backtest/uploadSerialize";
 import {
   StrategySlotLimitError,
   assertStrategySlotAvailable,
@@ -52,7 +53,7 @@ export async function GET() {
   const out = rows.map((s) => {
     const w = whMap.get(s.id);
     const path = strategySignalWebhookPath(s.id);
-    return {
+    return withBacktestUpload({
       ...s,
       symbols: parseSymbolsJson(s.symbolsJson, s.symbol),
       webhookEnabled: w?.enabled ?? false,
@@ -61,7 +62,7 @@ export async function GET() {
       webhookRotatedAt: w?.rotatedAt?.toISOString() ?? null,
       webhookUrl: base ? `${base}${path}` : null,
       webhookPath: path,
-    };
+    });
   });
 
   const used = await countStrategySlots(session.user.id, "algo");

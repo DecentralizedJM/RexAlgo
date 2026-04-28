@@ -1,12 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { getMasterAccessStatus, isAdminUser } from "@/lib/adminAuth";
+import { clientIpFromRequest } from "@/lib/authRateLimit";
 import { db } from "@/lib/db";
 import { users } from "@/lib/schema";
-import { userHasSharedMudrexKey } from "@/lib/mudrexKeySharing";
+import { effectiveSharedMudrexWarning } from "@/lib/mudrexKeySharing";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ user: null }, { status: 401 });
@@ -14,9 +15,16 @@ export async function GET() {
 
   const isAdmin = isAdminUser(session.user);
   const masterAccess = await getMasterAccessStatus(session.user);
+  // The dashboard surfaces a yellow "shared key" badge based on this flag.
+  // We check both the raw fingerprint share AND the persisted "It's ok" ack
+  // (keyed on fingerprint + IP) so the warning stays dismissed across logins
+  // until the user changes machines/networks or rotates the Mudrex secret.
   const mudrexKeySharedAcrossAccounts =
     session.apiSecret != null
-      ? await userHasSharedMudrexKey(session.user.id)
+      ? await effectiveSharedMudrexWarning(
+          session.user.id,
+          clientIpFromRequest(req)
+        )
       : false;
 
   // Telegram state is not in the JWT (we don't want to bump JWT size on every

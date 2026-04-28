@@ -200,9 +200,18 @@ export async function POST() {
     }
   }
 
+  // Kill-switch wipes the linked key — also clear the shared-key ack so the
+  // dashboard warning re-arms from scratch if the user later reconnects a
+  // (possibly still-shared) secret. See `mudrexKeySharing.ts`.
   await db
     .update(users)
-    .set({ apiSecretEncrypted: null, userSecretFingerprint: null })
+    .set({
+      apiSecretEncrypted: null,
+      userSecretFingerprint: null,
+      sharedMudrexAckFingerprint: null,
+      sharedMudrexAckIp: null,
+      sharedMudrexAckAt: null,
+    })
     .where(eq(users.id, session.user.id));
 
   return NextResponse.json({

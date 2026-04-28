@@ -70,6 +70,8 @@ import {
   ApiError,
 } from "@/lib/api";
 import StrategyBacktestPanel from "@/components/StrategyBacktestPanel";
+import StudioBacktestUploader from "@/components/studio/StudioBacktestUploader";
+import StudioSubmitChecklist from "@/components/studio/StudioSubmitChecklist";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
@@ -186,15 +188,38 @@ export default function MarketplaceStudioPage() {
     action: "enable" | "disable" | "rotate";
   } | null>(null);
   const [secretVisible, setSecretVisible] = useState(false);
+  /**
+   * Set to `Date.now()` when the creator clicks "I'm sending the test signal
+   * now" inside `StudioSubmitChecklist`. We use this to switch the studio
+   * strategies query into a fast-poll mode for the next ~2 minutes so the
+   * checklist can flip to "Signal received" without waiting for the default
+   * 15s stale window. `null` = idle (default cadence).
+   */
+  const [signalListeningSince, setSignalListeningSince] = useState<number | null>(
+    null
+  );
 
   const originFallback =
     typeof window !== "undefined" ? `${window.location.origin}` : "";
+
+  /**
+   * Fast-poll window: 4s cadence for up to 2 minutes after the creator
+   * clicks "I'm sending the test signal now" inside the checklist. We only
+   * tighten the loop when there is no `webhookLastDeliveryAt` yet — once a
+   * delivery is recorded we drop back to the default 15s stale window so
+   * the studio doesn't hammer the backend in steady state. The window also
+   * self-expires on a 2 min timer (see effect below).
+   */
+  const FAST_POLL_WINDOW_MS = 2 * 60_000;
+  const fastPollActive = signalListeningSince !== null;
+  const studioRefetchInterval = fastPollActive ? 4_000 : false;
 
   const studioQ = useQuery({
     queryKey: ["marketplace-studio", "strategies"],
     queryFn: fetchMarketplaceStudioStrategies,
     enabled: sessionAuthed,
     ...liveDataQueryOptions,
+    refetchInterval: studioRefetchInterval,
   });
 
   const strategies = useMemo(
@@ -215,6 +240,36 @@ export default function MarketplaceStudioPage() {
   }, [strategies, selectedId]);
 
   const selected = strategies.find((s) => s.id === selectedId) ?? null;
+
+  // Stop fast-polling once we observe a recorded delivery on the selected
+  // strategy. Without this we would keep hitting the API every 4s after the
+  // checklist already turned green.
+  useEffect(() => {
+    if (!fastPollActive) return;
+    if (selected?.webhookLastDeliveryAt) {
+      setSignalListeningSince(null);
+    }
+  }, [fastPollActive, selected?.webhookLastDeliveryAt]);
+
+  // Hard ceiling on the fast-poll window in case the test signal never lands
+  // (TradingView misconfig, wrong URL, etc.). Drops back to the default 15s
+  // cadence after 2 minutes; user can re-arm by clicking the checklist
+  // button again.
+  useEffect(() => {
+    if (signalListeningSince === null) return;
+    const elapsed = Date.now() - signalListeningSince;
+    const remaining = Math.max(0, FAST_POLL_WINDOW_MS - elapsed);
+    const timer = window.setTimeout(() => {
+      setSignalListeningSince(null);
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [signalListeningSince]);
+
+  // Re-arm the listening flag when the creator switches strategies — the
+  // listener is per-attempt, not global.
+  useEffect(() => {
+    setSignalListeningSince(null);
+  }, [selectedId]);
 
   const signalsQ = useQuery({
     queryKey: ["marketplace-studio", "signals", selectedId],
@@ -393,16 +448,6 @@ export default function MarketplaceStudioPage() {
     selectedGeneratedSecret && !secretVisible
       ? maskWebhookSecretUrl(webhookDisplayUrl)
       : webhookDisplayUrl;
-
-  const canSubmitForAdminReview = useMemo(
-    () =>
-      Boolean(
-        selected?.status === "draft" &&
-          selected.webhookEnabled &&
-          selected.webhookLastDeliveryAt
-      ),
-    [selected?.status, selected?.webhookEnabled, selected?.webhookLastDeliveryAt]
-  );
 
   const pendingSlotRequest = (slotRequestsQ.data?.requests ?? []).find(
     (r) => r.status === "pending"
@@ -609,37 +654,12 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         >
                           <Pencil className="w-4 h-4 mr-1" /> Edit
                         </Button>
-                        {selected.status === "rejected" && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={resubmitMut.isPending}
-                            onClick={() => resubmitMut.mutate(selected.id)}
-                          >
-                            <Send className="w-4 h-4 mr-1" /> Reapply
-                          </Button>
-                        )}
-                        {selected.status === "draft" && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={submitReviewMut.isPending || !canSubmitForAdminReview}
-                            title={
-                              !canSubmitForAdminReview
-                                ? "Create the webhook URL, send a test signal, then submit."
-                                : undefined
-                            }
-                            onClick={() => submitReviewMut.mutate(selected.id)}
-                          >
-                            {submitReviewMut.isPending ? (
-                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                            ) : (
-                              <Send className="w-4 h-4 mr-1" />
-                            )}
-                            Submit for admin review
-                          </Button>
-                        )}
+                        {/*
+                          Reapply / Submit-for-review live inside the
+                          StudioSubmitChecklist below — keeps the call-to-action
+                          attached to the explanatory steps so creators know
+                          what unlocks the action.
+                        */}
                         <Button
                           type="button"
                           size="sm"
@@ -653,15 +673,19 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {selected.status === "draft" && (
-                      <div className="rounded-lg border border-border bg-secondary/40 p-3 text-sm">
-                        <p className="font-medium text-foreground">Setup: verify your webhook</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Create the webhook URL, paste it into TradingView or your bot, and send a test signal.
-                          We record a delivery timestamp — then use <strong>Submit for admin review</strong> so the
-                          team can approve your listing. Subscriber mirroring stays off until approved.
-                        </p>
-                      </div>
+                    {(selected.status === "draft" ||
+                      selected.status === "rejected") && (
+                      <StudioSubmitChecklist
+                        status={selected.status}
+                        webhookEnabled={selected.webhookEnabled}
+                        webhookLastDeliveryAt={selected.webhookLastDeliveryAt}
+                        rejectionReason={selected.rejectionReason}
+                        submitting={submitReviewMut.isPending}
+                        onSubmit={() => submitReviewMut.mutate(selected.id)}
+                        onReapply={() => resubmitMut.mutate(selected.id)}
+                        reapplying={resubmitMut.isPending}
+                        onSignalListenStart={() => setSignalListeningSince(Date.now())}
+                      />
                     )}
                     {selected.status === "pending" && (
                       <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
@@ -670,16 +694,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
                           Your listing is hidden from shoppers until an admin approves it. Webhook test traffic is
                           already on file; live mirroring to subscribers only runs once the listing is approved and
                           active.
-                        </p>
-                      </div>
-                    )}
-                    {selected.status === "rejected" && (
-                      <div className="rounded-lg border border-loss/30 bg-loss/10 p-3 text-sm">
-                        <p className="font-medium text-loss">Rejected</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {selected.rejectionReason?.trim()
-                            ? selected.rejectionReason
-                            : "No reason was provided. Edit the listing and reapply, or delete it."}
                         </p>
                       </div>
                     )}
@@ -885,12 +899,6 @@ with urllib.request.urlopen(req, timeout=30) as res:
                           <Copy className="w-4 h-4" />
                         </Button>
                       </div>
-                      {!selected.webhookEnabled && selected.status !== "rejected" && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Create the webhook URL to get a secret link, then send a test signal. After we show a last
-                          delivery time, submit for admin review from the header.
-                        </p>
-                      )}
                       <p className="text-xs text-warning mt-2">
                         This full URL is the secret. Do not share it publicly. If it leaks, anyone with the URL can
                         send signals that manage this strategy. Regenerate the URL immediately if exposed.
@@ -904,9 +912,21 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   </CardContent>
                 </Card>
 
-                <StrategyBacktestPanel
+                <StudioBacktestUploader
                   strategyId={selected.id}
+                  strategyType="algo"
+                  current={selected.backtestUpload ?? null}
+                  onUploaded={() => {
+                    void queryClient.invalidateQueries({
+                      queryKey: ["marketplace-studio", "strategies"],
+                    });
+                    void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
+                  }}
+                />
+
+                <StrategyBacktestPanel
                   strategyName={selected.name}
+                  upload={selected.backtestUpload ?? null}
                 />
 
                 <Card>

@@ -1,0 +1,354 @@
+/**
+ * StudioSubmitChecklist
+ *
+ * Inline guidance + submission button for the Strategy / Copy-trading studios.
+ * Replaces the small "Setup: verify your webhook" callout and the lone
+ * "Submit for admin review" button with an explicit three-step flow:
+ *
+ *   1. Generate webhook URL  (done when `webhookEnabled === true`)
+ *   2. Send a test signal    (done when `webhookLastDeliveryAt` is set)
+ *   3. Submit for admin review (enabled iff steps 1 + 2 are done)
+ *
+ * Step 2 is interactive: after the creator pastes the URL into TradingView /
+ * their bot, they click "I'm sending the test signal now" which fires
+ * `onSignalListenStart` so the parent can poll the studio strategies query
+ * faster (see `liveDataQueryOptions`). When `webhookLastDeliveryAt` flips
+ * from null to a timestamp, step 2 transitions to a green "Signal received"
+ * state automatically. Refetch cadence and the listening timer live in the
+ * parent — this component is presentational + a couple of callbacks.
+ *
+ * For `rejected` strategies we surface `rejectionReason` at the top with a
+ * "Reapply" CTA. Once reapplied the row goes back to draft and the same
+ * checklist guides the next attempt.
+ *
+ * Server-side gate (kept identical) lives in
+ * `backend/src/app/api/marketplace/studio/strategies/[id]/submit-review/route.ts`
+ * (and its copy-trading twin): `status === "draft"` AND
+ * `copy_webhook_config.enabled` AND `copy_webhook_config.last_delivery_at IS
+ * NOT NULL`.
+ */
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertTriangle,
+  Check,
+  Loader2,
+  Radio,
+  Send,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { StrategyReviewStatus } from "@/lib/api";
+
+type StepKey = "webhook" | "signal" | "submit";
+type StepState = "pending" | "active" | "done" | "blocked";
+
+const STEP_TITLES: Record<StepKey, string> = {
+  webhook: "1. Generate the webhook URL",
+  signal: "2. Send a test signal",
+  submit: "3. Submit for admin review",
+};
+
+function formatRelative(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(diff) || diff < 0) return "just now";
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 48) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  return `${d}d ago`;
+}
+
+function StepIndicator({ state }: { state: StepState }) {
+  if (state === "done") {
+    return (
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-profit text-profit-foreground"
+        aria-hidden
+      >
+        <Check className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+  if (state === "active") {
+    return (
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-warning bg-warning/20 text-warning"
+        aria-hidden
+      >
+        <span className="h-2 w-2 rounded-full bg-warning animate-pulse" />
+      </span>
+    );
+  }
+  return (
+    <span
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-secondary/40 text-xs text-muted-foreground"
+      aria-hidden
+    />
+  );
+}
+
+export interface StudioSubmitChecklistProps {
+  status: StrategyReviewStatus;
+  webhookEnabled: boolean;
+  webhookLastDeliveryAt: string | null;
+  rejectionReason: string | null;
+  /** Submit-review mutation pending state. */
+  submitting: boolean;
+  /** Fires the existing submit-review mutation on the parent. */
+  onSubmit: () => void;
+  /** Resubmit (reapply) for rejected listings. */
+  onReapply?: () => void;
+  /** Resubmit mutation pending state. */
+  reapplying?: boolean;
+  /**
+   * Called when the user clicks "I'm sending the test signal now" so the
+   * parent can switch the studio strategies query into a fast-poll mode
+   * (see `liveDataQueryOptions` + the parent's `useQuery` overrides).
+   */
+  onSignalListenStart?: () => void;
+}
+
+export default function StudioSubmitChecklist({
+  status,
+  webhookEnabled,
+  webhookLastDeliveryAt,
+  rejectionReason,
+  submitting,
+  onSubmit,
+  onReapply,
+  reapplying = false,
+  onSignalListenStart,
+}: StudioSubmitChecklistProps) {
+  const [listening, setListening] = useState(false);
+  const [recentlyArrived, setRecentlyArrived] = useState(false);
+  const lastSeenDeliveryRef = useRef<string | null>(webhookLastDeliveryAt);
+
+  // Detect the moment `webhookLastDeliveryAt` flips from null/older → newer.
+  // We flash the green "Signal received" pill for 5s, then settle into the
+  // permanent "done" state. Tracking the previous value via ref avoids
+  // re-flashing on every parent refetch.
+  useEffect(() => {
+    const prev = lastSeenDeliveryRef.current;
+    if (
+      webhookLastDeliveryAt &&
+      (!prev || webhookLastDeliveryAt !== prev)
+    ) {
+      lastSeenDeliveryRef.current = webhookLastDeliveryAt;
+      if (prev !== webhookLastDeliveryAt && prev !== null) {
+        setRecentlyArrived(true);
+      } else if (prev === null) {
+        setRecentlyArrived(true);
+      }
+      setListening(false);
+      const t = window.setTimeout(() => setRecentlyArrived(false), 5_000);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
+  }, [webhookLastDeliveryAt]);
+
+  // Stop listening if the parent disabled the webhook from outside the
+  // checklist (e.g. via the "Disable" button) so we don't keep showing
+  // "Listening..." forever.
+  useEffect(() => {
+    if (!webhookEnabled) setListening(false);
+  }, [webhookEnabled]);
+
+  const isRejected = status === "rejected";
+  const stepStates: Record<StepKey, StepState> = {
+    webhook: webhookEnabled ? "done" : "active",
+    signal: !webhookEnabled
+      ? "pending"
+      : webhookLastDeliveryAt
+        ? "done"
+        : listening
+          ? "active"
+          : "active",
+    submit:
+      webhookEnabled && webhookLastDeliveryAt
+        ? "active"
+        : "pending",
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-secondary/30 p-4 text-sm">
+      {isRejected && (
+        <div className="mb-4 rounded-md border border-loss/40 bg-loss/10 p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle
+              className="h-4 w-4 mt-0.5 shrink-0 text-loss"
+              aria-hidden
+            />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-loss leading-snug">
+                Listing was rejected
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                {rejectionReason?.trim()
+                  ? rejectionReason
+                  : "An admin returned this listing without a written reason. Edit the details, reapply, and we'll requeue it for review."}
+              </p>
+            </div>
+          </div>
+          {onReapply && (
+            <div className="mt-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={reapplying}
+                onClick={onReapply}
+              >
+                {reapplying ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4 mr-1" />
+                )}
+                Reapply
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mb-3 flex items-baseline justify-between gap-2 flex-wrap">
+        <p className="font-semibold text-foreground">
+          {isRejected
+            ? "After you reapply, finish these steps:"
+            : "Three steps to go live"}
+        </p>
+        {!isRejected && (
+          <p className="text-xs text-muted-foreground">
+            Subscriber mirroring stays off until an admin approves.
+          </p>
+        )}
+      </div>
+
+      <ol className="space-y-3">
+        {/* Step 1 — generate URL */}
+        <li className="flex items-start gap-3">
+          <StepIndicator state={stepStates.webhook} />
+          <div className="flex-1 min-w-0">
+            <p
+              className={cn(
+                "font-medium",
+                stepStates.webhook === "done"
+                  ? "text-foreground"
+                  : "text-foreground"
+              )}
+            >
+              {STEP_TITLES.webhook}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              {webhookEnabled
+                ? "Webhook URL is active. The full secret URL is shown once after creation — keep it safe."
+                : "Use \u201CCreate webhook URL\u201D below. The full URL contains a secret; treat it like a password."
+              }
+            </p>
+          </div>
+        </li>
+
+        {/* Step 2 — send test signal */}
+        <li className="flex items-start gap-3">
+          <StepIndicator state={stepStates.signal} />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-foreground">{STEP_TITLES.signal}</p>
+            {!webhookEnabled ? (
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Available after step 1. Paste the webhook URL into TradingView
+                or your bot, then send a test signal here.
+              </p>
+            ) : webhookLastDeliveryAt ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+                    recentlyArrived
+                      ? "bg-profit/20 text-profit animate-pulse"
+                      : "bg-profit/15 text-profit"
+                  )}
+                >
+                  <Check className="h-3 w-3" />
+                  Signal received {formatRelative(webhookLastDeliveryAt)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Send another at any time to retest.
+                </span>
+              </div>
+            ) : listening ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
+                  <Radio className="h-3 w-3 animate-pulse" />
+                  Listening for your test signal…
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setListening(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setListening(true);
+                    onSignalListenStart?.();
+                  }}
+                >
+                  <Radio className="h-3.5 w-3.5 mr-1" />
+                  I&rsquo;m sending the test signal now
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  We&rsquo;ll watch for the first delivery and turn this green.
+                </span>
+              </div>
+            )}
+          </div>
+        </li>
+
+        {/* Step 3 — submit */}
+        <li className="flex items-start gap-3">
+          <StepIndicator state={stepStates.submit} />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-foreground">{STEP_TITLES.submit}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              {stepStates.submit === "active"
+                ? "Everything looks good. An admin will review your listing — you\u2019ll see status updates here."
+                : "Available after a verified test signal."
+              }
+            </p>
+            <div className="mt-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={
+                  submitting ||
+                  isRejected ||
+                  !webhookEnabled ||
+                  !webhookLastDeliveryAt
+                }
+                onClick={onSubmit}
+              >
+                {submitting ? (
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4 mr-1" />
+                )}
+                Submit for admin review
+              </Button>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </div>
+  );
+}

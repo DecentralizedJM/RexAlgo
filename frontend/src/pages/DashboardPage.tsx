@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import Navbar from "@/components/Navbar";
 import PerformanceChart from "@/components/PerformanceChart";
@@ -30,6 +30,7 @@ import {
   fetchRexAlgoTradeActivity,
   fetchSubscriptions,
   linkMudrexKey,
+  dismissSharedMudrexWarning,
   ApiError,
   getApiErrorCode,
   isMudrexCredentialError,
@@ -46,11 +47,6 @@ import { MUDREX_PRO_TRADING_URL } from "@/lib/externalLinks";
 import { MUDREX_KEY_PROBE_QUERY_KEY } from "@/lib/queryKeys";
 import { toast } from "sonner";
 import { refreshAppData } from "@/lib/refreshAppData";
-
-/** Session-scoped: user acknowledged shared-key warning; survives dashboard remounts. */
-function sharedMudrexDismissStorageKey(userId: string): string {
-  return `rexalgo:dismissSharedMudrex:${userId}`;
-}
 
 /** Cumulative realized P&L from Mudrex position history (one API page). */
 function buildRealizedPnlCurve(positions: ApiPosition[]): { date: string; value: number }[] {
@@ -381,7 +377,6 @@ export default function DashboardPage() {
   const refreshingRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [mudrexSharedKeyPopoverOpen, setMudrexSharedKeyPopoverOpen] = useState(false);
-  const [sharedMudrexWarningDismissed, setSharedMudrexWarningDismissed] = useState(false);
   const [pnlScope, setPnlScope] = useState<PositionScope>("all");
   const [openScope, setOpenScope] = useState<PositionScope>("all");
   const [historyScope, setHistoryScope] = useState<PositionScope>("all");
@@ -389,31 +384,28 @@ export default function DashboardPage() {
   const user = authQ.data?.user;
   const hasMudrexKey = user?.hasMudrexKey ?? false;
   const mudrexKeySharedAcrossAccounts = user?.mudrexKeySharedAcrossAccounts === true;
-  const showSharedMudrexWarning =
-    mudrexKeySharedAcrossAccounts && !sharedMudrexWarningDismissed;
   const isAdmin = user?.isAdmin === true;
 
-  useEffect(() => {
-    if (!mudrexKeySharedAcrossAccounts) {
-      setSharedMudrexWarningDismissed(false);
-      if (user?.id) {
-        try {
-          sessionStorage.removeItem(sharedMudrexDismissStorageKey(user.id));
-        } catch {
-          /* private mode */
-        }
-      }
-      return;
-    }
-    if (!user?.id) return;
-    try {
-      const dismissed =
-        sessionStorage.getItem(sharedMudrexDismissStorageKey(user.id)) === "1";
-      setSharedMudrexWarningDismissed(dismissed);
-    } catch {
-      setSharedMudrexWarningDismissed(false);
-    }
-  }, [user?.id, mudrexKeySharedAcrossAccounts]);
+  // Server-side ack: persisted on `users.shared_mudrex_ack_*`, scoped to the
+  // current Mudrex fingerprint + request IP. We trust `/api/auth/me` to flip
+  // `mudrexKeySharedAcrossAccounts` to `false` once the ack matches; until
+  // then we use a transient `dismissed` flag to hide the popover instantly so
+  // the click feels responsive (the next `me` refetch confirms).
+  const dismissMut = useMutation({
+    mutationFn: dismissSharedMudrexWarning,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["session", "me"] });
+    },
+    onError: (err) => {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Could not save your acknowledgement. Try again."
+      );
+    },
+  });
+  const showSharedMudrexWarning =
+    mudrexKeySharedAcrossAccounts && !dismissMut.isSuccess && !dismissMut.isPending;
 
   const walletQ = useQuery({
     queryKey: ["wallet", "futures"],
@@ -646,22 +638,13 @@ export default function DashboardPage() {
                           type="button"
                           size="sm"
                           className="w-full h-10 shadow-sm font-semibold"
+                          disabled={dismissMut.isPending}
                           onClick={() => {
-                            setSharedMudrexWarningDismissed(true);
                             setMudrexSharedKeyPopoverOpen(false);
-                            if (user?.id) {
-                              try {
-                                sessionStorage.setItem(
-                                  sharedMudrexDismissStorageKey(user.id),
-                                  "1"
-                                );
-                              } catch {
-                                /* private mode */
-                              }
-                            }
+                            dismissMut.mutate();
                           }}
                         >
-                          It&apos;s ok
+                          {dismissMut.isPending ? "Saving…" : "It\u2019s ok"}
                         </Button>
                         <Button
                           type="button"

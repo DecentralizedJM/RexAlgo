@@ -35,11 +35,17 @@ export async function POST(req: NextRequest) {
     const encrypted = encryptApiSecret(trimmed);
     const fingerprint = tryComputeUserSecretFingerprint(trimmed);
 
+    // Wipe any prior shared-key ack: a new fingerprint must re-trigger the
+    // warning if the new secret is also shared, otherwise the previous "It's
+    // ok" silently covers a different key. See `mudrexKeySharing.ts`.
     await db
       .update(users)
       .set({
         apiSecretEncrypted: encrypted,
         userSecretFingerprint: fingerprint ?? null,
+        sharedMudrexAckFingerprint: null,
+        sharedMudrexAckIp: null,
+        sharedMudrexAckAt: null,
       })
       .where(eq(users.id, session.user.id));
 
@@ -76,9 +82,17 @@ export async function DELETE() {
   }
 
   try {
+    // Unlinking the key removes the basis for any prior ack — clear all three
+    // columns so a future re-link starts the warning state from scratch.
     await db
       .update(users)
-      .set({ apiSecretEncrypted: null, userSecretFingerprint: null })
+      .set({
+        apiSecretEncrypted: null,
+        userSecretFingerprint: null,
+        sharedMudrexAckFingerprint: null,
+        sharedMudrexAckIp: null,
+        sharedMudrexAckAt: null,
+      })
       .where(eq(users.id, session.user.id));
 
     return NextResponse.json({

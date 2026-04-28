@@ -1,23 +1,24 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+/**
+ * Strategy backtest panel.
+ *
+ * Renders the creator-uploaded backtest payload (`strategy.backtestUpload`)
+ * read-only. The previous version ran a server-side simulator
+ * (`sma_cross` / `rule_builder_v1`) against live Bybit klines, which could
+ * not model SMC, order blocks, liquidity, or volume strategies. Creators
+ * now publish their own backtest results via
+ * `StudioBacktestUploader` and this panel just visualises the payload.
+ *
+ * If `backtestUpload` is null we show an empty-state instead of running
+ * anything — there is no fallback simulator anymore.
+ */
+import { useMemo } from "react";
 import {
-  runStrategyBacktest,
-  ApiError,
-  type StrategyBacktestResultPayload,
-} from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Play } from "lucide-react";
-import { toast } from "sonner";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   LineChart,
   Line,
@@ -27,8 +28,16 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import type {
+  StrategyBacktestUpload,
+  StrategyBacktestUploadEquityPoint,
+} from "@/lib/api";
 
-type EquityTooltipPayload = { value?: number; name?: string; dataKey?: string | number };
+type EquityTooltipPayload = {
+  value?: number;
+  name?: string;
+  dataKey?: string | number;
+};
 
 function EquityTooltip({
   active,
@@ -46,302 +55,215 @@ function EquityTooltip({
     <div className="min-w-[9rem] rounded-md border border-border bg-popover px-3 py-2 text-left shadow-lg !outline-none">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-popover-foreground">
-        Equity <span className="text-foreground/80">:</span> ${v.toFixed(2)}
+        Equity <span className="text-foreground/80">:</span>{" "}
+        {v.toLocaleString(undefined, { maximumFractionDigits: 2 })}
       </p>
     </div>
   );
 }
 
 function downsampleEquity(
-  pts: { t: number; equity: number }[],
+  pts: StrategyBacktestUploadEquityPoint[],
   maxPoints: number
-): { t: number; equity: number; label: string }[] {
-  if (pts.length <= maxPoints) {
-    return pts.map((p) => ({
-      ...p,
-      label: new Date(p.t).toLocaleDateString(),
-    }));
-  }
+): { t: string; v: number; label: string }[] {
+  if (!pts.length) return [];
+  const decorate = (p: StrategyBacktestUploadEquityPoint) => ({
+    ...p,
+    label: new Date(p.t).toLocaleDateString(),
+  });
+  if (pts.length <= maxPoints) return pts.map(decorate);
   const step = Math.ceil(pts.length / maxPoints);
-  const out: { t: number; equity: number; label: string }[] = [];
+  const out: { t: string; v: number; label: string }[] = [];
   for (let i = 0; i < pts.length; i += step) {
-    const p = pts[i]!;
-    out.push({
-      ...p,
-      label: new Date(p.t).toLocaleDateString(),
-    });
+    out.push(decorate(pts[i]!));
   }
   const last = pts[pts.length - 1]!;
-  if (out[out.length - 1]?.t !== last.t) {
-    out.push({ ...last, label: new Date(last.t).toLocaleDateString() });
-  }
+  if (out[out.length - 1]?.t !== last.t) out.push(decorate(last));
   return out;
 }
 
 export default function StrategyBacktestPanel({
-  strategyId,
   strategyName,
+  upload,
 }: {
-  strategyId: string;
   strategyName: string;
+  upload: StrategyBacktestUpload | null | undefined;
 }) {
-  const navigate = useNavigate();
-  const [months, setMonths] = useState("6");
-  const [capital, setCapital] = useState("10000");
-  const [riskPct, setRiskPct] = useState("2");
-  const [indicator, setIndicator] = useState<"sma" | "ema" | "rsi">("sma");
-  const [period, setPeriod] = useState("20");
-  const [comparator, setComparator] = useState<"cross_above" | "cross_below" | "above" | "below">("cross_above");
-  const [threshold, setThreshold] = useState("0");
-  const [exitComparator, setExitComparator] = useState<"cross_above" | "cross_below" | "above" | "below">("cross_below");
-  const [exitThreshold, setExitThreshold] = useState("0");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<StrategyBacktestResultPayload | null>(null);
-  const [metaBars, setMetaBars] = useState<number | null>(null);
-
   const chartData = useMemo(
-    () => (result?.equity?.length ? downsampleEquity(result.equity, 400) : []),
-    [result]
+    () => (upload?.payload.equity?.length ? downsampleEquity(upload.payload.equity, 400) : []),
+    [upload]
   );
 
-  async function onRun() {
-    setLoading(true);
-    setResult(null);
-    try {
-      const m = Math.min(36, Math.max(1, parseInt(months, 10) || 6));
-      const cap = Math.max(100, parseFloat(capital) || 10_000);
-      const risk = Math.min(10, Math.max(0.5, parseFloat(riskPct) || 2)) / 100;
-      const { result: r, meta } = await runStrategyBacktest(strategyId, {
-        lookbackMonths: m,
-        initialCapital: cap,
-        riskPctPerTrade: risk,
-        backtestSpec: {
-          engine: "rule_builder_v1",
-          params: {
-            indicator,
-            period: Math.max(2, parseInt(period, 10) || 20),
-            comparator,
-            threshold: parseFloat(threshold) || 0,
-            exitComparator,
-            exitThreshold: parseFloat(exitThreshold) || 0,
-          },
-        },
-      });
-      setResult(r);
-      setMetaBars(meta.barsUsed);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
-        toast.error("Sign in to run a simulation");
-        navigate("/auth", { state: { from: `/strategy/${strategyId}` } });
-        return;
-      }
-      toast.error(e instanceof Error ? e.message : "Simulation failed");
-    } finally {
-      setLoading(false);
-    }
+  if (!upload) {
+    return (
+      <Card className="border-border/80">
+        <CardHeader>
+          <CardTitle className="text-lg">Backtest</CardTitle>
+          <CardDescription>
+            The creator hasn&rsquo;t published a backtest for{" "}
+            <span className="font-medium text-foreground">{strategyName}</span> yet.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          When the creator uploads their backtest results JSON or a TradingView
+          Strategy Tester export, the equity curve, win rate, max drawdown and
+          recent trades will appear here.
+        </CardContent>
+      </Card>
+    );
   }
+
+  const { summary, trades } = upload.payload;
+  const initialCapital = summary.initialCapital;
+  const formatEquity = (v: number) =>
+    initialCapital
+      ? `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+      : v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+  const sourceLabel =
+    upload.kind === "tv_export"
+      ? "TradingView Strategy Tester export"
+      : "Uploaded backtest JSON";
 
   return (
     <Card className="border-border/80">
       <CardHeader>
-        <CardTitle className="text-lg">Simulated backtest</CardTitle>
+        <CardTitle className="text-lg">Backtest</CardTitle>
         <CardDescription>
-          Hypothetical performance for <span className="font-medium text-foreground">{strategyName}</span>{" "}
-          using this listing&apos;s saved logic and historical OHLC data. Not a guarantee of live results
+          Creator-published backtest for{" "}
+          <span className="font-medium text-foreground">{strategyName}</span>{" "}
+          ({sourceLabel}). Past performance is not a guarantee of live results
           on Mudrex.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="rounded-lg border border-border/60 p-4 space-y-4">
-          <div>
-            <p className="text-sm font-medium">Rule builder</p>
-            <p className="text-xs text-muted-foreground">
-              Historical backtest over Bybit klines using these limited, explicit rules. This is not arbitrary strategy code.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Indicator</Label>
-              <Select value={indicator} onValueChange={(v) => setIndicator(v as typeof indicator)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sma">SMA distance %</SelectItem>
-                  <SelectItem value="ema">EMA value</SelectItem>
-                  <SelectItem value="rsi">RSI</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bt-period">Period</Label>
-              <Input id="bt-period" type="number" min={2} max={200} value={period} onChange={(e) => setPeriod(e.target.value)} className="font-mono" />
-            </div>
-            <div className="space-y-2">
-              <Label>Entry condition</Label>
-              <Select value={comparator} onValueChange={(v) => setComparator(v as typeof comparator)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cross_above">Cross above</SelectItem>
-                  <SelectItem value="cross_below">Cross below</SelectItem>
-                  <SelectItem value="above">Above</SelectItem>
-                  <SelectItem value="below">Below</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bt-threshold">Entry threshold</Label>
-              <Input id="bt-threshold" type="number" value={threshold} onChange={(e) => setThreshold(e.target.value)} className="font-mono" />
-            </div>
-            <div className="space-y-2">
-              <Label>Exit condition</Label>
-              <Select value={exitComparator} onValueChange={(v) => setExitComparator(v as typeof exitComparator)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cross_above">Cross above</SelectItem>
-                  <SelectItem value="cross_below">Cross below</SelectItem>
-                  <SelectItem value="above">Above</SelectItem>
-                  <SelectItem value="below">Below</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bt-exit-threshold">Exit threshold</Label>
-              <Input id="bt-exit-threshold" type="number" value={exitThreshold} onChange={(e) => setExitThreshold(e.target.value)} className="font-mono" />
-            </div>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <Metric
+            label="Return"
+            value={`${summary.totalReturnPct >= 0 ? "+" : ""}${summary.totalReturnPct.toFixed(2)}%`}
+            positive={summary.totalReturnPct >= 0}
+          />
+          <Metric label="Win rate" value={`${summary.winRatePct.toFixed(1)}%`} />
+          <Metric
+            label="Max drawdown"
+            value={`${summary.maxDrawdownPct.toFixed(2)}%`}
+            warn
+          />
+          <Metric label="Trades" value={String(summary.trades)} />
+          {typeof summary.profitFactor === "number" && (
+            <Metric
+              label="Profit factor"
+              value={summary.profitFactor.toFixed(2)}
+            />
+          )}
+          {typeof summary.sharpe === "number" && (
+            <Metric label="Sharpe" value={summary.sharpe.toFixed(2)} />
+          )}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="space-y-2">
-            <Label>History</Label>
-            <Select value={months} onValueChange={setMonths}>
-              <SelectTrigger>
-                <SelectValue placeholder="Months" />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 3, 6, 12, 24, 36].map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n} mo
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="bt-cap">Starting capital (USDT)</Label>
-            <Input
-              id="bt-cap"
-              type="number"
-              min={100}
-              step={100}
-              value={capital}
-              onChange={(e) => setCapital(e.target.value)}
-              className="font-mono"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="bt-risk">Risk / trade (% of equity)</Label>
-            <Input
-              id="bt-risk"
-              type="number"
-              min={0.5}
-              max={10}
-              step={0.5}
-              value={riskPct}
-              onChange={(e) => setRiskPct(e.target.value)}
-              className="font-mono"
-            />
-          </div>
-          <div className="flex items-end">
-            <Button
-              type="button"
-              className="w-full"
-              disabled={loading}
-              onClick={() => void onRun()}
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2" />
-                  Run simulation
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Range:{" "}
+          {new Date(summary.rangeStart).toLocaleDateString()}{" "}
+          &rarr; {new Date(summary.rangeEnd).toLocaleDateString()}
+          {upload.meta.fileName ? ` · ${upload.meta.fileName}` : null}
+        </p>
 
-        {metaBars != null && (
-          <p className="text-xs text-muted-foreground">
-            Bars used: {metaBars.toLocaleString()} (same timeframe as the listing).
-          </p>
+        {chartData.length > 0 && (
+          <div className="h-64 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={chartData}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10 }}
+                  className="text-muted-foreground"
+                />
+                <YAxis
+                  tick={{ fontSize: 10 }}
+                  className="text-muted-foreground"
+                  domain={["auto", "auto"]}
+                  tickFormatter={(v) => formatEquity(Number(v))}
+                />
+                <Tooltip
+                  content={(props) => (
+                    <EquityTooltip
+                      {...(props as unknown as {
+                        active?: boolean;
+                        payload?: EquityTooltipPayload[];
+                        label?: string;
+                      })}
+                    />
+                  )}
+                  cursor={{
+                    stroke: "hsl(var(--muted-foreground) / 0.35)",
+                    strokeWidth: 1,
+                  }}
+                  wrapperStyle={{ outline: "none" }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="v"
+                  stroke="hsl(var(--primary))"
+                  dot={false}
+                  strokeWidth={2}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         )}
 
-        {result && (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <Metric label="Return" value={`${result.summary.totalReturnPct >= 0 ? "+" : ""}${result.summary.totalReturnPct.toFixed(2)}%`} positive={result.summary.totalReturnPct >= 0} />
-              <Metric label="Final equity" value={`$${result.summary.finalEquity.toFixed(2)}`} />
-              <Metric label="Max drawdown" value={`${result.summary.maxDrawdownPct.toFixed(2)}%`} warn />
-              <Metric label="Win rate" value={`${result.summary.winRatePct.toFixed(1)}%`} />
-              <Metric label="Trades" value={String(result.summary.tradeCount)} />
-              <Metric label="Fees (est.)" value={`$${result.summary.feesApproxUsdt.toFixed(2)}`} />
+        {trades.length > 0 && (
+          <div className="rounded-lg border border-border/60 overflow-hidden">
+            <p className="text-xs font-medium px-3 py-2 bg-secondary/40 border-b border-border/60">
+              Trades ({trades.length})
+            </p>
+            <div className="max-h-72 overflow-y-auto text-xs font-mono">
+              <table className="w-full">
+                <thead className="text-muted-foreground sticky top-0 bg-background">
+                  <tr className="border-b border-border/50">
+                    <th className="text-left p-2">Side</th>
+                    <th className="text-left p-2">Entry</th>
+                    <th className="text-left p-2">Exit</th>
+                    <th className="text-right p-2">P/L</th>
+                    <th className="text-right p-2">P/L %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trades.slice(0, 200).map((t, i) => (
+                    <tr key={i} className="border-b border-border/30">
+                      <td className="p-2 uppercase">{t.side}</td>
+                      <td className="p-2 text-muted-foreground">
+                        {new Date(t.entryTime).toLocaleString()}
+                      </td>
+                      <td className="p-2 text-muted-foreground">
+                        {new Date(t.exitTime).toLocaleString()}
+                      </td>
+                      <td
+                        className={`p-2 text-right ${
+                          t.pnl >= 0 ? "text-profit" : "text-loss"
+                        }`}
+                      >
+                        {t.pnl >= 0 ? "+" : ""}
+                        {t.pnl.toFixed(2)}
+                      </td>
+                      <td
+                        className={`p-2 text-right ${
+                          t.pnlPct >= 0 ? "text-profit" : "text-loss"
+                        }`}
+                      >
+                        {t.pnlPct >= 0 ? "+" : ""}
+                        {t.pnlPct.toFixed(2)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-
-            {chartData.length > 0 && (
-              <div className="h-64 w-full min-w-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} className="text-muted-foreground" />
-                    <YAxis
-                      tick={{ fontSize: 10 }}
-                      className="text-muted-foreground"
-                      domain={["auto", "auto"]}
-                      tickFormatter={(v) => `$${Number(v).toLocaleString()}`}
-                    />
-                    <Tooltip
-                      content={(props) => <EquityTooltip {...props} />}
-                      cursor={{ stroke: "hsl(var(--muted-foreground) / 0.35)", strokeWidth: 1 }}
-                      wrapperStyle={{ outline: "none" }}
-                      isAnimationActive={false}
-                    />
-                    <Line type="monotone" dataKey="equity" stroke="hsl(var(--primary))" dot={false} strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {result.trades.length > 0 && (
-              <div className="rounded-lg border border-border/60 overflow-hidden">
-                <p className="text-xs font-medium px-3 py-2 bg-secondary/40 border-b border-border/60">
-                  Recent trades (up to 200)
-                </p>
-                <div className="max-h-48 overflow-y-auto text-xs font-mono">
-                  <table className="w-full">
-                    <thead className="text-muted-foreground sticky top-0 bg-background">
-                      <tr className="border-b border-border/50">
-                        <th className="text-left p-2">Side</th>
-                        <th className="text-right p-2">PnL</th>
-                        <th className="text-right p-2">Exit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.trades.map((t, i) => (
-                        <tr key={i} className="border-b border-border/30">
-                          <td className="p-2">{t.side}</td>
-                          <td className={`p-2 text-right ${t.pnlUsdt >= 0 ? "text-profit" : "text-loss"}`}>
-                            {t.pnlUsdt >= 0 ? "+" : ""}
-                            {t.pnlUsdt.toFixed(2)}
-                          </td>
-                          <td className="p-2 text-right text-muted-foreground">{t.reason}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -361,10 +283,18 @@ function Metric({
 }) {
   return (
     <div className="rounded-lg border border-border/60 bg-secondary/20 px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">
+        {label}
+      </p>
       <p
         className={`font-mono font-semibold text-sm ${
-          positive === true ? "text-profit" : positive === false ? "text-loss" : warn ? "text-warning" : ""
+          positive === true
+            ? "text-profit"
+            : positive === false
+              ? "text-loss"
+              : warn
+                ? "text-warning"
+                : ""
         }`}
       >
         {value}

@@ -119,7 +119,6 @@ The **web** image defaults to `API_UPSTREAM=http://api:3000` (Compose service na
 | `PUBLIC_APP_URL` | API | Full webhook URLs in studio UIs (no trailing slash). **Vercel UI + Railway API:** set to your SPA origin (e.g. `https://rexalgo.xyz`) so Telegram OAuth redirects return to the same host the browser uses (fallback when `X-Forwarded-Host` is missing). |
 | `API_UPSTREAM` | Web (nginx) | Full URL of Next API for `proxy_pass` |
 | `NODE_ENV=production` | API | `Secure` cookies |
-| `REXALGO_OHLC_API_BASE` | API (optional) | Internal base URL for historical candle fetches used by `POST /api/strategies/[id]/backtest` (default built-in). Operators only — not shown in product UI. |
 | `TELEGRAM_BOT_TOKEN` | API (optional) | Enables the bot-first login button on `/auth` and `/settings` and DM notifications. Both `TELEGRAM_BOT_*` vars must be set for the button to render. |
 | `TELEGRAM_BOT_USERNAME` | API (optional) | Bot username from BotFather, no leading `@`. Served by `GET /api/auth/telegram/config` to the SPA so the button can build the `t.me/<bot>?start=…` deep link. |
 | `TELEGRAM_WEBHOOK_SECRET` | API (required if bot vars are set) | Shared secret validated against Telegram's `X-Telegram-Bot-Api-Secret-Token` header on every inbound webhook. Generate with `openssl rand -hex 32`, set on Railway, and pass to `setWebhook` via `scripts/set-telegram-webhook.sh`. |
@@ -198,6 +197,44 @@ Bots must `POST` to:
 `{PUBLIC_API_URL}/api/webhooks/strategy/{strategyId}` (legacy: `/api/webhooks/copy-trading/...`)
 
 So `PUBLIC_APP_URL` must be a URL that resolves to a path nginx (or Vercel rewrite) forwards to Next. Use **HTTPS** in production.
+
+---
+
+## Backtest results (creator-supplied)
+
+The simulated `sma_cross` / `rule_builder_v1` engines have been retired —
+`POST /api/strategies/[id]/backtest` now returns `410 Gone` with code
+`BACKTEST_LEGACY_DEPRECATED`. Creators publish their own backtest results
+through the studio (`POST .../backtest-upload`) in one of two formats:
+
+- **Raw JSON** matching the canonical shape in
+  `backend/src/lib/backtest/uploadSchema.ts` (summary + equity + trades).
+- **TradingView Strategy Tester export** — either the *List of Trades*
+  CSV or the *Performance Summary* JSON. Server-side
+  `parseTvExport.ts` translates these into the canonical shape before
+  persistence.
+
+Limits enforced server-side:
+
+- Max body size: **1 MB** (`UPLOAD_MAX_BYTES`).
+- Max trades: **5,000** (`UPLOAD_MAX_TRADES`).
+- Max equity points: **10,000** (`UPLOAD_MAX_EQUITY_POINTS`).
+
+Re-uploads on an `approved` algo listing demote it to `draft` and disable
+the webhook (audit-style, mirroring sensitive PATCH fields). Approved
+copy-trading listings are locked — uploads return `STRATEGY_LOCKED`.
+
+---
+
+## Shared Mudrex key warning persistence
+
+The dashboard "shared key — Action Required" banner is dismissed via
+`POST /api/account/shared-mudrex-warning/dismiss`, which writes
+`users.shared_mudrex_ack_fingerprint`, `shared_mudrex_ack_ip`, and
+`shared_mudrex_ack_at` (migration `0019_shared_mudrex_ack`). The
+ack survives logout/login and only re-shows when the Mudrex secret
+fingerprint or the request IP changes. Linking, unlinking, or
+kill-switching the Mudrex secret automatically clears all three columns.
 
 ---
 

@@ -69,11 +69,20 @@ If `TELEGRAM_WEBHOOK_SECRET` is missing, the webhook refuses all updates
 | `REXALGO_WEBHOOK_MAX_SKEW_SEC` | `60` | Maximum clock skew in seconds accepted on signed copy-trading webhooks. Clamped to 30–900. Reducing below 60 tightens the replay window; increasing above 60 is not recommended for production. |
 
 > **Redis memory-fallback note:** When `REDIS_URL` is not set, all distributed
-> rate-limiting (webhook quotas, auth rate limits, backtest concurrency) falls
-> back to per-replica in-memory state. For a single-instance dev setup this is
-> fine. For multi-replica production: set `REDIS_URL` so limits are shared
-> across all instances. The fallback is fail-open — a missing/crashed Redis does
-> not block API traffic, but limits become per-instance again until Redis recovers.
+> rate-limiting (webhook quotas, auth rate limits) falls back to per-replica
+> in-memory state. For a single-instance dev setup this is fine. For
+> multi-replica production: set `REDIS_URL` so limits are shared across all
+> instances. The fallback is fail-open — a missing/crashed Redis does not block
+> API traffic, but limits become per-instance again until Redis recovers.
+
+> **Backtest engine note:** The simulated `sma_cross` / `rule_builder_v1`
+> engines have been retired (`backend/src/lib/backtest/runBacktest.ts` is no
+> longer reachable; `POST /api/strategies/[id]/backtest` returns `410 Gone`
+> with `BACKTEST_LEGACY_DEPRECATED`). Creators publish their own results via
+> `POST /api/{marketplace|copy-trading}/studio/strategies/[id]/backtest-upload`
+> as either a normalised JSON payload or a TradingView Strategy Tester export
+> (CSV / Performance Summary JSON). The 1 MB / 5,000-trades / 10,000-equity
+> caps are enforced server-side in `lib/backtest/uploadSchema.ts`.
 
 ---
 
@@ -107,6 +116,20 @@ rejected on the next request because they lack the `sid` claim, and users
 sign in again — that writes a `user_sessions` row automatically. If you
 prefer to force the cutover immediately, set `REXALGO_SESSION_MIN_IAT=$(date +%s)`
 before the deploy that applies the migration.
+
+Migration `0019_shared_mudrex_ack` adds three nullable columns to `users`
+(`shared_mudrex_ack_fingerprint`, `shared_mudrex_ack_ip`,
+`shared_mudrex_ack_at`) backing the persistent dashboard ack of the
+shared-Mudrex-key warning. The dismiss endpoint
+(`POST /api/account/shared-mudrex-warning/dismiss`) writes those columns;
+linking, unlinking, or kill-switching the Mudrex secret clears them.
+
+Migration `0020_creator_backtest_upload` adds three nullable text columns
+to `strategies` (`backtest_upload_kind`, `backtest_upload_payload`,
+`backtest_upload_meta`) holding the creator-uploaded backtest payload that
+replaces the deprecated simulated engine. Existing rows stay untouched —
+they simply render the empty state until the creator publishes a payload
+through the studio uploader.
 
 Applying migrations manually (useful for pre-deploy smoke tests):
 
