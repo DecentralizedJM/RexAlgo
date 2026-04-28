@@ -10,6 +10,20 @@ import {
   subscriptions,
 } from "@/lib/schema";
 
+function toIsoOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "string") {
+    const d = new Date(v);
+    return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+  }
+  return null;
+}
+
+function toIsoOrNow(v: unknown): string {
+  return toIsoOrNull(v) ?? new Date(0).toISOString();
+}
+
 /**
  * Admin strategy directory. Supports `?type=algo|copy_trading|all` (default all)
  * and `?status=draft|pending|approved|rejected|all` (default all).
@@ -89,9 +103,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     strategies: rows.map((r) => ({
       ...r,
-      reviewedAt: r.reviewedAt?.toISOString() ?? null,
-      createdAt: r.createdAt.toISOString(),
-      webhookLastDeliveryAt: r.webhookLastDeliveryAt?.toISOString() ?? null,
+      reviewedAt: toIsoOrNull(r.reviewedAt),
+      createdAt: toIsoOrNow(r.createdAt),
+      webhookLastDeliveryAt: toIsoOrNull(r.webhookLastDeliveryAt),
     })),
   });
 }

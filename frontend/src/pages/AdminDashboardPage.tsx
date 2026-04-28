@@ -740,147 +740,157 @@ function StrategiesTab() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Symbol</TableHead>
-                <TableHead>Creator</TableHead>
-                <TableHead>State</TableHead>
-                <TableHead>Subs</TableHead>
-                <TableHead>Webhook / verified</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {q.data?.strategies.length === 0 && (
+          {q.isLoading ? (
+            <EmptyNote>Loading strategies...</EmptyNote>
+          ) : q.isError ? (
+            <EmptyNote>
+              {q.error instanceof Error
+                ? q.error.message
+                : "Failed to load strategies"}
+            </EmptyNote>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="text-center text-sm text-muted-foreground"
-                  >
-                    No strategies.
-                  </TableCell>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Symbol</TableHead>
+                  <TableHead>Creator</TableHead>
+                  <TableHead>State</TableHead>
+                  <TableHead>Subs</TableHead>
+                  <TableHead>Webhook / verified</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              )}
-              {q.data?.strategies.map((s) => {
-                const state = strategyListingState(s);
-                return (
-                  <TableRow key={s.id}>
-                    <TableCell>
-                      <div className="font-medium">{s.name}</div>
-                      <div className="text-xs text-muted-foreground">{s.id}</div>
+              </TableHeader>
+              <TableBody>
+                {q.data?.strategies.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center text-sm text-muted-foreground"
+                    >
+                      No strategies.
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{s.type}</Badge>
-                    </TableCell>
-                    <TableCell>{s.symbol}</TableCell>
-                    <TableCell>
-                      <div className="text-xs">{s.creatorName}</div>
-                      {s.creatorEmail && (
-                        <div className="text-[11px] text-muted-foreground">
-                          {s.creatorEmail}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <Badge variant={state.variant}>{state.label}</Badge>
-                        <div className="text-[11px] text-muted-foreground">
-                          {state.marketplaceVisible
-                            ? "Visible in marketplace"
-                            : "Hidden from marketplace"}
-                        </div>
-                        {s.status === "approved" && (
+                  </TableRow>
+                )}
+                {q.data?.strategies.map((s) => {
+                  const state = strategyListingState(s);
+                  return (
+                    <TableRow key={s.id}>
+                      <TableCell>
+                        <div className="font-medium">{s.name}</div>
+                        <div className="text-xs text-muted-foreground">{s.id}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{s.type}</Badge>
+                      </TableCell>
+                      <TableCell>{s.symbol}</TableCell>
+                      <TableCell>
+                        <div className="text-xs">{s.creatorName}</div>
+                        {s.creatorEmail && (
                           <div className="text-[11px] text-muted-foreground">
-                            Review: approved
+                            {s.creatorEmail}
                           </div>
                         )}
-                        {s.status === "rejected" && s.rejectionReason?.trim() && (
-                          <div
-                            className="text-[11px] text-muted-foreground max-w-[220px] truncate"
-                            title={s.rejectionReason}
-                          >
-                            {s.rejectionReason}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <Badge variant={state.variant}>{state.label}</Badge>
+                          <div className="text-[11px] text-muted-foreground">
+                            {state.marketplaceVisible
+                              ? "Visible in marketplace"
+                              : "Hidden from marketplace"}
                           </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{s.subscriberCount}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <Badge variant={s.webhookEnabled ? "default" : "outline"}>
-                          {s.webhookEnabled ? "On" : "Off"}
-                        </Badge>
-                        <div className="text-[11px] text-muted-foreground">
-                          Last test:{" "}
-                          {s.webhookLastDeliveryAt
-                            ? new Date(s.webhookLastDeliveryAt).toLocaleString()
-                            : "—"}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {s.status === "pending" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              disabled={reviewMut.isPending}
-                              onClick={() =>
-                                reviewMut.mutate({ id: s.id, action: "approve" })
-                              }
+                          {s.status === "approved" && (
+                            <div className="text-[11px] text-muted-foreground">
+                              Review: approved
+                            </div>
+                          )}
+                          {s.status === "rejected" && s.rejectionReason?.trim() && (
+                            <div
+                              className="text-[11px] text-muted-foreground max-w-[220px] truncate"
+                              title={s.rejectionReason}
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                              Approve
-                            </Button>
+                              {s.rejectionReason}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{s.subscriberCount}</TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <Badge variant={s.webhookEnabled ? "default" : "outline"}>
+                            {s.webhookEnabled ? "On" : "Off"}
+                          </Badge>
+                          <div className="text-[11px] text-muted-foreground">
+                            Last test:{" "}
+                            {s.webhookLastDeliveryAt
+                              ? new Date(s.webhookLastDeliveryAt).toLocaleString()
+                              : "—"}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {s.status === "pending" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                disabled={reviewMut.isPending}
+                                onClick={() =>
+                                  reviewMut.mutate({ id: s.id, action: "approve" })
+                                }
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setToReject(s);
+                                  setRejectReason("");
+                                }}
+                              >
+                                <XCircle className="h-3.5 w-3.5 mr-1" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {s.status === "approved" && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => {
-                                setToReject(s);
-                                setRejectReason("");
-                              }}
+                              disabled={toggleMut.isPending}
+                              onClick={() =>
+                                toggleMut.mutate({
+                                  id: s.id,
+                                  active: !s.isActive,
+                                })
+                              }
                             >
-                              <XCircle className="h-3.5 w-3.5 mr-1" />
-                              Reject
+                              {s.isActive ? "Pause listing" : "Resume listing"}
                             </Button>
-                          </>
-                        )}
-                        {s.status === "approved" && (
+                          )}
                           <Button
                             size="sm"
-                            variant="outline"
-                            disabled={toggleMut.isPending}
-                            onClick={() =>
-                              toggleMut.mutate({
-                                id: s.id,
-                                active: !s.isActive,
-                              })
-                            }
+                            variant="destructive"
+                            onClick={() => {
+                              setToDelete(s);
+                              setConfirmText("");
+                            }}
                           >
-                            {s.isActive ? "Pause listing" : "Resume listing"}
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => {
-                            setToDelete(s);
-                            setConfirmText("");
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
