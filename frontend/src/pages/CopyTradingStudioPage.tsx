@@ -367,6 +367,25 @@ export default function CopyTradingStudioPage() {
     selectedGeneratedSecret && !secretVisible
       ? maskWebhookSecretUrl(webhookDisplayUrl)
       : webhookDisplayUrl;
+  /**
+   * `true` once the creator has run "Create webhook URL" at least once for
+   * this strategy. Mirrors the marketplace twin — see
+   * `frontend/src/pages/MarketplaceStudioPage.tsx` for the rationale and
+   * `backend/src/app/api/copy-trading/studio/strategies/route.ts` for the
+   * server-side flag.
+   */
+  const hasWebhookEndpoint = Boolean(
+    selected &&
+      (selected.webhookConfigured ||
+        selected.webhookEnabled ||
+        selectedGeneratedSecret)
+  );
+
+  // Reset reveal toggle when switching strategies — secrets are
+  // per-strategy and a stale "revealed" flag would leak across rows.
+  useEffect(() => {
+    setSecretVisible(false);
+  }, [selectedId]);
 
   const copyExampleSymbol = selected?.symbol?.trim().toUpperCase() || "BTCUSDT";
   const pythonSnippet = selected
@@ -567,6 +586,7 @@ with urllib.request.urlopen(req, timeout=30) as res:
                       selected.status === "rejected") && (
                       <StudioSubmitChecklist
                         status={selected.status}
+                        webhookConfigured={selected.webhookConfigured}
                         webhookEnabled={selected.webhookEnabled}
                         webhookLastDeliveryAt={selected.webhookLastDeliveryAt}
                         rejectionReason={selected.rejectionReason}
@@ -588,187 +608,268 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     )}
 
                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      {selected.webhookEnabled ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-profit/15 text-profit px-2 py-0.5 font-medium">
-                          <Check className="w-3 h-3" /> webhook active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-secondary text-muted-foreground px-2 py-0.5 font-medium">
-                          webhook disabled
-                        </span>
-                      )}
-                      <span>
-                        Last delivery:{" "}
-                        {selected.webhookLastDeliveryAt
-                          ? new Date(selected.webhookLastDeliveryAt).toLocaleString()
-                          : "—"}
-                      </span>
-                      {selected.webhookRotatedAt && (
-                        <span>
-                          Rotated:{" "}
-                          {new Date(selected.webhookRotatedAt).toLocaleString()}
-                        </span>
+                      {hasWebhookEndpoint && (
+                        <>
+                          {selected.webhookEnabled ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-profit/15 text-profit px-2 py-0.5 font-medium">
+                              <Check className="w-3 h-3" /> webhook active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 text-warning px-2 py-0.5 font-medium">
+                              webhook disabled
+                            </span>
+                          )}
+                          <span>
+                            Last delivery:{" "}
+                            {selected.webhookLastDeliveryAt
+                              ? new Date(selected.webhookLastDeliveryAt).toLocaleString()
+                              : "—"}
+                          </span>
+                          {selected.webhookRotatedAt && (
+                            <span>
+                              Rotated:{" "}
+                              {new Date(selected.webhookRotatedAt).toLocaleString()}
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
 
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Webhook name
-                      </Label>
-                      {renameDraft !== null ? (
-                        <div className="flex gap-2 mt-1">
-                          <Input
-                            autoFocus
-                            value={renameDraft}
-                            onChange={(e) => setRenameDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
+                    <div className="border-t border-border pt-4 space-y-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">
+                          Signal endpoint
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                          RexAlgo creates a private API endpoint for this strategy.
+                          Paste it into TradingView or your bot so RexAlgo can listen
+                          for your signals and mirror them to subscribers after admin
+                          approval.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/*
+                      Webhook label (rename) only after creation — see the
+                      marketplace twin for the rationale.
+                    */}
+                    {hasWebhookEndpoint && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">
+                          Webhook name
+                        </Label>
+                        {renameDraft !== null ? (
+                          <div className="flex gap-2 mt-1">
+                            <Input
+                              autoFocus
+                              value={renameDraft}
+                              onChange={(e) => setRenameDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const v = renameDraft.trim();
+                                  if (v) renameMut.mutate({ id: selected.id, name: v });
+                                } else if (e.key === "Escape") {
+                                  setRenameDraft(null);
+                                }
+                              }}
+                              maxLength={120}
+                            />
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              disabled={renameMut.isPending || !renameDraft.trim()}
+                              onClick={() => {
                                 const v = renameDraft.trim();
                                 if (v) renameMut.mutate({ id: selected.id, name: v });
-                              } else if (e.key === "Escape") {
-                                setRenameDraft(null);
-                              }
-                            }}
-                            maxLength={120}
-                          />
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="outline"
-                            disabled={renameMut.isPending || !renameDraft.trim()}
-                            onClick={() => {
-                              const v = renameDraft.trim();
-                              if (v) renameMut.mutate({ id: selected.id, name: v });
-                            }}
-                          >
-                            <Check className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => setRenameDraft(null)}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-sm font-medium">
-                            {selected.webhookName ?? selected.name}
-                          </span>
-                          {selected.webhookEnabled && (
+                              }}
+                            >
+                              <Check className="w-4 h-4" />
+                            </Button>
                             <Button
                               type="button"
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7"
-                              onClick={() =>
-                                setRenameDraft(selected.webhookName ?? selected.name)
-                              }
-                              aria-label="Rename webhook"
+                              onClick={() => setRenameDraft(null)}
                             >
-                              <Pencil className="w-3.5 h-3.5" />
+                              <X className="w-4 h-4" />
                             </Button>
-                          )}
-                        </div>
-                      )}
-                      {!selected.webhookEnabled && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Enable the webhook to rename it.
-                        </p>
-                      )}
-                    </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-sm font-medium">
+                              {selected.webhookName ?? selected.name}
+                            </span>
+                            {selected.webhookEnabled && (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                onClick={() =>
+                                  setRenameDraft(selected.webhookName ?? selected.name)
+                                }
+                                aria-label="Rename webhook"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                        {!selected.webhookEnabled && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Re-enable the webhook (Regenerate URL) to rename it.
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={
-                          webhookMut.isPending ||
-                          selected.webhookEnabled ||
-                          selected.status === "rejected"
-                        }
-                        title={
-                          selected.status === "rejected"
-                            ? "Resubmit from the studio before enabling the webhook."
-                            : undefined
-                        }
-                        onClick={() => webhookMut.mutate({ id: selected.id, action: "enable" })}
-                      >
-                        <Power className="w-4 h-4 mr-1" />
-                        Create webhook URL
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={webhookMut.isPending || !selected.webhookEnabled}
-                        onClick={() => webhookMut.mutate({ id: selected.id, action: "disable" })}
-                      >
-                        <PowerOff className="w-4 h-4 mr-1" />
-                        Disable
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={webhookMut.isPending || selected.status === "rejected"}
-                        title={
-                          selected.status === "rejected"
-                            ? "Resubmit from the studio before rotating the webhook."
-                            : undefined
-                        }
-                        onClick={() => webhookMut.mutate({ id: selected.id, action: "rotate" })}
-                      >
-                        <RefreshCw className="w-4 h-4 mr-1" />
-                        Regenerate URL
-                      </Button>
-                    </div>
-
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Webhook URL</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input readOnly value={webhookUrlInputValue} className="font-mono text-xs" />
-                        {selectedGeneratedSecret && (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="outline"
-                            onClick={() => setSecretVisible((v) => !v)}
-                            aria-label={secretVisible ? "Hide webhook URL secret" : "Reveal webhook URL secret"}
-                          >
-                            {secretVisible ? (
-                              <EyeOff className="w-4 h-4" />
-                            ) : (
-                              <Eye className={cn("w-4 h-4 animate-pulse")} aria-hidden />
-                            )}
-                          </Button>
-                        )}
+                      {!hasWebhookEndpoint ? (
                         <Button
                           type="button"
-                          size="icon"
+                          size="sm"
                           variant="outline"
-                          onClick={() => void copyText(webhookDisplayUrl, "Webhook URL copied")}
+                          disabled={
+                            webhookMut.isPending || selected.status === "rejected"
+                          }
+                          title={
+                            selected.status === "rejected"
+                              ? "Resubmit from the studio before creating the webhook."
+                              : undefined
+                          }
+                          onClick={() =>
+                            webhookMut.mutate({ id: selected.id, action: "enable" })
+                          }
                         >
-                          <Copy className="w-4 h-4" />
+                          <Power className="w-4 h-4 mr-1" />
+                          Create webhook URL
                         </Button>
-                      </div>
-                      <p className="text-xs text-warning mt-2">
-                        This full URL is the secret. Do not share it publicly. If it leaks, anyone with the URL can
-                        send signals that manage this strategy. Regenerate the URL immediately if exposed.
-                      </p>
-                      {!selectedGeneratedSecret && selected.webhookEnabled && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          For security, the full secret URL is only shown right after creation or regeneration.
-                        </p>
+                      ) : (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={
+                              webhookMut.isPending || selected.status === "rejected"
+                            }
+                            title={
+                              selected.status === "rejected"
+                                ? "Resubmit from the studio before rotating the webhook."
+                                : undefined
+                            }
+                            onClick={() =>
+                              webhookMut.mutate({ id: selected.id, action: "rotate" })
+                            }
+                          >
+                            <RefreshCw className="w-4 h-4 mr-1" />
+                            Regenerate URL
+                          </Button>
+                          {selected.webhookEnabled && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={webhookMut.isPending}
+                              onClick={() =>
+                                webhookMut.mutate({
+                                  id: selected.id,
+                                  action: "disable",
+                                })
+                              }
+                            >
+                              <PowerOff className="w-4 h-4 mr-1" />
+                              Disable
+                            </Button>
+                          )}
+                        </>
                       )}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Dev tip: expose <code className="text-foreground/80">127.0.0.1:3000</code> with
-                        ngrok; bots cannot call Vite on 8080 unless you proxy webhooks there too.
-                      </p>
                     </div>
+
+                    {hasWebhookEndpoint && (
+                      selectedGeneratedSecret ? (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Webhook URL
+                          </Label>
+                          <div className="flex gap-2 mt-1">
+                            <Input
+                              readOnly
+                              value={webhookUrlInputValue}
+                              className="font-mono text-xs"
+                            />
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              onClick={() => setSecretVisible((v) => !v)}
+                              aria-label={
+                                secretVisible
+                                  ? "Hide webhook URL secret"
+                                  : "Reveal webhook URL secret"
+                              }
+                            >
+                              {secretVisible ? (
+                                <EyeOff className="w-4 h-4" />
+                              ) : (
+                                <Eye
+                                  className={cn("w-4 h-4 animate-pulse")}
+                                  aria-hidden
+                                />
+                              )}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              onClick={() => {
+                                // Reveal-on-copy so the creator can sanity
+                                // check the value before pasting it into
+                                // TradingView/their bot.
+                                setSecretVisible(true);
+                                void copyText(
+                                  webhookDisplayUrl,
+                                  "Webhook URL copied"
+                                );
+                              }}
+                              aria-label="Copy webhook URL"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <p className="text-xs text-warning mt-2">
+                            This URL contains a secret. Keep it private; if it
+                            leaks, anyone with the URL can send signals for this
+                            strategy. Regenerate it immediately if exposed.
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Dev tip: expose{" "}
+                            <code className="text-foreground/80">127.0.0.1:3000</code>{" "}
+                            with ngrok; bots cannot call Vite on 8080 unless you proxy
+                            webhooks there too.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-border bg-secondary/40 p-3 text-xs text-muted-foreground leading-relaxed">
+                          <p className="font-medium text-foreground mb-1">
+                            Endpoint configured — full URL hidden
+                          </p>
+                          <p>
+                            For security, the secret in the webhook URL is only
+                            revealed right after creation or regeneration.{" "}
+                            {selected.webhookEnabled
+                              ? ""
+                              : "This endpoint is currently disabled. "}
+                            Click{" "}
+                            <span className="font-medium text-foreground">
+                              Regenerate URL
+                            </span>{" "}
+                            to mint a fresh secret you can copy.
+                          </p>
+                        </div>
+                      )
+                    )}
                   </CardContent>
                 </Card>
 

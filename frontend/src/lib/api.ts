@@ -931,6 +931,16 @@ export type StudioStrategyRow = ApiStrategy & {
   symbols?: string[];
   rejectionReason: string | null;
   reviewedAt: string | null;
+  /**
+   * `true` once a `copy_webhook_config` row exists for this strategy (i.e.
+   * the creator has run "Create webhook URL" at least once). Stays `true`
+   * even when the webhook is currently disabled — this lets the studio UI
+   * distinguish the empty pre-creation state (hide URL + regenerate +
+   * disable) from a configured-but-disabled endpoint (show regenerate so
+   * the creator can mint a fresh secret without going through "create"
+   * again).
+   */
+  webhookConfigured: boolean;
   webhookEnabled: boolean;
   /** Human-friendly webhook label (defaults to strategy name until renamed). */
   webhookName: string | null;

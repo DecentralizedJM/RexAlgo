@@ -43,7 +43,7 @@ type StepKey = "webhook" | "signal" | "submit";
 type StepState = "pending" | "active" | "done" | "blocked";
 
 const STEP_TITLES: Record<StepKey, string> = {
-  webhook: "1. Generate the webhook URL",
+  webhook: "1. Create the signal endpoint",
   signal: "2. Send a test signal",
   submit: "3. Submit for admin review",
 };
@@ -92,6 +92,14 @@ function StepIndicator({ state }: { state: StepState }) {
 
 export interface StudioSubmitChecklistProps {
   status: StrategyReviewStatus;
+  /**
+   * `true` once the creator has run "Create webhook URL" at least once.
+   * Stays `true` even when the endpoint is currently disabled. Used to
+   * differentiate the "endpoint exists but is paused" copy from the empty
+   * pre-creation state — see the matching server flag in the studio list
+   * routes (`webhookConfigured`).
+   */
+  webhookConfigured: boolean;
   webhookEnabled: boolean;
   webhookLastDeliveryAt: string | null;
   rejectionReason: string | null;
@@ -113,6 +121,7 @@ export interface StudioSubmitChecklistProps {
 
 export default function StudioSubmitChecklist({
   status,
+  webhookConfigured,
   webhookEnabled,
   webhookLastDeliveryAt,
   rejectionReason,
@@ -243,8 +252,10 @@ export default function StudioSubmitChecklist({
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
               {webhookEnabled
-                ? "Webhook URL is active. The full secret URL is shown once after creation — keep it safe."
-                : "Use \u201CCreate webhook URL\u201D below. The full URL contains a secret; treat it like a password."
+                ? "Signal endpoint created. Use the masked URL below when configuring TradingView or your bot — RexAlgo listens here for your strategy signals."
+                : webhookConfigured
+                  ? "Endpoint exists but is currently disabled. Click Regenerate URL below to mint a fresh secret URL and re-enable mirroring."
+                  : "Create a private RexAlgo signal endpoint. This is the URL where TradingView or your bot will POST strategy signals; RexAlgo will mirror them to subscribers after admin approval."
               }
             </p>
           </div>

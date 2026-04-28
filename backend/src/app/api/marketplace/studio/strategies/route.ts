@@ -56,6 +56,13 @@ export async function GET() {
     return withBacktestUpload({
       ...s,
       symbols: parseSymbolsJson(s.symbolsJson, s.symbol),
+      // `webhookConfigured` is true once the creator has run "Create webhook
+      // URL" at least once (a `copy_webhook_config` row exists). The UI uses
+      // this to distinguish the empty pre-creation state from a configured
+      // but currently disabled endpoint — a webhook that was disabled still
+      // owns the path and a stored secret, so the action is "regenerate",
+      // not "create".
+      webhookConfigured: Boolean(w),
       webhookEnabled: w?.enabled ?? false,
       webhookName: w?.name ?? s.name,
       webhookLastDeliveryAt: w?.lastDeliveryAt?.toISOString() ?? null,

@@ -44,6 +44,11 @@ export async function GET() {
     const path = strategySignalWebhookPath(s.id);
     return withBacktestUpload({
       ...s,
+      // See marketplace twin: `webhookConfigured` is the existence of the
+      // `copy_webhook_config` row, regardless of `enabled`. Lets the studio
+      // hide the URL/regenerate/disable controls until the creator has
+      // explicitly clicked "Create webhook URL" (Workstream B UX).
+      webhookConfigured: Boolean(w),
       webhookEnabled: w?.enabled ?? false,
       webhookName: w?.name ?? s.name,
       webhookLastDeliveryAt: w?.lastDeliveryAt?.toISOString() ?? null,
