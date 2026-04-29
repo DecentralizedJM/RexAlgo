@@ -212,7 +212,7 @@ export default function StudioSubmitChecklist({
     backtest: hasBacktest ? "done" : hasWebhookEndpoint ? "active" : "pending",
     signal: webhookLastDeliveryAt
       ? "done"
-      : !hasWebhookEndpoint
+      : !hasWebhookEndpoint || !hasBacktest
         ? "pending"
         : listening
           ? "active"
@@ -358,6 +358,11 @@ export default function StudioSubmitChecklist({
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                 Available after step 1. Paste the webhook URL into TradingView
                 or your bot, then send a test signal here.
+              </p>
+            ) : !hasBacktest ? (
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Available after step 2. Publish a successful backtest first, then
+                send your test signal.
               </p>
             ) : webhookLastDeliveryAt ? (
               <div className="mt-1 flex flex-wrap items-center gap-2">
