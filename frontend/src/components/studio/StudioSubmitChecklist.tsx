@@ -51,6 +51,10 @@ const STEP_TITLES: Record<StepKey, string> = {
   submit: "4. Submit for admin review",
 };
 
+function isSilencePauseReason(reason: string | null): boolean {
+  return reason?.startsWith("Paused automatically:") ?? false;
+}
+
 function formatRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   if (!Number.isFinite(diff) || diff < 0) return "just now";
@@ -206,6 +210,7 @@ export default function StudioSubmitChecklist({
   }, [listening, remainingMs]);
 
   const isRejected = status === "rejected";
+  const isPausedForSilence = status === "draft" && isSilencePauseReason(rejectionReason);
   const hasWebhookEndpoint = webhookConfigured || webhookEnabled;
   const stepStates: Record<StepKey, StepState> = {
     webhook: hasWebhookEndpoint ? "done" : "active",
@@ -225,6 +230,26 @@ export default function StudioSubmitChecklist({
 
   return (
     <div className="rounded-lg border border-border bg-secondary/30 p-4 text-sm">
+      {isPausedForSilence && (
+        <div className="mb-4 rounded-md border border-warning/40 bg-warning/10 p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle
+              className="h-4 w-4 mt-0.5 shrink-0 text-warning"
+              aria-hidden
+            />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-warning leading-snug">
+                Paused for silence
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                {rejectionReason} Send a fresh test signal and submit for admin
+                review to go live again.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isRejected && (
         <div className="mb-4 rounded-md border border-loss/40 bg-loss/10 p-3">
           <div className="flex items-start gap-2">

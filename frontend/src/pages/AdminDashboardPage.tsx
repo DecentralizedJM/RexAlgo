@@ -98,10 +98,22 @@ function strategyStatusBadgeVariant(
 type StrategyStateInput = {
   status: StrategyReviewStatus;
   isActive: boolean;
+  rejectionReason?: string | null;
 };
 
+function isSilencePauseReason(reason: string | null | undefined): boolean {
+  return reason?.startsWith("Paused automatically:") ?? false;
+}
+
 function strategyListingState(row: StrategyStateInput): {
-  label: "Active" | "Paused" | "Pending review" | "Check later" | "Rejected" | "Setup";
+  label:
+    | "Active"
+    | "Paused"
+    | "Pending review"
+    | "Check later"
+    | "Rejected"
+    | "Setup"
+    | "Paused for silence";
   variant: "default" | "destructive" | "secondary" | "outline";
   marketplaceVisible: boolean;
 } {
@@ -109,6 +121,9 @@ function strategyListingState(row: StrategyStateInput): {
     return { label: "Rejected", variant: "destructive", marketplaceVisible: false };
   }
   if (row.status === "draft") {
+    if (isSilencePauseReason(row.rejectionReason)) {
+      return { label: "Paused for silence", variant: "outline", marketplaceVisible: false };
+    }
     return { label: "Setup", variant: "outline", marketplaceVisible: false };
   }
   if (row.status === "pending") {
@@ -949,7 +964,9 @@ function StrategiesTab() {
                               Review: approved
                             </div>
                           )}
-                          {s.status === "rejected" && s.rejectionReason?.trim() && (
+                        {(s.status === "rejected" ||
+                          isSilencePauseReason(s.rejectionReason)) &&
+                          s.rejectionReason?.trim() && (
                             <div
                               className="text-[11px] text-muted-foreground max-w-[220px] truncate"
                               title={s.rejectionReason}

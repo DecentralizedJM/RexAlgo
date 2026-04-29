@@ -106,6 +106,10 @@ export function ensureDbReady(): Promise<void> {
       await maybeAutoBackfillUserFingerprints();
       const { ensureNotificationsWorker } = await import("./notifications");
       ensureNotificationsWorker();
+      const { ensureStrategySilenceDetectorWorker } = await import(
+        "./strategySilenceDetector"
+      );
+      ensureStrategySilenceDetectorWorker();
     })().catch((err) => {
       bootPromise = null;
       throw err;
