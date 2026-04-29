@@ -14,6 +14,7 @@ import {
   serializeSymbols,
   validateMudrexSymbols,
 } from "@/lib/strategyAssets";
+import { validateStrategyDescription } from "@/lib/strategyValidation";
 
 /**
  * Marketplace (algo) studio per-strategy route.
@@ -83,14 +84,14 @@ export async function PATCH(
     patch.name = name;
   }
   if (typeof body.description === "string") {
-    const description = body.description.trim();
-    if (!description) {
+    const descriptionCheck = validateStrategyDescription(body.description);
+    if (!descriptionCheck.ok) {
       return NextResponse.json(
-        { error: "description cannot be empty" },
+        { error: descriptionCheck.message, code: "DESCRIPTION_TOO_SHORT" },
         { status: 400 }
       );
     }
-    patch.description = description;
+    patch.description = descriptionCheck.value;
   }
   if ("symbol" in body || "symbols" in body || "assetMode" in body) {
     if (!session.apiSecret) {

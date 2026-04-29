@@ -59,6 +59,17 @@ export async function POST(
     );
   }
 
+  if (!strategy.backtestUploadKind || !strategy.backtestUploadPayload) {
+    return NextResponse.json(
+      {
+        error:
+          "Publish a valid backtest before submitting for admin review. Admins need to review real backtest evidence before approving a listing.",
+        code: "BACKTEST_REQUIRED",
+      },
+      { status: 409 }
+    );
+  }
+
   const [wh] = await db
     .select()
     .from(copyWebhookConfig)

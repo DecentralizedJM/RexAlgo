@@ -74,6 +74,10 @@ export const UPLOAD_MAX_BYTES = 1_000_000; // 1 MB
 export const UPLOAD_MAX_TRADES = 5_000;
 /** Equity sampling cap for the same reason. */
 export const UPLOAD_MAX_EQUITY_POINTS = 10_000;
+/** Backtests need enough history to be useful for admin review. */
+export const UPLOAD_MIN_RANGE_DAYS = 90;
+/** Require a real closed-trade list, not just a summary count. */
+export const UPLOAD_MIN_CLOSED_TRADES = 20;
 
 export type UploadedBacktestValidation =
   | { ok: true; value: UploadedBacktest }
@@ -119,12 +123,24 @@ export function validateUploadedBacktest(
     return fail("UPLOAD_NOT_OBJECT", "Backtest payload must be a JSON object");
   }
   const obj = raw as Record<string, unknown>;
+  if (obj.exampleOnly === true || obj.example_only === true) {
+    return fail(
+      "UPLOAD_EXAMPLE_ONLY",
+      "Example backtest payloads are for formatting only. Replace it with your real backtest data before publishing."
+    );
+  }
 
   const summaryRaw = obj.summary;
   if (!summaryRaw || typeof summaryRaw !== "object" || Array.isArray(summaryRaw)) {
     return fail("UPLOAD_SUMMARY_MISSING", "`summary` is required");
   }
   const s = summaryRaw as Record<string, unknown>;
+  if (s.exampleOnly === true || s.example_only === true) {
+    return fail(
+      "UPLOAD_EXAMPLE_ONLY",
+      "Example backtest payloads are for formatting only. Replace it with your real backtest data before publishing."
+    );
+  }
 
   const totalReturnPct =
     pickNumber(s, ["totalReturnPct", "total_return_pct", "totalReturn"]);
@@ -173,6 +189,21 @@ export function validateUploadedBacktest(
     "summary.rangeEnd"
   );
   if (typeof endIso !== "string") return fail("UPLOAD_RANGE_END", endIso.error);
+  const rangeStartMs = new Date(startIso).getTime();
+  const rangeEndMs = new Date(endIso).getTime();
+  if (rangeEndMs <= rangeStartMs) {
+    return fail(
+      "UPLOAD_RANGE_INVALID",
+      "summary.rangeEnd must be after summary.rangeStart"
+    );
+  }
+  const rangeDays = (rangeEndMs - rangeStartMs) / 86_400_000;
+  if (rangeDays < UPLOAD_MIN_RANGE_DAYS) {
+    return fail(
+      "UPLOAD_RANGE_TOO_SHORT",
+      `Backtest range must cover at least ${UPLOAD_MIN_RANGE_DAYS} days`
+    );
+  }
 
   const summary: UploadedBacktestSummary = {
     totalReturnPct,
@@ -191,10 +222,22 @@ export function validateUploadedBacktest(
   const finalCapital = pickNumber(s, ["finalCapital", "final_capital"]);
   if (finalCapital !== null) summary.finalCapital = finalCapital;
 
-  // Equity curve — optional but strongly recommended; we accept either an
+  // Equity curve — required for publishable backtests; we accept either an
   // already-shaped array or a list of `[t, v]` tuples.
   const equity: UploadedBacktestEquityPoint[] = [];
-  if (Array.isArray(obj.equity)) {
+  if (!Array.isArray(obj.equity)) {
+    return fail(
+      "UPLOAD_EQUITY_REQUIRED",
+      "equity must include at least two points across the backtest range"
+    );
+  }
+  if (obj.equity.length < 2) {
+    return fail(
+      "UPLOAD_EQUITY_TOO_SMALL",
+      "equity must include at least two points across the backtest range"
+    );
+  }
+  {
     if (obj.equity.length > UPLOAD_MAX_EQUITY_POINTS) {
       return fail(
         "UPLOAD_EQUITY_TOO_LARGE",
@@ -231,9 +274,21 @@ export function validateUploadedBacktest(
     }
   }
 
-  // Trades — optional; capped to keep panel render bounded.
+  // Trades — required; capped to keep panel render bounded.
   const trades: UploadedBacktestTrade[] = [];
-  if (Array.isArray(obj.trades)) {
+  if (!Array.isArray(obj.trades)) {
+    return fail(
+      "UPLOAD_TRADES_REQUIRED",
+      "trades must include the closed trade list, not only summary.trades"
+    );
+  }
+  if (obj.trades.length < UPLOAD_MIN_CLOSED_TRADES) {
+    return fail(
+      "UPLOAD_TRADES_TOO_FEW",
+      `Backtest must include at least ${UPLOAD_MIN_CLOSED_TRADES} closed trades`
+    );
+  }
+  {
     if (obj.trades.length > UPLOAD_MAX_TRADES) {
       return fail(
         "UPLOAD_TRADES_TOO_LARGE",
@@ -318,6 +373,41 @@ export function validateUploadedBacktest(
         pnl,
         pnlPct,
       });
+    }
+  }
+
+  if (summary.trades < UPLOAD_MIN_CLOSED_TRADES) {
+    return fail(
+      "UPLOAD_SUMMARY_TRADES_TOO_FEW",
+      `summary.trades must be at least ${UPLOAD_MIN_CLOSED_TRADES}`
+    );
+  }
+  const tradeCountTolerance = Math.max(1, Math.ceil(trades.length * 0.02));
+  if (Math.abs(summary.trades - trades.length) > tradeCountTolerance) {
+    return fail(
+      "UPLOAD_TRADE_COUNT_MISMATCH",
+      "summary.trades must match the trades array length within a small tolerance"
+    );
+  }
+  const tradeTimes = trades.flatMap((t) => [
+    new Date(t.entryTime).getTime(),
+    new Date(t.exitTime).getTime(),
+  ]);
+  const firstTradeMs = Math.min(...tradeTimes);
+  const lastTradeMs = Math.max(...tradeTimes);
+  if (firstTradeMs < rangeStartMs || lastTradeMs > rangeEndMs) {
+    return fail(
+      "UPLOAD_TRADES_OUTSIDE_RANGE",
+      "All trade entry/exit times must fit inside summary.rangeStart and summary.rangeEnd"
+    );
+  }
+  for (let i = 0; i < equity.length; i++) {
+    const tMs = new Date(equity[i]!.t).getTime();
+    if (tMs < rangeStartMs || tMs > rangeEndMs) {
+      return fail(
+        "UPLOAD_EQUITY_OUTSIDE_RANGE",
+        `equity[${i}].t must fit inside summary.rangeStart and summary.rangeEnd`
+      );
     }
   }
 

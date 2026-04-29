@@ -132,8 +132,9 @@ export default function StrategyBacktestPanel({
         <CardDescription>
           Creator-published backtest for{" "}
           <span className="font-medium text-foreground">{strategyName}</span>{" "}
-          ({sourceLabel}). Past performance is not a guarantee of live results
-          on Mudrex.
+          ({sourceLabel}). RexAlgo validates consistency and minimum evidence,
+          but the upload is still creator-attested. Past performance is not a
+          guarantee of live results on Mudrex.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

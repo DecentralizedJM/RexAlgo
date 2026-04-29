@@ -14,6 +14,7 @@ import {
   countStrategySlots,
   getStrategySlotLimit,
 } from "@/lib/quotas";
+import { validateStrategyDescription } from "@/lib/strategyValidation";
 
 export async function GET() {
   const session = await getSession();
@@ -95,6 +96,13 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
+    const descriptionCheck = validateStrategyDescription(body.description);
+    if (!descriptionCheck.ok) {
+      return NextResponse.json(
+        { error: descriptionCheck.message, code: "DESCRIPTION_TOO_SHORT" },
+        { status: 400 }
+      );
+    }
 
     const id = uuidv4();
     const newStrategy = {
@@ -102,7 +110,7 @@ export async function POST(req: NextRequest) {
       creatorId: session.user.id,
       creatorName: session.user.displayName,
       name: body.name,
-      description: body.description,
+      description: descriptionCheck.value,
       type: "copy_trading" as const,
       symbol: body.symbol,
       side: body.side as "LONG" | "SHORT" | "BOTH",
@@ -120,9 +128,9 @@ export async function POST(req: NextRequest) {
       subscriberCount: 0,
     };
 
-    if (!newStrategy.name || !newStrategy.description || !newStrategy.symbol) {
+    if (!newStrategy.name || !newStrategy.symbol) {
       return NextResponse.json(
-        { error: "name, description, and symbol are required" },
+        { error: "name and symbol are required" },
         { status: 400 }
       );
     }

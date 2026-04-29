@@ -88,23 +88,40 @@ export default function StrategyDetailPage() {
     fromCopy || strategy?.type === "copy_trading" ? "/copy-trading" : "/marketplace";
   const backLabel =
     fromCopy || strategy?.type === "copy_trading" ? "Copy trading" : "Marketplace";
+  const backtestSummary = strategy?.backtestUpload?.payload.summary;
 
   const metrics = strategy
     ? [
         {
-          label: "Total PnL",
-          value: `${strategy.totalPnl >= 0 ? "+" : ""}${strategy.totalPnl}%`,
+          label: "Backtest return",
+          value: backtestSummary
+            ? `${backtestSummary.totalReturnPct >= 0 ? "+" : ""}${backtestSummary.totalReturnPct.toFixed(2)}%`
+            : "No upload",
           icon: TrendingUp,
-          color: strategy.totalPnl >= 0 ? "text-profit" : "text-loss",
+          color: backtestSummary
+            ? backtestSummary.totalReturnPct >= 0
+              ? "text-profit"
+              : "text-loss"
+            : "text-muted-foreground",
         },
-        { label: "Win rate", value: `${strategy.winRate}%`, icon: Target, color: "text-foreground" },
+        {
+          label: "Backtest win rate",
+          value: backtestSummary ? `${backtestSummary.winRatePct.toFixed(1)}%` : "No upload",
+          icon: Target,
+          color: "text-foreground",
+        },
         {
           label: "Max lev.",
           value: `${strategy.leverage}x`,
           icon: Shield,
           color: "text-foreground",
         },
-        { label: "Trades", value: String(strategy.totalTrades), icon: Activity, color: "text-foreground" },
+        {
+          label: "Backtest trades",
+          value: backtestSummary ? String(backtestSummary.trades) : "No upload",
+          icon: Activity,
+          color: "text-foreground",
+        },
         {
           label: "Subscribers",
           value: strategy.subscriberCount.toLocaleString(),
@@ -286,16 +303,18 @@ export default function StrategyDetailPage() {
         </div>
 
         <div className="glass rounded-xl p-6 mb-8 animate-fade-up-delay-2">
-          <h2 className="font-semibold mb-4">Performance</h2>
+          <h2 className="font-semibold mb-4">Backtest vs live activity</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Stats here are aggregates stored in{" "}
-            <RexAlgoWordmark className="inline text-sm font-semibold" />, not a verified exchange equity
-            curve. Your own
-            closed-trade chart is on the{" "}
+            The return, win rate, and trade count above come from the
+            creator-published backtest. Live activity starts from real webhook
+            signals, subscribers, mirror attempts, and trade logs after admin
+            approval, so a new strategy can correctly show zero live trades
+            until signals and subscriber execution happen. Your own closed-trade
+            chart is on the{" "}
             <Link to="/dashboard" className="text-primary hover:underline">
               dashboard
             </Link>
-            .
+            {" "}in <RexAlgoWordmark className="inline text-sm font-semibold" />.
           </p>
         </div>
 

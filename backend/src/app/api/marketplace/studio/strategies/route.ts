@@ -25,6 +25,7 @@ import {
   countStrategySlots,
   getStrategySlotLimit,
 } from "@/lib/quotas";
+import { validateStrategyDescription } from "@/lib/strategyValidation";
 
 export async function GET() {
   const session = await getSession();
@@ -115,6 +116,13 @@ export async function POST(req: NextRequest) {
         { status: 428 }
       );
     }
+    const descriptionCheck = validateStrategyDescription(body.description);
+    if (!descriptionCheck.ok) {
+      return NextResponse.json(
+        { error: descriptionCheck.message, code: "DESCRIPTION_TOO_SHORT" },
+        { status: 400 }
+      );
+    }
     const assetSelection = parseAssetSelection(body);
     if (!assetSelection.ok) {
       return NextResponse.json({ error: assetSelection.error }, { status: 400 });
@@ -136,7 +144,7 @@ export async function POST(req: NextRequest) {
       creatorId: session.user.id,
       creatorName: session.user.displayName,
       name: body.name,
-      description: body.description,
+      description: descriptionCheck.value,
       type: "algo" as const,
       symbol: assetSelection.primarySymbol,
       assetMode: assetSelection.assetMode,
@@ -156,9 +164,9 @@ export async function POST(req: NextRequest) {
       subscriberCount: 0,
     };
 
-    if (!newStrategy.name || !newStrategy.description || !newStrategy.symbol) {
+    if (!newStrategy.name || !newStrategy.symbol) {
       return NextResponse.json(
-        { error: "name, description, and symbol are required" },
+        { error: "name and symbol are required" },
         { status: 400 }
       );
     }

@@ -31,7 +31,9 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
+  ArrowDownCircle,
   Check,
+  FileCheck2,
   Loader2,
   Radio,
   Send,
@@ -39,13 +41,14 @@ import {
 import { cn } from "@/lib/utils";
 import type { StrategyReviewStatus } from "@/lib/api";
 
-type StepKey = "webhook" | "signal" | "submit";
+type StepKey = "webhook" | "backtest" | "signal" | "submit";
 type StepState = "pending" | "active" | "done" | "blocked";
 
 const STEP_TITLES: Record<StepKey, string> = {
   webhook: "1. Create the signal endpoint",
-  signal: "2. Send a test signal",
-  submit: "3. Submit for admin review",
+  backtest: "2. Publish your backtest",
+  signal: "3. Send a test signal",
+  submit: "4. Submit for admin review",
 };
 
 function formatRelative(iso: string): string {
@@ -102,6 +105,7 @@ export interface StudioSubmitChecklistProps {
   webhookConfigured: boolean;
   webhookEnabled: boolean;
   webhookLastDeliveryAt: string | null;
+  hasBacktest: boolean;
   rejectionReason: string | null;
   /** Submit-review mutation pending state. */
   submitting: boolean;
@@ -117,6 +121,9 @@ export interface StudioSubmitChecklistProps {
    * (see `liveDataQueryOptions` + the parent's `useQuery` overrides).
    */
   onSignalListenStart?: () => void;
+  onGoToWebhook?: () => void;
+  onGoToBacktest?: () => void;
+  onGoToSignalTest?: () => void;
 }
 
 export default function StudioSubmitChecklist({
@@ -124,12 +131,16 @@ export default function StudioSubmitChecklist({
   webhookConfigured,
   webhookEnabled,
   webhookLastDeliveryAt,
+  hasBacktest,
   rejectionReason,
   submitting,
   onSubmit,
   onReapply,
   reapplying = false,
   onSignalListenStart,
+  onGoToWebhook,
+  onGoToBacktest,
+  onGoToSignalTest,
 }: StudioSubmitChecklistProps) {
   const [listening, setListening] = useState(false);
   const [recentlyArrived, setRecentlyArrived] = useState(false);
@@ -168,6 +179,7 @@ export default function StudioSubmitChecklist({
   const isRejected = status === "rejected";
   const stepStates: Record<StepKey, StepState> = {
     webhook: webhookEnabled ? "done" : "active",
+    backtest: hasBacktest ? "done" : webhookEnabled ? "active" : "pending",
     signal: !webhookEnabled
       ? "pending"
       : webhookLastDeliveryAt
@@ -176,7 +188,7 @@ export default function StudioSubmitChecklist({
           ? "active"
           : "active",
     submit:
-      webhookEnabled && webhookLastDeliveryAt
+      webhookEnabled && hasBacktest && webhookLastDeliveryAt
         ? "active"
         : "pending",
   };
@@ -226,7 +238,7 @@ export default function StudioSubmitChecklist({
         <p className="font-semibold text-foreground">
           {isRejected
             ? "After you reapply, finish these steps:"
-            : "Three steps to go live"}
+            : "Four steps to go live"}
         </p>
         {!isRejected && (
           <p className="text-xs text-muted-foreground">
@@ -258,10 +270,58 @@ export default function StudioSubmitChecklist({
                   : "Create a private RexAlgo signal endpoint. This is the URL where TradingView or your bot will POST strategy signals; RexAlgo will mirror them to subscribers after admin approval."
               }
             </p>
+            {onGoToWebhook && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="mt-2 h-7 px-2 text-xs"
+                onClick={onGoToWebhook}
+              >
+                <ArrowDownCircle className="h-3.5 w-3.5 mr-1" />
+                Go to Signal endpoint
+              </Button>
+            )}
           </div>
         </li>
 
-        {/* Step 2 — send test signal */}
+        {/* Step 2 — publish backtest */}
+        <li className="flex items-start gap-3">
+          <StepIndicator state={stepStates.backtest} />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-foreground">{STEP_TITLES.backtest}</p>
+            {hasBacktest ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-profit/15 px-2 py-0.5 text-xs font-medium text-profit">
+                  <FileCheck2 className="h-3 w-3" />
+                  Backtest published
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Admins will review this evidence before approval.
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Upload a real JSON backtest or TradingView Strategy Tester export.
+                Sample payloads and weak data cannot be submitted.
+              </p>
+            )}
+            {onGoToBacktest && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="mt-2 h-7 px-2 text-xs"
+                onClick={onGoToBacktest}
+              >
+                <ArrowDownCircle className="h-3.5 w-3.5 mr-1" />
+                Go to Publish backtest
+              </Button>
+            )}
+          </div>
+        </li>
+
+        {/* Step 3 — send test signal */}
         <li className="flex items-start gap-3">
           <StepIndicator state={stepStates.signal} />
           <div className="flex-1 min-w-0">
@@ -312,6 +372,7 @@ export default function StudioSubmitChecklist({
                   variant="outline"
                   onClick={() => {
                     setListening(true);
+                    onGoToSignalTest?.();
                     onSignalListenStart?.();
                   }}
                 >
@@ -323,10 +384,22 @@ export default function StudioSubmitChecklist({
                 </span>
               </div>
             )}
+            {onGoToSignalTest && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="mt-2 h-7 px-2 text-xs"
+                onClick={onGoToSignalTest}
+              >
+                <ArrowDownCircle className="h-3.5 w-3.5 mr-1" />
+                Go to Signal test
+              </Button>
+            )}
           </div>
         </li>
 
-        {/* Step 3 — submit */}
+        {/* Step 4 — submit */}
         <li className="flex items-start gap-3">
           <StepIndicator state={stepStates.submit} />
           <div className="flex-1 min-w-0">
@@ -334,7 +407,7 @@ export default function StudioSubmitChecklist({
             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
               {stepStates.submit === "active"
                 ? "Everything looks good. An admin will review your listing — you\u2019ll see status updates here."
-                : "Available after a verified test signal."
+                : "Available after the endpoint, published backtest, and verified test signal are complete."
               }
             </p>
             <div className="mt-2">
@@ -345,6 +418,7 @@ export default function StudioSubmitChecklist({
                   submitting ||
                   isRejected ||
                   !webhookEnabled ||
+                  !hasBacktest ||
                   !webhookLastDeliveryAt
                 }
                 onClick={onSubmit}

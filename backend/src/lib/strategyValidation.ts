@@ -1,3 +1,24 @@
+export const MIN_STRATEGY_DESCRIPTION_CHARS = 100;
+
+export function normalizeStrategyDescription(input: unknown): string {
+  return typeof input === "string" ? input.trim() : "";
+}
+
+export function validateStrategyDescription(input: unknown):
+  | { ok: true; value: string }
+  | { ok: false; message: string } {
+  const value = normalizeStrategyDescription(input);
+  if (!value) {
+    return { ok: false, message: "description is required" };
+  }
+  if (value.length < MIN_STRATEGY_DESCRIPTION_CHARS) {
+    return {
+      ok: false,
+      message: `description must be at least ${MIN_STRATEGY_DESCRIPTION_CHARS} characters`,
+    };
+  }
+  return { ok: true, value };
+}
 /**
  * Runtime validation for strategy create/edit payloads.
  *

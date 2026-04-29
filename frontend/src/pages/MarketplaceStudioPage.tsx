@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
@@ -75,6 +75,11 @@ import StudioSubmitChecklist from "@/components/studio/StudioSubmitChecklist";
 import { liveDataQueryOptions } from "@/lib/liveQueryOptions";
 import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
+import {
+  isStrategyDescriptionValid,
+  MIN_STRATEGY_DESCRIPTION_CHARS,
+  strategyDescriptionLength,
+} from "@/lib/strategyValidation";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -189,6 +194,12 @@ export default function MarketplaceStudioPage() {
     action: "enable" | "disable" | "rotate";
   } | null>(null);
   const [secretVisible, setSecretVisible] = useState(false);
+  const signalEndpointRef = useRef<HTMLDivElement | null>(null);
+  const backtestSectionRef = useRef<HTMLDivElement | null>(null);
+  const signalTestRef = useRef<HTMLDivElement | null>(null);
+  const [highlightSection, setHighlightSection] = useState<
+    "webhook" | "backtest" | "signal" | null
+  >(null);
   /**
    * Set to `Date.now()` when the creator clicks "I'm sending the test signal
    * now" inside `StudioSubmitChecklist`. We use this to switch the studio
@@ -214,6 +225,21 @@ export default function MarketplaceStudioPage() {
   const FAST_POLL_WINDOW_MS = 2 * 60_000;
   const fastPollActive = signalListeningSince !== null;
   const studioRefetchInterval = fastPollActive ? 4_000 : false;
+
+  const scrollToSection = useCallback(
+    (section: "webhook" | "backtest" | "signal") => {
+      const ref =
+        section === "webhook"
+          ? signalEndpointRef
+          : section === "backtest"
+            ? backtestSectionRef
+            : signalTestRef;
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setHighlightSection(section);
+      window.setTimeout(() => setHighlightSection(null), 2_000);
+    },
+    []
+  );
 
   const studioQ = useQuery({
     queryKey: ["marketplace-studio", "strategies"],
@@ -705,12 +731,16 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         webhookConfigured={selected.webhookConfigured}
                         webhookEnabled={selected.webhookEnabled}
                         webhookLastDeliveryAt={selected.webhookLastDeliveryAt}
+                        hasBacktest={Boolean(selected.backtestUpload)}
                         rejectionReason={selected.rejectionReason}
                         submitting={submitReviewMut.isPending}
                         onSubmit={() => submitReviewMut.mutate(selected.id)}
                         onReapply={() => resubmitMut.mutate(selected.id)}
                         reapplying={resubmitMut.isPending}
                         onSignalListenStart={() => setSignalListeningSince(Date.now())}
+                        onGoToWebhook={() => scrollToSection("webhook")}
+                        onGoToBacktest={() => scrollToSection("backtest")}
+                        onGoToSignalTest={() => scrollToSection("signal")}
                       />
                     )}
                     {selected.status === "pending" && (
@@ -775,9 +805,19 @@ with urllib.request.urlopen(req, timeout=30) as res:
                       )}
                     </div>
 
-                    <div className="border-t border-border pt-4 space-y-3">
+                    <div
+                      ref={signalEndpointRef}
+                      className={cn(
+                        "scroll-mt-24 rounded-xl border border-border bg-secondary/20 p-4 transition-shadow",
+                        highlightSection === "webhook" &&
+                          "ring-2 ring-primary/60 shadow-lg shadow-primary/10"
+                      )}
+                    >
                       <div>
-                        <h3 className="text-sm font-semibold text-foreground">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Step action happens here
+                        </p>
+                        <h3 className="text-lg font-semibold text-foreground">
                           Signal endpoint
                         </h3>
                         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
@@ -1028,24 +1068,40 @@ with urllib.request.urlopen(req, timeout=30) as res:
                   </CardContent>
                 </Card>
 
-                <StudioBacktestUploader
-                  strategyId={selected.id}
-                  strategyType="algo"
-                  current={selected.backtestUpload ?? null}
-                  onUploaded={() => {
-                    void queryClient.invalidateQueries({
-                      queryKey: ["marketplace-studio", "strategies"],
-                    });
-                    void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
-                  }}
-                />
+                <div
+                  ref={backtestSectionRef}
+                  className={cn(
+                    "scroll-mt-24 rounded-xl transition-shadow",
+                    highlightSection === "backtest" &&
+                      "ring-2 ring-primary/60 shadow-lg shadow-primary/10"
+                  )}
+                >
+                  <StudioBacktestUploader
+                    strategyId={selected.id}
+                    strategyType="algo"
+                    current={selected.backtestUpload ?? null}
+                    onUploaded={() => {
+                      void queryClient.invalidateQueries({
+                        queryKey: ["marketplace-studio", "strategies"],
+                      });
+                      void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
+                    }}
+                  />
+                </div>
 
                 <StrategyBacktestPanel
                   strategyName={selected.name}
                   upload={selected.backtestUpload ?? null}
                 />
 
-                <Card>
+                <Card
+                  ref={signalTestRef}
+                  className={cn(
+                    "scroll-mt-24 transition-shadow",
+                    highlightSection === "signal" &&
+                      "ring-2 ring-primary/60 shadow-lg shadow-primary/10"
+                  )}
+                >
                   <CardHeader>
                     <CardTitle className="text-base">Signal format (JSON)</CardTitle>
                     <CardDescription>
@@ -1127,7 +1183,10 @@ with urllib.request.urlopen(req, timeout=30) as res:
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">Recent signals</CardTitle>
-                    <CardDescription>Last 50 webhook deliveries.</CardDescription>
+                    <CardDescription>
+                      Last 50 webhook deliveries. These are live signal events,
+                      separate from the uploaded backtest stats above.
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     {signalsQ.isLoading ? (
@@ -1276,8 +1335,8 @@ with urllib.request.urlopen(req, timeout=30) as res:
                       <AlertDialogTitle>Confirm webhook action</AlertDialogTitle>
                       <AlertDialogDescription>
                         This action changes access to your strategy webhook URL. The full URL contains the secret;
-                        if it leaks, anyone can send signals for this strategy. You may be asked to sign in again
-                        before the server accepts this action.
+                        if it leaks, anyone can send signals for this strategy. Confirm here to continue without
+                        leaving the studio.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
@@ -1572,13 +1631,21 @@ function EditAlgoForm({
     initial.riskLevel
   );
   const [timeframe, setTimeframe] = useState(initial.timeframe ?? "1h");
+  const descriptionChars = strategyDescriptionLength(description);
+  const descriptionValid = isStrategyDescriptionValid(description);
 
   return (
     <form
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!name.trim() || !description.trim() || symbols.length === 0) return;
+        if (!name.trim() || symbols.length === 0) return;
+        if (!descriptionValid) {
+          toast.error(
+            `Description must be at least ${MIN_STRATEGY_DESCRIPTION_CHARS} characters.`
+          );
+          return;
+        }
         onSubmit({
           name: name.trim(),
           description: description.trim(),
@@ -1601,6 +1668,14 @@ function EditAlgoForm({
           className="mt-1"
           required
         />
+        <div className="mt-1 flex justify-between gap-2 text-xs">
+          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
+            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
+          </span>
+          {!descriptionValid && (
+            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
+          )}
+        </div>
       </div>
       <div>
         <Label htmlFor="edit-ms-desc">Description</Label>
@@ -1665,7 +1740,7 @@ function EditAlgoForm({
           className="mt-1"
         />
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
+      <Button type="submit" className="w-full" disabled={loading || !descriptionValid}>
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save changes"}
       </Button>
     </form>
@@ -1697,13 +1772,21 @@ function AlgoCreateForm({
   const [leverage, setLeverage] = useState("5");
   const [riskLevel, setRiskLevel] = useState<"low" | "medium" | "high">("medium");
   const [timeframe, setTimeframe] = useState("1h");
+  const descriptionChars = strategyDescriptionLength(description);
+  const descriptionValid = isStrategyDescriptionValid(description);
 
   return (
     <form
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!name.trim() || !description.trim() || symbols.length === 0) return;
+        if (!name.trim() || symbols.length === 0) return;
+        if (!descriptionValid) {
+          toast.error(
+            `Description must be at least ${MIN_STRATEGY_DESCRIPTION_CHARS} characters.`
+          );
+          return;
+        }
         if (assetMode === "multi" && symbols.length < 2) {
           toast.error("Choose at least two symbols for a multi-asset strategy.");
           return;
@@ -1730,6 +1813,14 @@ function AlgoCreateForm({
           className="mt-1"
           required
         />
+        <div className="mt-1 flex justify-between gap-2 text-xs">
+          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
+            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
+          </span>
+          {!descriptionValid && (
+            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
+          )}
+        </div>
       </div>
       <div>
         <Label htmlFor="ms-desc">Description</Label>
@@ -1791,7 +1882,7 @@ function AlgoCreateForm({
           className="mt-1"
         />
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
+      <Button type="submit" className="w-full" disabled={loading || !descriptionValid}>
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}
       </Button>
     </form>

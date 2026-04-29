@@ -11,10 +11,9 @@
  *        trades:  [{ entryTime, exitTime, side, entry, exit, qty,
  *                    pnl, pnlPct }, ...] }
  *
- *   2. "TradingView export" — creator uploads either the "List of Trades"
- *      CSV or the "Performance Summary" JSON that TradingView's Strategy
- *      Tester emits. Server-side `parseTvExport.ts` translates these to
- *      the canonical shape before persisting.
+ *   2. "TradingView export" — creator uploads the "List of Trades" CSV that
+ *      TradingView's Strategy Tester emits. Server-side `parseTvExport.ts`
+ *      translates it to the canonical shape before persisting.
  *
  * The uploader is deliberately a single component with a tab-style switch
  * — keeps the studio surface small while making both paths discoverable.
@@ -58,6 +57,7 @@ export interface StudioBacktestUploaderProps {
 
 const SAMPLE_JSON = JSON.stringify(
   {
+    exampleOnly: true,
     summary: {
       totalReturnPct: 38.4,
       winRatePct: 54.1,
@@ -194,12 +194,12 @@ export default function StudioBacktestUploader({
   return (
     <Card className="border-border/80">
       <CardHeader>
-        <CardTitle className="text-lg">Publish your backtest</CardTitle>
+        <CardTitle className="text-xl">Publish your backtest</CardTitle>
         <CardDescription>
-          Subscribers see whatever you upload here. We don&rsquo;t simulate
-          anything server-side &mdash; bring your own results from
-          TradingView, your own engine, or any tool that produces a trade
-          list.
+          Step action happens here. Upload real, self-attested results from
+          TradingView, your own engine, or any tool that produces a closed
+          trade list. RexAlgo validates consistency, date span, trade count,
+          and shape, but cannot prove external truth without a trusted import.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -231,7 +231,8 @@ export default function StudioBacktestUploader({
               <code>summary.winRatePct</code>,{" "}
               <code>summary.maxDrawdownPct</code>, <code>summary.trades</code>,{" "}
               <code>summary.rangeStart</code>, <code>summary.rangeEnd</code>.
-              Equity points and trades are optional but recommended.
+              Also required: at least 90 days, 20 closed trades, a matching
+              <code> trades</code> array, and at least two equity points.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -253,9 +254,13 @@ export default function StudioBacktestUploader({
                 variant="ghost"
                 onClick={() => setPasteJson(SAMPLE_JSON)}
               >
-                Insert sample
+                View example format
               </Button>
             </div>
+            <p className="text-xs text-warning">
+              The example includes <code>exampleOnly: true</code> and cannot be
+              published unchanged.
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -269,9 +274,8 @@ export default function StudioBacktestUploader({
                   Strategy Tester panel.
                 </li>
                 <li>
-                  Click the export icon and choose either{" "}
-                  <em>List of Trades</em> (CSV) or{" "}
-                  <em>Performance Summary</em> (JSON).
+                  Click the export icon and choose <em>List of Trades</em>{" "}
+                  (CSV). Summary-only exports cannot be used for admin review.
                 </li>
                 <li>Drop the file below or paste its contents.</li>
               </ol>
