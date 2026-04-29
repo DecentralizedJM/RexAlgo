@@ -156,7 +156,11 @@ export async function PATCH(
     );
   }
 
-  if (existing.status === "approved") {
+  const requeueForReview =
+    existing.status === "approved" ||
+    existing.status === "pending" ||
+    existing.status === "on_hold";
+  if (requeueForReview) {
     patch.status = "draft";
     patch.rejectionReason = null;
     patch.reviewedBy = null;
@@ -164,7 +168,7 @@ export async function PATCH(
   }
 
   await db.update(strategies).set(patch).where(eq(strategies.id, id));
-  if (existing.status === "approved") {
+  if (requeueForReview) {
     await db
       .update(copyWebhookConfig)
       .set({ enabled: false })
@@ -175,7 +179,7 @@ export async function PATCH(
   const [updated] = await db.select().from(strategies).where(eq(strategies.id, id));
   return NextResponse.json({
     strategy: updated,
-    ...(existing.status === "approved"
+    ...(requeueForReview
       ? {
           notice:
             "Strategy returned to setup (draft): the webhook was disabled. Send a test signal again, then submit for admin review.",

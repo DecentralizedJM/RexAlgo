@@ -171,6 +171,7 @@ export default function CopyTradingStudioPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [reviewWarningPatch, setReviewWarningPatch] = useState<Parameters<typeof updateCopyStudioStrategy>[1] | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const signalEndpointRef = useRef<HTMLDivElement | null>(null);
   const backtestSectionRef = useRef<HTMLDivElement | null>(null);
@@ -330,12 +331,17 @@ export default function CopyTradingStudioPage() {
       id: string;
       patch: Parameters<typeof updateCopyStudioStrategy>[1];
     }) => updateCopyStudioStrategy(id, patch),
-    onSuccess: () => {
+    onSuccess: (data) => {
       void queryClient.invalidateQueries({
         queryKey: ["copy-studio", "strategies"],
       });
       setEditOpen(false);
-      toast.success("Strategy updated");
+      setReviewWarningPatch(null);
+      if (data.notice) {
+        toast.warning(data.notice);
+      } else {
+        toast.success("Strategy updated");
+      }
     },
     onError: (e) => {
       toast.error(e instanceof ApiError ? e.message : "Update failed");
@@ -1083,12 +1089,53 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     <EditStrategyForm
                       initial={selected}
                       loading={updateMut.isPending}
-                      onSubmit={(patch) =>
-                        updateMut.mutate({ id: selected.id, patch })
-                      }
+                      onSubmit={(patch) => {
+                        if (
+                          selected.status === "approved" ||
+                          selected.status === "pending" ||
+                          selected.status === "on_hold"
+                        ) {
+                          setReviewWarningPatch(patch);
+                          return;
+                        }
+                        updateMut.mutate({ id: selected.id, patch });
+                      }}
                     />
                   </DialogContent>
                 </Dialog>
+
+                <AlertDialog
+                  open={Boolean(reviewWarningPatch)}
+                  onOpenChange={(open) => !open && setReviewWarningPatch(null)}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Save changes and send for admin review?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Saving these changes returns the strategy to setup (draft) and disables the webhook.
+                        Send a test signal again, then submit for admin review.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        disabled={updateMut.isPending || !reviewWarningPatch}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (reviewWarningPatch) {
+                            updateMut.mutate({ id: selected.id, patch: reviewWarningPatch });
+                          }
+                        }}
+                      >
+                        {updateMut.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Save and send to review"
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
 
                 <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                   <AlertDialogContent>

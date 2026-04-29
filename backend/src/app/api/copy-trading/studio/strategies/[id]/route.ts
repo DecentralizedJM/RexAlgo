@@ -4,18 +4,16 @@ import { getSession } from "@/lib/auth";
 import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
 import { db } from "@/lib/db";
-import { strategies } from "@/lib/schema";
+import { copyWebhookConfig, strategies } from "@/lib/schema";
 import { validateStrategyDescription } from "@/lib/strategyValidation";
 
 /**
  * Copy-trading studio per-strategy route.
  *
  * Supports edit (PATCH) and delete (DELETE) of a user's own copy-trading
- * listing. Editing is only permitted while the listing is `draft`, `pending`, or
- * `rejected` — approved listings are locked to prevent silent drift of the
- * parameters subscribers signed up for. Deleting is only permitted for
- * non-approved listings for the same reason. Moving a `rejected` listing
- * back to `pending` is handled by POST `./resubmit/route.ts`.
+ * listing. Sensitive edits to reviewed listings (`pending`, `on_hold`,
+ * `approved`) now return the row to `draft`, disable the webhook, and require
+ * the creator to send a fresh test signal + resubmit for admin review.
  */
 
 const SIDES = ["LONG", "SHORT", "BOTH"] as const;
@@ -59,19 +57,6 @@ export async function PATCH(
   const existing = await loadOwned(id, session.user.id);
   if (!existing) {
     return NextResponse.json({ error: "Strategy not found" }, { status: 404 });
-  }
-
-  // Approved listings are locked — subscribers rely on the reviewed parameters.
-  if (existing.status === "approved") {
-    return NextResponse.json(
-      {
-        error:
-          "Approved listings cannot be edited. Pause and resubmit a fresh version if you need to change parameters.",
-        code: "STRATEGY_LOCKED",
-        status: existing.status,
-      },
-      { status: 409 }
-    );
   }
 
   let body: Record<string, unknown>;
@@ -139,11 +124,36 @@ export async function PATCH(
     );
   }
 
+  const requeueForReview =
+    existing.status === "approved" ||
+    existing.status === "pending" ||
+    existing.status === "on_hold";
+  if (requeueForReview) {
+    patch.status = "draft";
+    patch.rejectionReason = null;
+    patch.reviewedBy = null;
+    patch.reviewedAt = null;
+  }
+
   await db.update(strategies).set(patch).where(eq(strategies.id, id));
+  if (requeueForReview) {
+    await db
+      .update(copyWebhookConfig)
+      .set({ enabled: false })
+      .where(eq(copyWebhookConfig.strategyId, id));
+  }
   revalidatePublicStrategiesList();
 
   const [updated] = await db.select().from(strategies).where(eq(strategies.id, id));
-  return NextResponse.json({ strategy: updated });
+  return NextResponse.json({
+    strategy: updated,
+    ...(requeueForReview
+      ? {
+          notice:
+            "Strategy returned to setup (draft): the webhook was disabled. Send a test signal again, then submit for admin review.",
+        }
+      : {}),
+  });
 }
 
 export async function DELETE(

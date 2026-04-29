@@ -1103,7 +1103,7 @@ export async function updateCopyStudioStrategy(
   strategyId: string,
   patch: CopyStudioStrategyPatch
 ) {
-  return apiFetch<{ strategy: StudioStrategyRow }>(
+  return apiFetch<{ strategy: StudioStrategyRow; notice?: string }>(
     `/api/copy-trading/studio/strategies/${strategyId}`,
     { method: "PATCH", body: JSON.stringify(patch) }
   );
@@ -1219,7 +1219,7 @@ export async function updateMarketplaceStudioStrategy(
   strategyId: string,
   patch: MarketplaceStudioStrategyPatch
 ) {
-  return apiFetch<{ strategy: StudioStrategyRow }>(
+  return apiFetch<{ strategy: StudioStrategyRow; notice?: string }>(
     `/api/marketplace/studio/strategies/${strategyId}`,
     { method: "PATCH", body: JSON.stringify(patch) }
   );

@@ -186,7 +186,7 @@ export default function MarketplaceStudioPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [approvedEditPatch, setApprovedEditPatch] = useState<Parameters<typeof updateMarketplaceStudioStrategy>[1] | null>(null);
+  const [reviewWarningPatch, setReviewWarningPatch] = useState<Parameters<typeof updateMarketplaceStudioStrategy>[1] | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [slotDialogOpen, setSlotDialogOpen] = useState(false);
   const [webhookConfirm, setWebhookConfirm] = useState<{
@@ -404,14 +404,18 @@ export default function MarketplaceStudioPage() {
       id: string;
       patch: Parameters<typeof updateMarketplaceStudioStrategy>[1];
     }) => updateMarketplaceStudioStrategy(id, patch),
-    onSuccess: () => {
+    onSuccess: (data) => {
       void queryClient.invalidateQueries({
         queryKey: ["marketplace-studio", "strategies"],
       });
       void queryClient.invalidateQueries({ queryKey: ["strategies", "algo"] });
       setEditOpen(false);
-      setApprovedEditPatch(null);
-      toast.success("Strategy updated");
+      setReviewWarningPatch(null);
+      if (data.notice) {
+        toast.warning(data.notice);
+      } else {
+        toast.success("Strategy updated");
+      }
     },
     onError: (e) => {
       toast.error(e instanceof ApiError ? e.message : "Update failed");
@@ -1253,8 +1257,12 @@ with urllib.request.urlopen(req, timeout=30) as res:
                       initial={selected}
                       loading={updateMut.isPending}
                       onSubmit={(patch) => {
-                        if (selected.status === "approved") {
-                          setApprovedEditPatch(patch);
+                        if (
+                          selected.status === "approved" ||
+                          selected.status === "pending" ||
+                          selected.status === "on_hold"
+                        ) {
+                          setReviewWarningPatch(patch);
                           return;
                         }
                         updateMut.mutate({ id: selected.id, patch });
@@ -1264,14 +1272,14 @@ with urllib.request.urlopen(req, timeout=30) as res:
                 </Dialog>
 
                 <AlertDialog
-                  open={Boolean(approvedEditPatch)}
-                  onOpenChange={(open) => !open && setApprovedEditPatch(null)}
+                  open={Boolean(reviewWarningPatch)}
+                  onOpenChange={(open) => !open && setReviewWarningPatch(null)}
                 >
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Edit approved strategy?</AlertDialogTitle>
+                      <AlertDialogTitle>Save changes and send for admin review?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Saving changes to an approved strategy returns it to setup (draft) and disables the webhook.
+                        Saving these changes returns the strategy to setup (draft) and disables the webhook.
                         Send a test signal again, then submit for admin review. It stays hidden from the marketplace
                         until re-approved.
                       </AlertDialogDescription>
@@ -1279,11 +1287,11 @@ with urllib.request.urlopen(req, timeout=30) as res:
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
-                        disabled={updateMut.isPending || !approvedEditPatch}
+                        disabled={updateMut.isPending || !reviewWarningPatch}
                         onClick={(e) => {
                           e.preventDefault();
-                          if (approvedEditPatch) {
-                            updateMut.mutate({ id: selected.id, patch: approvedEditPatch });
+                          if (reviewWarningPatch) {
+                            updateMut.mutate({ id: selected.id, patch: reviewWarningPatch });
                           }
                         }}
                       >
