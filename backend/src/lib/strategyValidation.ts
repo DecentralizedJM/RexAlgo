@@ -1,4 +1,4 @@
-export const MIN_STRATEGY_DESCRIPTION_CHARS = 100;
+export const MIN_STRATEGY_DESCRIPTION_CHARS = 50;
 
 export function normalizeStrategyDescription(input: unknown): string {
   return typeof input === "string" ? input.trim() : "";
