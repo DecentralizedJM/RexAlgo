@@ -26,6 +26,7 @@ import { sessionJwtIssuedAtAllowed } from "@/lib/sessionPolicy";
 import { requireSecretEnv } from "@/lib/requireEnv";
 import { db } from "@/lib/db";
 import { queueAdminNotification } from "@/lib/adminNotifications";
+import { formatAdminUserLine, humanizeAuthProvider } from "@/lib/adminCopy";
 import { userSessions, users } from "@/lib/schema";
 
 /**
@@ -298,10 +299,9 @@ export async function createSession(
   void queueAdminNotification({
     kind: "admin_user_login",
     text:
-      `🔐 <b>User login</b>\n` +
-      `User: ${u?.displayName ?? userId}${u?.email ? ` (${u.email})` : ""}\n` +
-      `User ID: <code>${userId}</code>\n` +
-      `Provider: <code>${opts.authProvider ?? "unknown"}</code>`,
+      `🔐 <b>New sign-in</b>\n` +
+      `User: ${formatAdminUserLine({ id: userId, displayName: u?.displayName, email: u?.email })}\n` +
+      `Provider: <b>${humanizeAuthProvider(opts.authProvider)}</b>`,
     meta: {
       userId,
       email: u?.email ?? null,

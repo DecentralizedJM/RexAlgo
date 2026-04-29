@@ -547,15 +547,40 @@ export async function fetchAdminUserDetail(id: string) {
 export type AdminAuditEntry = {
   id: string;
   actorUserId: string;
+  actor: {
+    id: string;
+    displayName: string;
+    email: string | null;
+  } | null;
   action: string;
   targetType: string | null;
   targetId: string | null;
+  target: {
+    type: string | null;
+    id: string | null;
+    label: string;
+    secondary?: string;
+    status?: string;
+  } | null;
   detail: unknown;
   createdAt: string;
 };
 
-export async function fetchAdminAudit() {
-  return apiFetch<{ entries: AdminAuditEntry[] }>("/api/admin/audit");
+export type AdminAuditResponse = {
+  entries: AdminAuditEntry[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  windowSize: number;
+};
+
+export async function fetchAdminAudit(opts?: { page?: number; pageSize?: number }) {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.pageSize) params.set("pageSize", String(opts.pageSize));
+  const qs = params.toString();
+  return apiFetch<AdminAuditResponse>(`/api/admin/audit${qs ? `?${qs}` : ""}`);
 }
 
 // ─── Strategies ─────────────────────────────────────────────────────

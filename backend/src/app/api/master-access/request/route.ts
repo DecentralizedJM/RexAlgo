@@ -6,6 +6,7 @@ import { isAdminUser } from "@/lib/adminAuth";
 import { queueAdminNotification } from "@/lib/adminNotifications";
 import { db } from "@/lib/db";
 import { masterAccessRequests } from "@/lib/schema";
+import { escapeTelegramHtml, formatAdminUserLine } from "@/lib/adminCopy";
 
 const MAX_NOTE = 1000;
 const MAX_PHONE = 40;
@@ -120,14 +121,20 @@ export async function POST(req: NextRequest) {
   void queueAdminNotification({
     kind: "admin_master_access_requested",
     text:
-      `🆕 <b>New Master Studio access request</b>\n` +
-      `User: ${session.user.displayName}${session.user.email ? ` (${session.user.email})` : ""}\n` +
+      `🆕 <b>New Master Studio access request</b>\n\n` +
+      `Requester: ${formatAdminUserLine(session.user)}\n` +
+      `Phone: <code>${escapeTelegramHtml(contactPhone)}</code>\n` +
       `Request ID: <code>${id}</code>\n` +
-      `Phone: <code>${contactPhone}</code>\n` +
-      `Note: ${note ?? "—"}`,
+      `Note: ${note ? escapeTelegramHtml(note) : "—"}\n\n` +
+      `Use the buttons below to approve or reject directly from Telegram.`,
     telegram: {
       replyMarkup: {
-        inline_keyboard: [[{ text: "Approve in Telegram", callback_data: `adm:master:approve:${id}` }]],
+        inline_keyboard: [
+          [
+            { text: "Approve", callback_data: `adm:master:approve:${id}` },
+            { text: "Reject", callback_data: `adm:master:reject:${id}` },
+          ],
+        ],
       },
     },
     meta: { requestId: id, userId: session.user.id },

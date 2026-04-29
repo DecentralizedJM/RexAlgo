@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { subscriptions, strategies } from "@/lib/schema";
+import { subscriptions, strategies, users } from "@/lib/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { validateSubscriptionMargin } from "@/lib/subscriptionMargin";
 import { queueAdminNotification } from "@/lib/adminNotifications";
+import { formatAdminStrategyLine, formatAdminUserLine } from "@/lib/adminCopy";
 
 export async function GET() {
   const session = await getSession();
@@ -151,14 +152,32 @@ export async function POST(req: NextRequest) {
       })
       .where(eq(strategies.id, strategyId));
 
+    const [subscriber] = await db
+      .select({
+        id: users.id,
+        displayName: users.displayName,
+        email: users.email,
+      })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1);
+
     void queueAdminNotification({
       kind: "admin_new_subscription",
       text:
-        `💸 <b>New strategy subscription</b>\n` +
-        `Strategy: <b>${strategy.name}</b> (<code>${strategy.type}</code>)\n` +
-        `Strategy ID: <code>${strategyId}</code>\n` +
-        `Subscriber: <code>${session.user.id}</code>\n` +
-        `Margin: <code>${margin.amountString} ${margin.marginCurrency}</code>`,
+        `💸 <b>New subscription</b>\n\n` +
+        `Subscriber: ${formatAdminUserLine({
+          id: session.user.id,
+          displayName: subscriber?.displayName,
+          email: subscriber?.email,
+        })}\n` +
+        `Strategy: ${formatAdminStrategyLine({
+          id: strategyId,
+          name: strategy.name,
+          type: strategy.type,
+          symbol: strategy.symbol,
+        })}\n` +
+        `Margin: <b>${margin.amountString} ${margin.marginCurrency}</b>`,
       meta: {
         strategyId,
         strategyType: strategy.type,

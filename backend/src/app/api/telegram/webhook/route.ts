@@ -35,6 +35,8 @@ import { users } from "@/lib/schema";
 import {
   approveMasterAccessRequest,
   approveStrategyReview,
+  rejectMasterAccessRequest,
+  rejectStrategyReview,
 } from "@/lib/adminModeration";
 import {
   attachUserToTelegramLoginToken,
@@ -231,7 +233,7 @@ async function handleAdminCallback(update: TelegramUpdate): Promise<boolean> {
     return true;
   }
   const [, domain, action, targetId] = parts;
-  if (action !== "approve") {
+  if (action !== "approve" && action !== "reject") {
     await answerTelegramCallbackQuery(qid, {
       text: "Unsupported action.",
       showAlert: true,
@@ -240,11 +242,19 @@ async function handleAdminCallback(update: TelegramUpdate): Promise<boolean> {
   }
 
   if (domain === "master") {
-    const res = await approveMasterAccessRequest({
-      requestId: targetId,
-      reviewerUserId: admin.id,
-      reviewerLabel: admin.email ?? `telegram:${fromId}`,
-    });
+    const res =
+      action === "approve"
+        ? await approveMasterAccessRequest({
+            requestId: targetId,
+            reviewerUserId: admin.id,
+            reviewerLabel: admin.email ?? `telegram:${fromId}`,
+          })
+        : await rejectMasterAccessRequest({
+            requestId: targetId,
+            reviewerUserId: admin.id,
+            reviewerLabel: admin.email ?? `telegram:${fromId}`,
+            note: "Rejected from Telegram by admin.",
+          });
     if (!res.ok) {
       await answerTelegramCallbackQuery(qid, {
         text: res.error,
@@ -253,22 +263,34 @@ async function handleAdminCallback(update: TelegramUpdate): Promise<boolean> {
       return true;
     }
     await answerTelegramCallbackQuery(qid, {
-      text: "Master access approved.",
+      text:
+        action === "approve"
+          ? "Master access approved."
+          : "Master access rejected.",
     });
     if (chatId) {
       await sendTelegramMessage(
         chatId,
-        `✅ Master access approved for request <code>${targetId}</code>.`
+        action === "approve"
+          ? `✅ Master access approved for request <code>${targetId}</code>.`
+          : `❌ Master access rejected for request <code>${targetId}</code>.`
       );
     }
     return true;
   }
 
   if (domain === "strategy") {
-    const res = await approveStrategyReview({
-      strategyId: targetId,
-      reviewerUserId: admin.id,
-    });
+    const res =
+      action === "approve"
+        ? await approveStrategyReview({
+            strategyId: targetId,
+            reviewerUserId: admin.id,
+          })
+        : await rejectStrategyReview({
+            strategyId: targetId,
+            reviewerUserId: admin.id,
+            reason: "Rejected from Telegram by admin.",
+          });
     if (!res.ok) {
       await answerTelegramCallbackQuery(qid, {
         text: res.error,
@@ -277,12 +299,14 @@ async function handleAdminCallback(update: TelegramUpdate): Promise<boolean> {
       return true;
     }
     await answerTelegramCallbackQuery(qid, {
-      text: "Strategy approved.",
+      text: action === "approve" ? "Strategy approved." : "Strategy rejected.",
     });
     if (chatId) {
       await sendTelegramMessage(
         chatId,
-        `✅ Strategy approved: <code>${targetId}</code>.`
+        action === "approve"
+          ? `✅ Strategy approved: <b>${res.name}</b>.`
+          : `❌ Strategy rejected: <b>${res.name}</b>.`
       );
     }
     return true;

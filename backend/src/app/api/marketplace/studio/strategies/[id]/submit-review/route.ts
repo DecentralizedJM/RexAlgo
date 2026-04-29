@@ -3,10 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
-import { strategies, copyWebhookConfig } from "@/lib/schema";
+import { strategies, copyWebhookConfig, users } from "@/lib/schema";
 import { queueNotification } from "@/lib/notifications";
 import { queueAdminNotification } from "@/lib/adminNotifications";
 import { revalidatePublicStrategiesList } from "@/lib/publicStrategiesCache";
+import { formatAdminStrategyLine, formatAdminUserLine } from "@/lib/adminCopy";
 
 /**
  * POST /api/marketplace/studio/strategies/[id]/submit-review
@@ -104,17 +105,40 @@ export async function POST(
     meta: { strategyId: id, type: "algo" as const },
   });
 
+  const [creator] = await db
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      email: users.email,
+    })
+    .from(users)
+    .where(eq(users.id, strategy.creatorId))
+    .limit(1);
+
   void queueAdminNotification({
     kind: "admin_strategy_submitted_for_review",
     text:
-      `📥 <b>New strategy review request</b>\n` +
-      `Name: <b>${strategy.name}</b>\n` +
-      `Type: <code>algo</code>\n` +
-      `Strategy ID: <code>${id}</code>\n` +
-      `Creator ID: <code>${strategy.creatorId}</code>`,
+      `📥 <b>New strategy review request</b>\n\n` +
+      `Strategy: ${formatAdminStrategyLine({
+        id,
+        name: strategy.name,
+        type: "algo",
+        symbol: strategy.symbol,
+      })}\n` +
+      `Creator: ${formatAdminUserLine({
+        id: strategy.creatorId,
+        displayName: creator?.displayName,
+        email: creator?.email,
+      })}\n\n` +
+      `Review the backtest, description, and latest test signal before approving.`,
     telegram: {
       replyMarkup: {
-        inline_keyboard: [[{ text: "Approve in Telegram", callback_data: `adm:strategy:approve:${id}` }]],
+        inline_keyboard: [
+          [
+            { text: "Approve", callback_data: `adm:strategy:approve:${id}` },
+            { text: "Reject", callback_data: `adm:strategy:reject:${id}` },
+          ],
+        ],
       },
     },
     meta: { strategyId: id, type: "algo", creatorId: strategy.creatorId },

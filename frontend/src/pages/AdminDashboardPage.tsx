@@ -52,6 +52,7 @@ import {
   reviewAdminStrategy,
   fetchAdminStrategySlotRequests,
   reviewAdminStrategySlotRequest,
+  type AdminAuditEntry,
   type AdminMasterAccessRow,
   type AdminStrategyRow,
   type StrategySlotRequestRow,
@@ -66,8 +67,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { copyText } from "@/lib/clipboard";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Copy, Loader2, Trash2, XCircle } from "lucide-react";
 
 /**
  * Format a raw numeric-string notional (e.g. "12345.6789") as a compact
@@ -119,6 +121,86 @@ function strategyListingState(row: StrategyStateInput): {
     return { label: "Paused", variant: "outline", marketplaceVisible: false };
   }
   return { label: "Active", variant: "default", marketplaceVisible: true };
+}
+
+const AUDIT_PAGE_SIZE = 50;
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  "strategy.review.approve": "Approved strategy review",
+  "strategy.review.reject": "Rejected strategy review",
+  "strategy.review.on_hold": "Marked strategy review as I'll check later",
+  "strategy.review.later": "Marked strategy review as I'll check later",
+  "strategy.review.resume": "Resumed strategy review",
+  "strategy.toggle_active": "Changed strategy visibility",
+  "strategy.delete": "Deleted strategy",
+  "master_access.review.approve": "Approved master access",
+  "master_access.review.reject": "Rejected master access",
+  "master_access.request.delete": "Deleted master access request",
+  "strategy_slots.review.approve": "Approved slot request",
+  "strategy_slots.review.reject": "Rejected slot request",
+};
+
+function humanizeAuditAction(action: string): string {
+  return (
+    AUDIT_ACTION_LABELS[action] ??
+    action
+      .split(".")
+      .filter(Boolean)
+      .map((part) => part.replace(/_/g, " "))
+      .join(" / ")
+  );
+}
+
+function CopyIdButton({ id, label }: { id: string | null | undefined; label: string }) {
+  if (!id) return null;
+  return (
+    <Button
+      type="button"
+      size="icon"
+      variant="ghost"
+      className="h-6 w-6"
+      title={`Copy ${label} ID`}
+      onClick={() => void copyText(id, `${label} ID copied`)}
+    >
+      <Copy className="h-3.5 w-3.5" />
+    </Button>
+  );
+}
+
+function AuditTargetCell({ entry }: { entry: AdminAuditEntry }) {
+  const target = entry.target;
+  if (!target) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="min-w-[13rem]">
+      <div className="flex items-center gap-1.5">
+        <span className="font-medium text-foreground">{target.label}</span>
+        {target.status && (
+          <Badge variant="outline" className="text-[10px]">
+            {target.status}
+          </Badge>
+        )}
+        <CopyIdButton id={target.id} label="Target" />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {target.secondary ?? target.type ?? entry.targetType ?? "Target"}
+      </p>
+    </div>
+  );
+}
+
+function AuditActorCell({ entry }: { entry: AdminAuditEntry }) {
+  const actor = entry.actor;
+  return (
+    <div className="min-w-[12rem]">
+      <div className="flex items-center gap-1.5">
+        <span className="font-medium text-foreground">
+          {actor?.displayName || actor?.email || entry.actorUserId}
+        </span>
+        <CopyIdButton id={entry.actorUserId} label="Actor" />
+      </div>
+      <p className="text-xs text-muted-foreground">{actor?.email ?? "No email on file"}</p>
+    </div>
+  );
 }
 
 export default function AdminDashboardPage() {
@@ -175,19 +257,21 @@ export default function AdminDashboardPage() {
 }
 
 function AuditTab() {
+  const [page, setPage] = useState(1);
   const q = useQuery({
-    queryKey: ["admin", "audit"],
-    queryFn: fetchAdminAudit,
+    queryKey: ["admin", "audit", page],
+    queryFn: () => fetchAdminAudit({ page, pageSize: AUDIT_PAGE_SIZE }),
     staleTime: 15_000,
   });
+  const totalPages = q.data?.totalPages ?? 1;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Admin audit log</CardTitle>
         <CardDescription>
-          Last 100 admin mutations, newest first. Use this for operator review
-          and incident reconstruction.
+          Last 500 admin mutations, newest first. Showing 50 per page for
+          operator review and incident reconstruction.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -199,32 +283,80 @@ function AuditTab() {
         )}
         {q.data?.entries.length === 0 && <EmptyNote>No audit entries yet.</EmptyNote>}
         {q.data && q.data.entries.length > 0 && (
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Actor</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {q.data.entries.map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {new Date(e.createdAt).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{e.action}</TableCell>
-                    <TableCell className="text-xs">
-                      {e.targetType ?? "—"}
-                      {e.targetId ? `:${e.targetId}` : ""}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{e.actorUserId}</TableCell>
+          <div className="space-y-3">
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Actor</TableHead>
                   </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {q.data.entries.map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        {new Date(e.createdAt).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <span className="font-medium" title={e.action}>
+                          {humanizeAuditAction(e.action)}
+                        </span>
+                        <p className="font-mono text-[11px] text-muted-foreground">
+                          {e.action}
+                        </p>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <AuditTargetCell entry={e} />
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <AuditActorCell entry={e} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Page {q.data.page} of {q.data.totalPages} · {q.data.total} entries
+                in the latest {q.data.windowSize}
+              </p>
+              <div className="flex flex-wrap items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={page <= 1 || q.isFetching}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Prev
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <Button
+                    key={p}
+                    type="button"
+                    size="sm"
+                    variant={p === page ? "default" : "outline"}
+                    disabled={q.isFetching}
+                    onClick={() => setPage(p)}
+                  >
+                    {p}
+                  </Button>
                 ))}
-              </TableBody>
-            </Table>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={page >= totalPages || q.isFetching}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </CardContent>
