@@ -23,9 +23,8 @@
  *
  * Server-side gate (kept identical) lives in
  * `backend/src/app/api/marketplace/studio/strategies/[id]/submit-review/route.ts`
- * (and its copy-trading twin): `status === "draft"` AND
- * `copy_webhook_config.enabled` AND `copy_webhook_config.last_delivery_at IS
- * NOT NULL`.
+ * (and its copy-trading twin): `status === "draft"` AND configured webhook
+ * row exists with `copy_webhook_config.last_delivery_at IS NOT NULL`.
  */
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -207,18 +206,19 @@ export default function StudioSubmitChecklist({
   }, [listening, remainingMs]);
 
   const isRejected = status === "rejected";
+  const hasWebhookEndpoint = webhookConfigured || webhookEnabled;
   const stepStates: Record<StepKey, StepState> = {
-    webhook: webhookEnabled ? "done" : "active",
-    backtest: hasBacktest ? "done" : webhookEnabled ? "active" : "pending",
-    signal: !webhookEnabled
-      ? "pending"
-      : webhookLastDeliveryAt
-        ? "done"
+    webhook: hasWebhookEndpoint ? "done" : "active",
+    backtest: hasBacktest ? "done" : hasWebhookEndpoint ? "active" : "pending",
+    signal: webhookLastDeliveryAt
+      ? "done"
+      : !hasWebhookEndpoint
+        ? "pending"
         : listening
           ? "active"
           : "active",
     submit:
-      webhookEnabled && hasBacktest && webhookLastDeliveryAt
+      hasWebhookEndpoint && hasBacktest && webhookLastDeliveryAt
         ? "active"
         : "pending",
   };
@@ -293,11 +293,9 @@ export default function StudioSubmitChecklist({
               {STEP_TITLES.webhook}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-              {webhookEnabled
+              {hasWebhookEndpoint
                 ? "Signal endpoint created. Use the masked URL below when configuring TradingView or your bot — RexAlgo listens here for your strategy signals."
-                : webhookConfigured
-                  ? "Endpoint exists but is currently disabled. Click Regenerate URL below to mint a fresh secret URL and re-enable mirroring."
-                  : "Create a private RexAlgo signal endpoint. This is the URL where TradingView or your bot will POST strategy signals; RexAlgo will mirror them to subscribers after admin approval."
+                : "Create a private RexAlgo signal endpoint. This is the URL where TradingView or your bot will POST strategy signals; RexAlgo will mirror them to subscribers after admin approval."
               }
             </p>
             {onGoToWebhook && (
@@ -356,7 +354,7 @@ export default function StudioSubmitChecklist({
           <StepIndicator state={stepStates.signal} />
           <div className="flex-1 min-w-0">
             <p className="font-medium text-foreground">{STEP_TITLES.signal}</p>
-            {!webhookEnabled ? (
+            {!hasWebhookEndpoint ? (
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                 Available after step 1. Paste the webhook URL into TradingView
                 or your bot, then send a test signal here.
@@ -454,7 +452,7 @@ export default function StudioSubmitChecklist({
                 disabled={
                   submitting ||
                   isRejected ||
-                  !webhookEnabled ||
+                  !hasWebhookEndpoint ||
                   !hasBacktest ||
                   !webhookLastDeliveryAt
                 }

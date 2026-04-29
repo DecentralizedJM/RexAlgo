@@ -13,8 +13,8 @@ import { formatAdminStrategyLine, formatAdminUserLine } from "@/lib/adminCopy";
  * POST /api/marketplace/studio/strategies/[id]/submit-review
  *
  * Moves an algo listing from `draft` to `pending` for the admin queue.
- * Requires a verified webhook: config row exists, enabled, and at least one
- * accepted delivery (`lastDeliveryAt`).
+ * Requires a verified webhook: config row exists and at least one accepted
+ * delivery (`lastDeliveryAt`).
  */
 export async function POST(
   _req: NextRequest,
@@ -76,11 +76,11 @@ export async function POST(
     .from(copyWebhookConfig)
     .where(eq(copyWebhookConfig.strategyId, id));
 
-  if (!wh?.enabled || !wh.lastDeliveryAt) {
+  if (!wh || !wh.lastDeliveryAt) {
     return NextResponse.json(
       {
         error:
-          "Enable the webhook and send at least one test signal (so we record a delivery) before submitting for review.",
+          "Create the webhook endpoint and send at least one test signal (so we record a delivery) before submitting for review.",
         code: "WEBHOOK_NOT_VERIFIED",
       },
       { status: 409 }

@@ -74,11 +74,11 @@ export async function POST(
     .from(copyWebhookConfig)
     .where(eq(copyWebhookConfig.strategyId, id));
 
-  if (!wh?.enabled || !wh.lastDeliveryAt) {
+  if (!wh || !wh.lastDeliveryAt) {
     return NextResponse.json(
       {
         error:
-          "Enable the webhook and send at least one test signal (so we record a delivery) before submitting for review.",
+          "Create the webhook endpoint and send at least one test signal (so we record a delivery) before submitting for review.",
         code: "WEBHOOK_NOT_VERIFIED",
       },
       { status: 409 }
