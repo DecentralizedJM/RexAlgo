@@ -123,6 +123,54 @@ function parseTradingViewDate(raw: string | undefined): string | null {
 }
 
 /**
+ * TradingView also has summary/table exports that don't include per-trade rows.
+ * We detect those and return a clear, actionable message instead of a generic
+ * CSV header error.
+ */
+function looksLikeTvSummaryTable(text: string): boolean {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .slice(0, 40);
+  if (lines.length === 0) return false;
+
+  const sep = detectSeparator(lines[0]!);
+  const tokens = new Set<string>();
+  for (const line of lines) {
+    for (const cell of parseCsvLine(line, sep)) {
+      const t = cell.toLowerCase().trim();
+      if (t) tokens.add(t);
+    }
+  }
+
+  const summaryHints = [
+    "net profit",
+    "gross profit",
+    "gross loss",
+    "max drawdown",
+    "buy & hold return",
+    "sharpe ratio",
+    "sortino ratio",
+    "profit factor",
+    "total closed trades",
+    "percent profitable",
+    "avg trade",
+  ];
+
+  let matches = 0;
+  for (const hint of summaryHints) {
+    for (const token of tokens) {
+      if (token.includes(hint)) {
+        matches++;
+        break;
+      }
+    }
+  }
+  return matches >= 3;
+}
+
+/**
  * Detect whether `body` looks like our canonical JSON, a TV "Performance
  * Summary" JSON, or a CSV "List of Trades", and route to the matching
  * parser.
@@ -159,6 +207,13 @@ export function parseTvExport(body: string): TvExportParseResult {
     return fail(
       "TV_JSON_SHAPE",
       "Unrecognised JSON shape. Expected the RexAlgo backtest JSON or a TradingView Performance Summary export."
+    );
+  }
+
+  if (looksLikeTvSummaryTable(trimmed)) {
+    return fail(
+      "TV_SUMMARY_TABLE_ONLY",
+      "Detected a TradingView summary/table export. For publish, upload the 'List of Trades' CSV from Strategy Tester so RexAlgo can validate closed trades and equity range."
     );
   }
 
@@ -279,6 +334,12 @@ function parseTvTradesCsv(text: string): TvExportParseResult {
     idx.price < 0 ||
     idx.contracts < 0
   ) {
+    if (looksLikeTvSummaryTable(text)) {
+      return fail(
+        "TV_SUMMARY_TABLE_ONLY",
+        "Detected a TradingView summary/table export. For publish, upload the 'List of Trades' CSV from Strategy Tester so RexAlgo can validate closed trades and equity range."
+      );
+    }
     return fail(
       "TV_CSV_HEADER",
       "Could not locate required columns (Trade #, Type, Date/Time, Price, Contracts) in the CSV header"
