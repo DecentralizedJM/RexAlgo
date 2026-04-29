@@ -192,12 +192,12 @@ export default function CopyTradingStudioPage() {
     typeof window !== "undefined" ? `${window.location.origin}` : "";
 
   /**
-   * Fast-poll window: 4s cadence for up to 2 minutes after the creator
+   * Fast-poll window: 4s cadence for up to 3 minutes after the creator
    * clicks "I'm sending the test signal now" inside the checklist. Once a
-   * delivery is recorded (or the 2 min hard ceiling fires) we drop back to
+   * delivery is recorded (or the 3 min hard ceiling fires) we drop back to
    * the default 15s stale window so the studio doesn't hammer the backend.
    */
-  const FAST_POLL_WINDOW_MS = 2 * 60_000;
+  const FAST_POLL_WINDOW_MS = 3 * 60_000;
   const fastPollActive = signalListeningSince !== null;
   const studioRefetchInterval = fastPollActive ? 4_000 : false;
 
@@ -628,7 +628,8 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         onSignalListenStart={() => setSignalListeningSince(Date.now())}
                         onGoToWebhook={() => scrollToSection("webhook")}
                         onGoToBacktest={() => scrollToSection("backtest")}
-                        onGoToSignalTest={() => scrollToSection("signal")}
+                        onGoToSignalFormatExample={() => scrollToSection("signal")}
+                        listeningWindowMs={FAST_POLL_WINDOW_MS}
                       />
                     )}
                     {selected.status === "pending" && (
@@ -1182,14 +1183,6 @@ function EditStrategyForm({
           className="mt-1"
           required
         />
-        <div className="mt-1 flex justify-between gap-2 text-xs">
-          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
-            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
-          </span>
-          {!descriptionValid && (
-            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
-          )}
-        </div>
       </div>
       <div>
         <Label htmlFor="edit-cs-desc">Description</Label>
@@ -1200,6 +1193,14 @@ function EditStrategyForm({
           className="mt-1 min-h-[100px]"
           required
         />
+        <div className="mt-1 flex justify-between gap-2 text-xs">
+          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
+            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
+          </span>
+          {!descriptionValid && (
+            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
+          )}
+        </div>
       </div>
       <div>
         <Label htmlFor="edit-cs-sym">Symbol (Mudrex)</Label>
@@ -1322,14 +1323,6 @@ function CreateStrategyForm({
           className="mt-1"
           required
         />
-        <div className="mt-1 flex justify-between gap-2 text-xs">
-          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
-            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
-          </span>
-          {!descriptionValid && (
-            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
-          )}
-        </div>
       </div>
       <div>
         <Label htmlFor="cs-desc">Description</Label>
@@ -1340,6 +1333,14 @@ function CreateStrategyForm({
           className="mt-1 min-h-[100px]"
           required
         />
+        <div className="mt-1 flex justify-between gap-2 text-xs">
+          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
+            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
+          </span>
+          {!descriptionValid && (
+            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
+          )}
+        </div>
       </div>
       <div>
         <Label htmlFor="cs-sym">Symbol (Mudrex)</Label>

@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   ArrowDownCircle,
   Check,
+  Clock3,
   FileCheck2,
   Loader2,
   Radio,
@@ -123,7 +124,8 @@ export interface StudioSubmitChecklistProps {
   onSignalListenStart?: () => void;
   onGoToWebhook?: () => void;
   onGoToBacktest?: () => void;
-  onGoToSignalTest?: () => void;
+  onGoToSignalFormatExample?: () => void;
+  listeningWindowMs?: number;
 }
 
 export default function StudioSubmitChecklist({
@@ -140,11 +142,23 @@ export default function StudioSubmitChecklist({
   onSignalListenStart,
   onGoToWebhook,
   onGoToBacktest,
-  onGoToSignalTest,
+  onGoToSignalFormatExample,
+  listeningWindowMs = 3 * 60_000,
 }: StudioSubmitChecklistProps) {
   const [listening, setListening] = useState(false);
+  const [listeningSince, setListeningSince] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
   const [recentlyArrived, setRecentlyArrived] = useState(false);
   const lastSeenDeliveryRef = useRef<string | null>(webhookLastDeliveryAt);
+  const remainingMs =
+    listening && listeningSince
+      ? Math.max(0, listeningWindowMs - (nowTick - listeningSince))
+      : 0;
+  const remainingLabel = `${Math.floor(remainingMs / 60_000)
+    .toString()
+    .padStart(2, "0")}:${Math.floor((remainingMs % 60_000) / 1000)
+    .toString()
+    .padStart(2, "0")}`;
 
   // Detect the moment `webhookLastDeliveryAt` flips from null/older → newer.
   // We flash the green "Signal received" pill for 5s, then settle into the
@@ -163,6 +177,7 @@ export default function StudioSubmitChecklist({
         setRecentlyArrived(true);
       }
       setListening(false);
+      setListeningSince(null);
       const t = window.setTimeout(() => setRecentlyArrived(false), 5_000);
       return () => window.clearTimeout(t);
     }
@@ -173,8 +188,23 @@ export default function StudioSubmitChecklist({
   // checklist (e.g. via the "Disable" button) so we don't keep showing
   // "Listening..." forever.
   useEffect(() => {
-    if (!webhookEnabled) setListening(false);
+    if (!webhookEnabled) {
+      setListening(false);
+      setListeningSince(null);
+    }
   }, [webhookEnabled]);
+
+  useEffect(() => {
+    if (!listening) return;
+    const t = window.setInterval(() => setNowTick(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [listening]);
+
+  useEffect(() => {
+    if (!listening || remainingMs > 0) return;
+    setListening(false);
+    setListeningSince(null);
+  }, [listening, remainingMs]);
 
   const isRejected = status === "rejected";
   const stepStates: Record<StepKey, StepState> = {
@@ -354,12 +384,19 @@ export default function StudioSubmitChecklist({
                   <Radio className="h-3 w-3 animate-pulse" />
                   Listening for your test signal…
                 </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/5 px-2 py-0.5 text-[11px] text-warning">
+                  <Clock3 className="h-3 w-3" />
+                  {remainingLabel}
+                </span>
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
                   className="h-7 px-2 text-xs"
-                  onClick={() => setListening(false)}
+                  onClick={() => {
+                    setListening(false);
+                    setListeningSince(null);
+                  }}
                 >
                   Cancel
                 </Button>
@@ -372,7 +409,7 @@ export default function StudioSubmitChecklist({
                   variant="outline"
                   onClick={() => {
                     setListening(true);
-                    onGoToSignalTest?.();
+                    setListeningSince(Date.now());
                     onSignalListenStart?.();
                   }}
                 >
@@ -380,20 +417,20 @@ export default function StudioSubmitChecklist({
                   I&rsquo;m sending the test signal now
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  We&rsquo;ll watch for the first delivery and turn this green.
+                  We&rsquo;ll watch for the first delivery for up to 3 minutes and turn this green.
                 </span>
               </div>
             )}
-            {onGoToSignalTest && (
+            {onGoToSignalFormatExample && (
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
                 className="mt-2 h-7 px-2 text-xs"
-                onClick={onGoToSignalTest}
+                onClick={onGoToSignalFormatExample}
               >
                 <ArrowDownCircle className="h-3.5 w-3.5 mr-1" />
-                Go to Signal test
+                Go to Signal format example
               </Button>
             )}
           </div>

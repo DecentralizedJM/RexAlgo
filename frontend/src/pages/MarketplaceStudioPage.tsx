@@ -203,7 +203,7 @@ export default function MarketplaceStudioPage() {
   /**
    * Set to `Date.now()` when the creator clicks "I'm sending the test signal
    * now" inside `StudioSubmitChecklist`. We use this to switch the studio
-   * strategies query into a fast-poll mode for the next ~2 minutes so the
+   * strategies query into a fast-poll mode for the next ~3 minutes so the
    * checklist can flip to "Signal received" without waiting for the default
    * 15s stale window. `null` = idle (default cadence).
    */
@@ -215,14 +215,14 @@ export default function MarketplaceStudioPage() {
     typeof window !== "undefined" ? `${window.location.origin}` : "";
 
   /**
-   * Fast-poll window: 4s cadence for up to 2 minutes after the creator
+   * Fast-poll window: 4s cadence for up to 3 minutes after the creator
    * clicks "I'm sending the test signal now" inside the checklist. We only
    * tighten the loop when there is no `webhookLastDeliveryAt` yet — once a
    * delivery is recorded we drop back to the default 15s stale window so
    * the studio doesn't hammer the backend in steady state. The window also
-   * self-expires on a 2 min timer (see effect below).
+   * self-expires on a 3 min timer (see effect below).
    */
-  const FAST_POLL_WINDOW_MS = 2 * 60_000;
+  const FAST_POLL_WINDOW_MS = 3 * 60_000;
   const fastPollActive = signalListeningSince !== null;
   const studioRefetchInterval = fastPollActive ? 4_000 : false;
 
@@ -280,7 +280,7 @@ export default function MarketplaceStudioPage() {
 
   // Hard ceiling on the fast-poll window in case the test signal never lands
   // (TradingView misconfig, wrong URL, etc.). Drops back to the default 15s
-  // cadence after 2 minutes; user can re-arm by clicking the checklist
+  // cadence after 3 minutes; user can re-arm by clicking the checklist
   // button again.
   useEffect(() => {
     if (signalListeningSince === null) return;
@@ -740,7 +740,8 @@ with urllib.request.urlopen(req, timeout=30) as res:
                         onSignalListenStart={() => setSignalListeningSince(Date.now())}
                         onGoToWebhook={() => scrollToSection("webhook")}
                         onGoToBacktest={() => scrollToSection("backtest")}
-                        onGoToSignalTest={() => scrollToSection("signal")}
+                        onGoToSignalFormatExample={() => scrollToSection("signal")}
+                        listeningWindowMs={FAST_POLL_WINDOW_MS}
                       />
                     )}
                     {selected.status === "pending" && (
@@ -1668,14 +1669,6 @@ function EditAlgoForm({
           className="mt-1"
           required
         />
-        <div className="mt-1 flex justify-between gap-2 text-xs">
-          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
-            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
-          </span>
-          {!descriptionValid && (
-            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
-          )}
-        </div>
       </div>
       <div>
         <Label htmlFor="edit-ms-desc">Description</Label>
@@ -1686,6 +1679,14 @@ function EditAlgoForm({
           className="mt-1 min-h-[100px]"
           required
         />
+        <div className="mt-1 flex justify-between gap-2 text-xs">
+          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
+            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
+          </span>
+          {!descriptionValid && (
+            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
+          )}
+        </div>
       </div>
       <SymbolSelector
         assetMode={assetMode}
@@ -1813,14 +1814,6 @@ function AlgoCreateForm({
           className="mt-1"
           required
         />
-        <div className="mt-1 flex justify-between gap-2 text-xs">
-          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
-            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
-          </span>
-          {!descriptionValid && (
-            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
-          )}
-        </div>
       </div>
       <div>
         <Label htmlFor="ms-desc">Description</Label>
@@ -1831,6 +1824,14 @@ function AlgoCreateForm({
           className="mt-1 min-h-[100px]"
           required
         />
+        <div className="mt-1 flex justify-between gap-2 text-xs">
+          <span className={descriptionValid ? "text-profit" : "text-muted-foreground"}>
+            {descriptionChars}/{MIN_STRATEGY_DESCRIPTION_CHARS} characters
+          </span>
+          {!descriptionValid && (
+            <span className="text-warning">Explain the setup, risk, and signal rules.</span>
+          )}
+        </div>
       </div>
       <SymbolSelector
         assetMode={assetMode}
