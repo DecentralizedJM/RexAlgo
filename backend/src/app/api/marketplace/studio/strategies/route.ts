@@ -26,6 +26,8 @@ import {
   getStrategySlotLimit,
 } from "@/lib/quotas";
 import { validateStrategyDescription } from "@/lib/strategyValidation";
+import { queueAdminNotification } from "@/lib/adminNotifications";
+import { formatAdminStrategyLine, formatAdminUserLine } from "@/lib/adminCopy";
 
 export async function GET() {
   const session = await getSession();
@@ -183,6 +185,16 @@ export async function POST(req: NextRequest) {
       .select()
       .from(strategies)
       .where(eq(strategies.id, id));
+
+    void queueAdminNotification({
+      kind: "admin_strategy_draft_created",
+      text:
+        `📝 <b>New strategy draft created</b>\n\n` +
+        `Strategy: ${formatAdminStrategyLine({ id, name: newStrategy.name, type: "algo", symbol: newStrategy.symbol })}\n` +
+        `Creator: ${formatAdminUserLine(session.user)}\n\n` +
+        `Status: <code>draft</code>`,
+      meta: { strategyId: id, type: "algo", creatorId: session.user.id, status: "draft" },
+    });
 
     const base = publicApiBase();
     const path = strategySignalWebhookPath(id);

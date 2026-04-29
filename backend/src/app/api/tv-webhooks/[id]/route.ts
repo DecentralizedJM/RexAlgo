@@ -7,6 +7,8 @@ import { and, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { strategies, tvWebhooks } from "@/lib/schema";
+import { queueAdminNotification } from "@/lib/adminNotifications";
+import { formatAdminUserLine } from "@/lib/adminCopy";
 
 const MAX_NAME = 120;
 const MAX_MARGIN_CAP = 10_000;
@@ -120,6 +122,14 @@ export async function PATCH(
   }
 
   await db.update(tvWebhooks).set(patch).where(eq(tvWebhooks.id, id));
+  void queueAdminNotification({
+    kind: "admin_tv_webhook_event",
+    text:
+      `📡 <b>TradingView webhook updated</b>\n\n` +
+      `Webhook: <b>${existing.name}</b> · <code>${existing.mode}</code> · <code>${existing.id}</code>\n` +
+      `User: ${formatAdminUserLine(session.user)}`,
+    meta: { webhookId: existing.id, userId: session.user.id, action: "update", patch },
+  });
   return NextResponse.json({ ok: true });
 }
 
@@ -137,5 +147,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   await db.delete(tvWebhooks).where(eq(tvWebhooks.id, id));
+  void queueAdminNotification({
+    kind: "admin_tv_webhook_event",
+    text:
+      `📡 <b>TradingView webhook deleted</b>\n\n` +
+      `Webhook: <b>${existing.name}</b> · <code>${existing.mode}</code> · <code>${existing.id}</code>\n` +
+      `User: ${formatAdminUserLine(session.user)}`,
+    meta: { webhookId: existing.id, userId: session.user.id, action: "delete" },
+  });
   return NextResponse.json({ ok: true });
 }

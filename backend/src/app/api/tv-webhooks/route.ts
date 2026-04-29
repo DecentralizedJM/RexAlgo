@@ -17,6 +17,8 @@ import { getSession, encryptApiSecret } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { strategies, tvWebhooks } from "@/lib/schema";
 import { publicApiBase } from "@/lib/publicUrl";
+import { queueAdminNotification } from "@/lib/adminNotifications";
+import { formatAdminUserLine } from "@/lib/adminCopy";
 
 const MAX_NAME = 120;
 const MAX_MARGIN_CAP = 10_000;
@@ -168,6 +170,15 @@ export async function POST(req: NextRequest) {
     .select()
     .from(tvWebhooks)
     .where(eq(tvWebhooks.id, id));
+
+  void queueAdminNotification({
+    kind: "admin_tv_webhook_event",
+    text:
+      `📡 <b>TradingView webhook created</b>\n\n` +
+      `Webhook: <b>${created.name}</b> · <code>${created.mode}</code> · <code>${created.id}</code>\n` +
+      `User: ${formatAdminUserLine(session.user)}`,
+    meta: { webhookId: created.id, mode: created.mode, userId: session.user.id, action: "create" },
+  });
 
   const base = publicApiBase();
   return NextResponse.json(

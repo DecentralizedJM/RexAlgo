@@ -40,6 +40,7 @@ import {
 } from "@/lib/tvAlert";
 import { executeMirror } from "@/lib/copyMirror";
 import { queueNotification } from "@/lib/notifications";
+import { queueAdminNotification } from "@/lib/adminNotifications";
 import { checkCopyWebhookRateLimit } from "@/lib/copyWebhookRateLimit";
 import { enforceBodyLimit } from "@/lib/bodyLimit";
 import {
@@ -53,6 +54,25 @@ import {
 import { computeFollowerQuantity } from "@/lib/copyMirror";
 import { logTrade, markRexAlgoTradesClosed } from "@/lib/tradeLedger";
 import { parseSymbolsJson } from "@/lib/strategyAssets";
+
+function looksLikeKeyRejected(detail: string): boolean {
+  const d = detail.toLowerCase();
+  return (
+    d.includes("mudrex rejected this api key") ||
+    d.includes("expired") ||
+    d.includes("revoked") ||
+    d.includes("invalid")
+  );
+}
+
+function looksLikeLowBalance(detail: string): boolean {
+  const d = detail.toLowerCase();
+  return (
+    d.includes("insufficient") ||
+    d.includes("not enough balance") ||
+    d.includes("insufficient margin")
+  );
+}
 
 async function recordEvent(
   webhookId: string,
@@ -423,6 +443,29 @@ export async function POST(
     .where(eq(tvWebhooks.id, wh.id));
 
   if (!result.ok) {
+    if (looksLikeKeyRejected(result.detail)) {
+      void queueAdminNotification({
+        kind: "admin_key_rejected",
+        text:
+          `🔑 <b>Mudrex key rejected</b>\n\n` +
+          `Context: TradingView manual webhook\n` +
+          `Webhook: <b>${wh.name}</b> · <code>${wh.id}</code>\n` +
+          `User: <code>${wh.userId}</code>\n` +
+          `Detail: ${result.detail}`,
+        meta: { webhookId: wh.id, userId: wh.userId, detail: result.detail },
+      });
+    } else if (looksLikeLowBalance(result.detail)) {
+      void queueAdminNotification({
+        kind: "admin_user_low_balance",
+        text:
+          `💰 <b>Low/insufficient balance detected</b>\n\n` +
+          `Context: TradingView manual webhook\n` +
+          `Webhook: <b>${wh.name}</b> · <code>${wh.id}</code>\n` +
+          `User: <code>${wh.userId}</code>\n` +
+          `Detail: ${result.detail}`,
+        meta: { webhookId: wh.id, userId: wh.userId, detail: result.detail },
+      });
+    }
     void queueNotification(wh.userId, {
       kind: "copy_mirror_error",
       text: `⚠️ TradingView webhook <b>${wh.name}</b> failed to execute: ${result.detail}`,

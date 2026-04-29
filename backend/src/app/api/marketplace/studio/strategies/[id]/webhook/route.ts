@@ -5,6 +5,8 @@ import { getSession, encryptApiSecret } from "@/lib/auth";
 import { blockIfNoMasterAccess } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
 import { strategies, copyWebhookConfig } from "@/lib/schema";
+import { queueAdminNotification } from "@/lib/adminNotifications";
+import { formatAdminStrategyLine, formatAdminUserLine } from "@/lib/adminCopy";
 
 function newWebhookSecret(): string {
   return `whsec_${crypto.randomBytes(32).toString("hex")}`;
@@ -84,6 +86,14 @@ export async function POST(
       .update(copyWebhookConfig)
       .set({ enabled: false })
       .where(eq(copyWebhookConfig.strategyId, strategyId));
+    void queueAdminNotification({
+      kind: "admin_strategy_webhook_event",
+      text:
+        `🪝 <b>Strategy webhook disabled</b>\n\n` +
+        `Strategy: ${formatAdminStrategyLine({ id: strategy.id, name: strategy.name, type: strategy.type, symbol: strategy.symbol })}\n` +
+        `User: ${formatAdminUserLine(session.user)}`,
+      meta: { strategyId: strategy.id, type: strategy.type, action: "disable" },
+    });
     return NextResponse.json({ ok: true, enabled: false });
   }
 
@@ -100,6 +110,15 @@ export async function POST(
       createdAt: now,
       rotatedAt: now,
     });
+    void queueAdminNotification({
+      kind: "admin_strategy_webhook_event",
+      text:
+        `🪝 <b>Strategy webhook created</b>\n\n` +
+        `Strategy: ${formatAdminStrategyLine({ id: strategy.id, name: strategy.name, type: strategy.type, symbol: strategy.symbol })}\n` +
+        `User: ${formatAdminUserLine(session.user)}\n` +
+        `Action: <code>${action}</code>`,
+      meta: { strategyId: strategy.id, type: strategy.type, action: "create" },
+    });
     return NextResponse.json({
       ok: true,
       enabled: true,
@@ -115,6 +134,14 @@ export async function POST(
       .update(copyWebhookConfig)
       .set({ enabled: true })
       .where(eq(copyWebhookConfig.strategyId, strategyId));
+    void queueAdminNotification({
+      kind: "admin_strategy_webhook_event",
+      text:
+        `🪝 <b>Strategy webhook enabled</b>\n\n` +
+        `Strategy: ${formatAdminStrategyLine({ id: strategy.id, name: strategy.name, type: strategy.type, symbol: strategy.symbol })}\n` +
+        `User: ${formatAdminUserLine(session.user)}`,
+      meta: { strategyId: strategy.id, type: strategy.type, action: "enable" },
+    });
     return NextResponse.json({
       ok: true,
       enabled: true,
@@ -132,6 +159,14 @@ export async function POST(
       rotatedAt: now,
     })
     .where(eq(copyWebhookConfig.strategyId, strategyId));
+  void queueAdminNotification({
+    kind: "admin_strategy_webhook_event",
+    text:
+      `🪝 <b>Strategy webhook rotated</b>\n\n` +
+      `Strategy: ${formatAdminStrategyLine({ id: strategy.id, name: strategy.name, type: strategy.type, symbol: strategy.symbol })}\n` +
+      `User: ${formatAdminUserLine(session.user)}`,
+    meta: { strategyId: strategy.id, type: strategy.type, action: "rotate" },
+  });
 
   return NextResponse.json({
     ok: true,

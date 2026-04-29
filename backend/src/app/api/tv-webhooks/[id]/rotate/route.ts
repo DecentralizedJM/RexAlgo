@@ -7,6 +7,8 @@ import { and, eq } from "drizzle-orm";
 import { encryptApiSecret, getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { tvWebhooks } from "@/lib/schema";
+import { queueAdminNotification } from "@/lib/adminNotifications";
+import { formatAdminUserLine } from "@/lib/adminCopy";
 
 function newWebhookSecret(): string {
   return `whsec_${crypto.randomBytes(32).toString("hex")}`;
@@ -39,6 +41,15 @@ export async function POST(
       enabled: true,
     })
     .where(eq(tvWebhooks.id, id));
+
+  void queueAdminNotification({
+    kind: "admin_tv_webhook_event",
+    text:
+      `📡 <b>TradingView webhook secret rotated</b>\n\n` +
+      `Webhook: <b>${existing.name}</b> · <code>${existing.mode}</code> · <code>${existing.id}</code>\n` +
+      `User: ${formatAdminUserLine(session.user)}`,
+    meta: { webhookId: existing.id, userId: session.user.id, action: "rotate" },
+  });
 
   return NextResponse.json({
     ok: true,

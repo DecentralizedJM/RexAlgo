@@ -20,6 +20,7 @@ import {
   setLeverage,
 } from "@/lib/mudrex";
 import { logTrade, markRexAlgoTradesClosed } from "@/lib/tradeLedger";
+import { queueAdminNotification } from "@/lib/adminNotifications";
 
 export type CopySignalV1 = {
   idempotency_key: string;
@@ -244,6 +245,25 @@ type SubscriberRow = {
  */
 const MIRROR_CONCURRENCY = 10;
 
+function looksLikeKeyRejected(detail: string): boolean {
+  const d = detail.toLowerCase();
+  return (
+    d.includes("mudrex rejected this api key") ||
+    d.includes("expired") ||
+    d.includes("revoked") ||
+    d.includes("invalid")
+  );
+}
+
+function looksLikeLowBalance(detail: string): boolean {
+  const d = detail.toLowerCase();
+  return (
+    d.includes("insufficient") ||
+    d.includes("not enough balance") ||
+    d.includes("insufficient margin")
+  );
+}
+
 async function processSubscriber(
   strategy: StrategyRow,
   signal: CopySignalV1,
@@ -309,6 +329,29 @@ async function processSubscriber(
     status: "error",
     detail: result.detail,
   });
+  if (looksLikeKeyRejected(result.detail)) {
+    void queueAdminNotification({
+      kind: "admin_key_rejected",
+      text:
+        `🔑 <b>Mudrex key rejected</b>\n\n` +
+        `Context: copy mirror attempt\n` +
+        `Strategy: <b>${strategy.name}</b> · <code>${strategy.id}</code>\n` +
+        `Subscriber: <code>${sub.userId}</code>\n` +
+        `Detail: ${result.detail}`,
+      meta: { strategyId: strategy.id, subscriberUserId: sub.userId, detail: result.detail },
+    });
+  } else if (looksLikeLowBalance(result.detail)) {
+    void queueAdminNotification({
+      kind: "admin_user_low_balance",
+      text:
+        `💰 <b>Low/insufficient balance detected</b>\n\n` +
+        `Context: copy mirror attempt\n` +
+        `Strategy: <b>${strategy.name}</b> · <code>${strategy.id}</code>\n` +
+        `Subscriber: <code>${sub.userId}</code>\n` +
+        `Detail: ${result.detail}`,
+      meta: { strategyId: strategy.id, subscriberUserId: sub.userId, detail: result.detail },
+    });
+  }
   return "error";
 }
 
